@@ -25,6 +25,11 @@ describe('arcgisEsmModuleCatalog', () => {
     expect(watchUtils).toBe(reactiveUtils);
     expect(watchUtils.specifier).toBe('@arcgis/core/core/reactiveUtils.js');
 
+    const freeOsmLayer = requireArcgisModuleDescriptor('esri/layers/OpenStreetMapLayer');
+    const requestModule = requireArcgisModuleDescriptor('esri/request');
+    expect(freeOsmLayer.specifier).toBe('@arcgis/core/layers/OpenStreetMapLayer.js');
+    expect(requestModule.specifier).toBe('@arcgis/core/request.js');
+
     const queryTask = requireArcgisModuleDescriptor('esri/tasks/QueryTask');
     const modernQuery = requireArcgisModuleDescriptor('esri/rest/query');
     expect(queryTask).toBe(modernQuery);
