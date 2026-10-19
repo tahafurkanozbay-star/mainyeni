@@ -1,10 +1,9 @@
 import { describe, expect, test, vi } from 'vitest';
 import { AppError } from '../errors/appError';
 import { apiClient, clearApiClientRuntime, createApiClient, getApiClientDiagnosticSummary, getApiClientDiagnostics } from './httpClient';
-import type { RuntimeConfig } from '../config/runtimeConfig';
 import type { HttpResponseEnvelope, HttpTransport } from './contracts';
 
-const runtime: RuntimeConfig = Object.freeze({ apiBaseUrl: '/api', requestTimeoutMs: 5000, maxRetries: 2, cacheTtlMs: 30000 });
+const runtime = Object.freeze({ baseUrl: '/api', requestTimeoutMs: 5000, maxRetries: 2, cacheTtlMs: 30000 });
 
 const envelope = <T>(data: T): HttpResponseEnvelope<T> => ({
   data,
