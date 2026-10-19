@@ -508,16 +508,102 @@ const kentRehberiFields = Object.freeze([
   { name: 'durakNo', alias: 'Durak No', type: 'string', length: 254 },
 ]);
 
-const popupFieldInfos = Object.freeze([
-  { fieldName: 'objectid', label: 'Kayıt No', visible: true },
-  { fieldName: 'adi', label: 'Adı', visible: true },
-  { fieldName: 'adres', label: 'Adres', visible: true },
-  { fieldName: 'ilce', label: 'İlçe', visible: true },
-  { fieldName: 'mahalle', label: 'Mahalle', visible: true },
-  { fieldName: 'tur', label: 'Tür', visible: true },
-  { fieldName: 'durakNo', label: 'Durak No', visible: true },
-  { fieldName: 'webSayfasi', label: 'Web Sayfası', visible: true },
-]);
+interface KentRehberiPopupGraphic {
+  readonly attributes?: Readonly<Record<string, unknown>>;
+  readonly geometry?: unknown;
+}
+
+interface KentRehberiPopupFeature {
+  readonly graphic?: KentRehberiPopupGraphic;
+}
+
+interface KentRehberiPopupCoordinates {
+  readonly latitude: number;
+  readonly longitude: number;
+}
+
+const resolveKentRehberiPopupCoordinates = (
+  graphic: KentRehberiPopupGraphic | undefined,
+): KentRehberiPopupCoordinates | null => {
+  const geometry = isJsonObject(graphic?.geometry) ? graphic.geometry : null;
+  const attributes = graphic?.attributes ?? {};
+  // GeoJSONLayer points are WGS84. Prefer the SDK's geographic properties, then
+  // fall back to x/y and the source's x/y attributes for resilient popups.
+  const longitude = geometry
+    ? (typeof geometry.longitude === 'number' ? geometry.longitude : geometry.x)
+    : attributes.x;
+  const latitude = geometry
+    ? (typeof geometry.latitude === 'number' ? geometry.latitude : geometry.y)
+    : attributes.y;
+
+  if (typeof longitude !== 'number' || typeof latitude !== 'number'
+    || !Number.isFinite(longitude) || !Number.isFinite(latitude)
+    || Math.abs(longitude) > 180 || Math.abs(latitude) > 90) {
+    return null;
+  }
+
+  return { latitude, longitude };
+};
+
+const createGoogleMapsPopupLink = (
+  label: string,
+  href: string,
+  variant: 'primary' | 'secondary',
+): HTMLAnchorElement => {
+  const link = document.createElement('a');
+  link.className = `kent-rehberi-popup__action kent-rehberi-popup__action--${variant}`;
+  link.href = href;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.textContent = label;
+  link.setAttribute('aria-label', `${label} — Google Haritalar yeni sekmede açılır`);
+  return link;
+};
+
+/** Render just the address and useful Google Maps actions for a selected POI. */
+export const createKentRehberiPopupContent = (
+  feature: KentRehberiPopupFeature,
+): HTMLElement => {
+  const graphic = feature?.graphic;
+  const attributes = graphic?.attributes ?? {};
+  const rawAddress = attributes.adres;
+  const address = typeof rawAddress === 'string' ? rawAddress.trim() : '';
+  const coordinates = resolveKentRehberiPopupCoordinates(graphic);
+  const target = coordinates
+    ? `${coordinates.latitude},${coordinates.longitude}`
+    : address;
+
+  const content = document.createElement('div');
+  content.className = 'kent-rehberi-popup';
+
+  if (address) {
+    const addressElement = document.createElement('div');
+    addressElement.className = 'kent-rehberi-popup__address';
+    addressElement.textContent = address;
+    content.append(addressElement);
+  }
+
+  if (target) {
+    const directions = new URL('https://www.google.com/maps/dir/');
+    directions.searchParams.set('api', '1');
+    directions.searchParams.set('destination', target);
+
+    const streetView = new URL('https://www.google.com/maps/@');
+    streetView.searchParams.set('api', '1');
+    streetView.searchParams.set('map_action', 'pano');
+    streetView.searchParams.set('viewpoint', target);
+
+    const actions = document.createElement('div');
+    actions.className = 'kent-rehberi-popup__actions';
+    actions.append(
+      createGoogleMapsPopupLink('Yol tarifi al', directions.toString(), 'primary'),
+      createGoogleMapsPopupLink('Sokak görünümü al', streetView.toString(), 'secondary'),
+    );
+    content.append(actions);
+  }
+
+  return content;
+};
 
 export const createKentRehberiGeoJsonLayer = async (
   geojson: KentRehberiGeoJsonFeatureCollection,
@@ -549,7 +635,8 @@ export const createKentRehberiGeoJsonLayer = async (
       popupTemplate: {
         title: '{adi}',
         outFields: ['objectid', 'adi', 'adres', 'ilce', 'mahalle', 'tur', 'yapan', 'webSayfasi', 'durakNo', 'iconKey'],
-        content: [{ type: 'fields', fieldInfos: popupFieldInfos }],
+        returnGeometry: true,
+        content: createKentRehberiPopupContent,
       },
       ...(presentation.renderer ? { renderer: presentation.renderer } : {}),
     });
