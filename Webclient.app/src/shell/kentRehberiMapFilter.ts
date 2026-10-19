@@ -54,13 +54,7 @@ export const setKentRehberiMapFilter = (filter: KentRehberiMapFilterInput | null
     iconKeys,
   });
 
-  for (const listener of listeners) {
-    try {
-      listener();
-    } catch {
-      // One subscriber must not prevent the remaining map-filter subscribers from updating.
-    }
-  }
+  for (const listener of listeners) listener();
 };
 
 /** Produce a safe ArcGIS SQL expression from the validated, local icon registry keys. */
