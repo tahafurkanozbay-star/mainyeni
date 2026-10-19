@@ -21,6 +21,13 @@ Bu depo, ABB'nin **3D Altyapı / Üstyapı Koordinasyon Web Uygulaması** içind
 - 'En güncel' olmak tek başına amaç değildir; hedef en güncel STABIL ve bu proje için en hızlı/güvenilir çözümdür.
 - Çalışan işlevleri koru. Büyük rewrite gerekiyorsa feature-by-feature migration, adapter veya compatibility layer kullan; tek hamlede riskli rewrite yapma.
 
+## Kaynak kökleri ve arşiv politikası
+- Etkin dağıtılabilir uygulama `Webclient.app/` altındaki statik SPA'dır.
+- `KentRehberi/webclient/` ayrı GIS çekirdek kaynağıdır; `.github/workflows/gis-core-quality.yml` ile tür denetimi, lint ve testleri yürütülür. Açık bir mimari kararı ve başarılı doğrulama olmadan bu ağaç silinmez.
+- `archive/` altındaki kaynaklar tarihsel referanstır; build, runtime veya release giriş noktası değildir. Arşivden yeniden etkinleştirme istenirse dosyalar mevcut mimariye kontrollü taşınmalı ve gerekli CI/test kontratları eklenmelidir.
+- Eski `WebClient/src/gis/` politikaları etkin uygulamada import edilmediği, bağımsız paket/tsconfig'i olmadığı ve workflow/build/release köklerine dahil edilmediği için `archive/legacy-gis-policies/` altına taşınmıştır. Buradaki dosyaları uygulama kodu gibi değiştirme veya tekrar etkin köke bağlama; önce gerçek ürün gereksinimi ve entegrasyon/test kanıtı oluştur.
+- Kökler arasında kod taşımadan önce uygulama import grafiği, package/tsconfig referansları, CI path filters, quality/language ratchets ve release inventory denetlenmelidir. Yalnız dosya adlarına bakarak kaynak silme.
+
 ## Kod kalitesi ve yeniden geliştirme
 - Mevcut kodu körlemesine yamamak yerine, gerektiğinde modül veya özellik bazında modern mimariyle yeniden tasarla; ancak çalışan işlevleri gerekçesiz kaldırma.
 - Güncel, hızlı ve bakımı kolay dil/çerçeve özelliklerini mevcut stack ile uyumlu şekilde kullan; gereksiz teknoloji göçü yapma.
