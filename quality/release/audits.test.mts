@@ -9,7 +9,6 @@ import { scanFileWithRule, scanSource, SOURCE_RULES } from './source-audit.mts';
 import { auditTestContracts } from './test-contracts.mts';
 import { auditUx } from './ux-audit.mts';
 import {
-  directoryBuildProps,
   fixtureFile,
   fixtureInventory,
   fullFixtureInventory,
@@ -271,11 +270,11 @@ test('test-contract audit reports missing evidence', () => {
   assert.ok(section.findings.every(item => item.domain === 'testing'));
 });
 
-test('modernization audit recognizes modern .NET target while flagging nullable disable', () => {
-  const inventory = fixtureInventory([webManifest(), directoryBuildProps('disable')]);
-  const section = auditModernization(inventory);
-  assert.equal(section.summary.targetFramework, 'net10.0');
-  assert.ok(section.findings.some(item => item.id === 'modernization-csharp-nullable-disabled'));
+test('frontend modernization audit works without a server runtime manifest', () => {
+  const section = auditModernization(fixtureInventory([webManifest()]));
+  assert.equal(Object.hasOwn(section.summary, 'targetFramework'), false);
+  assert.equal(Object.hasOwn(section.summary, 'csharpFiles'), false);
+  assert.equal(section.findings.some(item => item.id.includes('csharp') || item.id.includes('dotnet')), false);
 });
 
 test('modernization audit recommends phased TypeScript adoption', () => {
