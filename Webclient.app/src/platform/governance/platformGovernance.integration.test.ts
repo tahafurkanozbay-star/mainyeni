@@ -6,15 +6,13 @@ import { governanceBlockingReasons, governanceSnapshotSummary } from './governan
 describe('Platform governance integration', () => {
   test('composes current runtime configuration without creating a transport stack', () => {
     const config = createRuntimeConfig({
-      VITE_API_URL: '/api',
-      VITE_API_TIMEOUT_MS: '15000',
-      VITE_API_CACHE_TTL_MS: '30000',
-      VITE_API_MAX_RETRIES: '2',
+      VITE_REQUEST_TIMEOUT_MS: '15000',
+      VITE_CACHE_TTL_MS: '30000',
+      VITE_MAX_RETRIES: '2',
       VITE_RELEASE: 'integration',
     });
     const kernel = createDefaultPlatformGovernance({ runtimeConfig: config });
     expect(kernel.config.publicValues()).toMatchObject({
-      'api-base-url': '/api',
       'request-timeout-ms': 15000,
       'cache-ttl-ms': 30000,
       'max-retries': 2,
@@ -132,12 +130,13 @@ describe('Platform governance integration', () => {
     expect(second.snapshot().state.phase).toBe('ready');
   });
 
-  test('support fingerprints never include API paths verbatim', () => {
+  test('support fingerprints do not expose raw runtime metadata', () => {
+    const marker = 'very-specific-release-marker';
     const kernel = createDefaultPlatformGovernance({
-      runtimeConfig: createRuntimeConfig({ VITE_API_URL: '/very-specific-api-path' }),
+      runtimeConfig: createRuntimeConfig({ VITE_RELEASE: marker }),
     });
-    expect(kernel.snapshot().fingerprint).not.toContain('/very-specific-api-path');
-    expect(kernel.config.snapshot().fingerprint).not.toContain('/very-specific-api-path');
+    expect(kernel.snapshot().fingerprint).not.toContain(marker);
+    expect(kernel.config.snapshot().fingerprint).not.toContain(marker);
   });
 
   test('governance stays fully synchronous and deterministic at decision boundaries', () => {
