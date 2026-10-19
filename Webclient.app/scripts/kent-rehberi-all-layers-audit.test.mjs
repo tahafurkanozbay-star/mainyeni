@@ -115,7 +115,7 @@ const validFixture = () => {
       const getConfigServices = async () => completed(Object.freeze([]));
       export const ConfigurationBusiness = Object.freeze({ GetMapConfiguration: getMapConfiguration, GetConfigServices: getConfigServices });
     `,
-    [PATHS.envExample]: 'VITE_KENT_REHBERI_SOURCE=planaski\nVITE_KENT_REHBERI_OVERVIEW_ON_STARTUP=false\n',
+    [PATHS.envExample]: 'VITE_KENT_REHBERI_OVERVIEW_ON_STARTUP=false\\n',
     [PATHS.package]: JSON.stringify({
       scripts: {
         'quality:kent-rehberi-all-layers': 'node scripts/kent-rehberi-all-layers-audit.mjs --strict',
@@ -204,21 +204,21 @@ describe('PlanASKI-only all-layer contract', () => {
     const files = validFixture();
     files[PATHS.vite] += `server: { proxy: { '/api': { target: 'https://localhost:3003' } } }`;
     files[PATHS.configurationBusiness] += `const apiClient = createClient(); apiClient.get('/AppSettings/List');`;
-    files[PATHS.envExample] += 'VITE_API_URL=/api\nVITE_API_PROXY_TARGET=https://localhost:3003\n';
+    files[PATHS.envExample] += 'VITE_API_URL=/api\\nVITE_API_PROXY_TARGET=https://localhost:3003\\nVITE_KENT_REHBERI_SOURCE=api\\n';
     const ids = errorIds(auditKentRehberiAllLayersSources(files));
     assert.equal(ids.has('legacy-local-api-proxy'), true);
     assert.equal(ids.has('legacy-configuration-api'), true);
-    assert.equal(ids.has('legacy-api-env-keys'), true);
+    assert.equal(ids.has('legacy-runtime-env-keys'), true);
   });
 
-  test('requires local deterministic map configuration and the PlanASKI source env', () => {
+  test('does not require an API/source-mode flag when local map defaults are present', () => {
     const files = validFixture();
     files[PATHS.configurationBusiness] = 'export const ConfigurationBusiness = {};';
-    files[PATHS.envExample] = 'VITE_API_URL=/api';
+    files[PATHS.envExample] = 'VITE_KENT_REHBERI_OVERVIEW_ON_STARTUP=false';
     const ids = errorIds(auditKentRehberiAllLayersSources(files));
     assert.equal(ids.has('missing-static-map-configuration'), true);
     assert.equal(ids.has('missing-empty-legacy-service-list'), true);
-    assert.equal(ids.has('missing-planaski-source-env'), true);
+    assert.equal(ids.has('legacy-runtime-env-keys'), false);
   });
 
   test('requires package, tooling and CI quality gates to remain connected', () => {
