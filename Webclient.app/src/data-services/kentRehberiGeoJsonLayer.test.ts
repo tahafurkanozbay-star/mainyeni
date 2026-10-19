@@ -49,7 +49,7 @@ describe('PlanASKI-only Kent Rehberi GeoJSON layer', () => {
     const popup = createKentRehberiPopupContent({
       graphic: {
         attributes: {
-          adres: '  Kızılay\\nAnkara  ',
+          adres: '  Kızılay\nAnkara  ',
           ilce: 'Çankaya',
           mahalle: 'Kızılay',
           objectid: 101,
