@@ -255,8 +255,10 @@
   }
 }
 
-.esri-map > .sidebar-container,
-.esri-map > .sidebar-container1 {
+/* The persistent Keşfet rail must keep its own absolute layout and lower stacking
+ * level. Only independent tool/query panels participate in this generic layer. */
+.esri-map > .sidebar-container:not(.kr-sidebar),
+.esri-map > .sidebar-container1:not(.kr-sidebar) {
   position: relative;
   z-index: 20;
 }
