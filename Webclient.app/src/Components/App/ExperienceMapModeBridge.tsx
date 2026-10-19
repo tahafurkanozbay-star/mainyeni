@@ -324,15 +324,33 @@ export function ExperienceMapModeBridge({
     }
 
     try {
-      setSceneHostActive(true);
+      // Keep the 3B host visually inactive while reattaching its renderer. This
+      // avoids revealing a stale/blank frame when returning from the 2B view.
       await nextBrowserFrame();
-      await waitForSceneContainer(sceneHostRef.current);
+      const sceneHost = sceneHostRef.current;
+      await waitForSceneContainer(sceneHost);
 
       const scene = await ensureScene();
       if (!scene?.view || disposedRef.current) return;
+      if (!sceneHost) throw new Error('3B harita kapsayıcısı kullanılamıyor.');
+      if (scene.view.destroyed) throw new Error('3B harita görünümü kapatılmış.');
+
+      // ArcGIS can retain a SceneView instance after its overlapping host was
+      // hidden, while the renderer no longer paints correctly on reactivation.
+      // Detach and reattach that same view (the Map and layer state are retained),
+      // then resize across rendered frames before applying the latest viewpoint.
+      if (scene.view.container === sceneHost) {
+        scene.view.container = null;
+        await nextBrowserFrame();
+      }
+      if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
+      scene.view.container = sceneHost;
+      await nextBrowserFrame();
+      synchronizeSceneViewSize(scene.view);
+      await nextBrowserFrame();
+      synchronizeSceneViewSize(scene.view);
 
       scene.view.padding = mapView.padding;
-      synchronizeSceneViewSize(scene.view);
       const sceneState = normalizeSceneStateFromMap(mapView, bridge);
       if (modeRef) modeRef.current = '3d';
       activeModeRef.current = '3d';
@@ -360,6 +378,11 @@ export function ExperienceMapModeBridge({
         accessorWatch,
       });
 
+      setSceneHostActive(true);
+      await nextBrowserFrame();
+      synchronizeSceneViewSize(scene.view);
+      await nextBrowserFrame();
+      synchronizeSceneViewSize(scene.view);
       sceneExperienceRef.current?.setActive(true);
       if (disposedRef.current) return;
       setMode('3d');
@@ -372,6 +395,23 @@ export function ExperienceMapModeBridge({
       activeModeRef.current = '2d';
       if (modeRef) modeRef.current = '2d';
       setActiveMode('2d');
+
+      // A failed SceneView is not safe to cache for the next retry. Dispose its
+      // bindings and recreate it on demand instead of reusing a blank renderer.
+      unbindSceneRef.current?.();
+      unbindSceneRef.current = () => undefined;
+      unsubscribeExperienceRef.current?.();
+      unsubscribeExperienceRef.current = () => false;
+      sceneExperienceRef.current?.dispose();
+      sceneExperienceRef.current = null;
+      sceneNavigationRef.current?.dispose();
+      sceneNavigationRef.current = null;
+      sceneNavigationHomeSetRef.current = false;
+      const failedScene = sceneRef.current;
+      sceneRef.current = null;
+      if (failedScene) destroySceneView(failedScene, (caught) => DebugHelper.Log({ context: 'scene-recovery-destroy', error: caught }));
+      setSceneReady(false);
+
       publishMode('2d', 'map-runtime-recovery');
       announce('3B görünüm başlatılamadı. 2B harita korunuyor.', 'assertive');
     }
