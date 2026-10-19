@@ -13,7 +13,7 @@
 
 ## 2026-10-19 — Yapı ve mimari hijyeni
 
-- Tarihsel kök seviye GIS/ilerleme dosyaları `progress/archive/` altına alındı; içerikleri arşiv blob doğrulamasıyla korundu. Kök `KENT_REHBERI_PROGRESS.md` kısa güncel giriş noktası olarak yeniden düzenlendi.
+- Önceki tarihsel GIS/ilerleme kayıtlarının tam kopyaları `progress/archive/` altında korunuyor; `progress/` içinde eski bağlantı yollarını bozmamak için yalnız kısa yönlendirme dosyaları bırakıldı. `docs/experience-ui-deep-audit-2026-09-15.md` için de tam kayıt `docs/archive/` altına alındı ve eski yolda yönlendirme korundu.
 - Root README, depo klasörleri ve statik-only yayın modelini açıklayacak biçimde güncellendi.
 - HTML title/description/Open Graph/Twitter metadata, istenen **3D Altyapı / Üstyapı Koordinasyon Web Uygulaması** adına hizalandı.
 - PR [#542](https://github.com/tahafurkanozbay-star/mainyeni/pull/542), `apiBaseUrl`/varsayılan `/api` runtime yapılandırmasını kaldırdı; generic HTTP singleton tahminî API çağrısı yapmak yerine kapalı hata verir. PR'ın güncel taban başlığındaki lint, exact-base TypeScript/Vitest, mimari, dependency, governance, release QA, bundle bütünlüğü ve üretim bütçesi kontrolleri geçti. Merge commit: `2736a6ea7ed1ae2ec79256016d99667393d597c0`.
@@ -25,10 +25,10 @@
 
 ## Doğrulama ve durum
 
-- Ana dal tabanı, bu çalışmanın başlangıcında `9d83821c132e43afe14d9924435e271d5506fbc6` idi; önceki statik-only API kaldırma değişikliği [PR #538](https://github.com/tahafurkanozbay-star/mainyeni/pull/538) ile birleştirilmişti.
+- Önceki statik-only API kaldırma değişikliği [PR #538](https://github.com/tahafurkanozbay-star/mainyeni/pull/538) ile; yapı/hijyen düzenlemesi [PR #540](https://github.com/tahafurkanozbay-star/mainyeni/pull/540) ile birleştirildi. Daha sonraki API runtime temizliği [PR #542](https://github.com/tahafurkanozbay-star/mainyeni/pull/542) ve GIS politika arşivleme işlemi de ana dala girdi.
 - Yapı/hijyen PR'ı [#540](https://github.com/tahafurkanozbay-star/mainyeni/pull/540) `0701d47f7e032832a2812208e04031da1844b4ba` exact-head SHA'sında beş kontrolün tamamını başarıyla geçti: Webclient Quality, Release QA, Platform Architecture Audit, Platform Dependency Governance ve Typed Source Boundary. PR 19 Ekim 2026 tarihinde squash-merge edildi; merge commit ve güncel `main` SHA'sı `10d4161d6576444bd83d0bfd67d5669108ff2515`.
 - Bu ortamda canlı IIS sunucusu veya üretim tarayıcısında değişiklik yapılmadı; dağıtım sonucu ya da üretim CORS başarısı iddia edilmiyor.
-- PR #542 sonrası `main` üzerindeki Release QA, Webclient Quality, Platform Typed Test/Validation ve Pages deploy iş akışları da `2736a6ea...` başlığında başarılı olarak doğrulandı.
+- En son doğrulanmış ana dal: `cc087daa30dad23f96e352593af724bc062e92cf`. Bu başlıkta Release QA, Webclient Quality, Typed Source Boundary, Platform Governance Validation ve Pages deploy başarılı. Platform Architecture/Typed Test/Dependency denetimleri de PR #542'nin birleştirilen tam başlığında başarıyla tamamlandı.
 
 ## Sonraki adımlar
 
@@ -36,4 +36,4 @@
 2. Canlı yayından sonra Network panelinde Kent Rehberi isteklerinin yalnız PlanASKI hostuna gittiğini ve CORS nedeniyle tarayıcı hatası oluşmadığını doğrula.
 3. Eski IIS eşlemesi/klasörü için canlı sunucu envanteri çıkar; yalnız ayrı onaylı bakım adımında kaldır. Bu ortamda canlı IIS'e erişilmedi.
 4. `KentRehberi/webclient/` ayrı `gis-core-quality.yml` kalite iş akışı tarafından hâlâ derlenip test ediliyor; bu modülü aktif mimari envanteri olmadan silme.
-5. Eski `WebClient/src/gis/` politika dosyaları; paket/tsconfig, uygulama import'u, build/release workflow'u veya etkin kalite aracı referansı bulunmadığı denetlendikten sonra silinmeden `archive/legacy-gis-policies/` altına taşınmak üzere ayrı PR'da arşivleniyor. `KentRehberi/webclient/` ayrı `gis-core-quality.yml` tarafından aktif olarak derlenip test edildiğinden korunmalıdır.
+5. Eski `WebClient/src/gis/` politika dosyaları paket, tsconfig, import veya build/release workflow bağlantısı bulunmadığından silinmeden `archive/legacy-gis-policies/` altına taşındı. `KentRehberi/webclient/` ayrı `gis-core-quality.yml` tarafından aktif olarak derlenip test edildiğinden korunmalıdır.
