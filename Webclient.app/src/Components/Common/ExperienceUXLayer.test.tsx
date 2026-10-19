@@ -61,56 +61,28 @@ describe('ExperienceUXLayer', () => {
     document.body.replaceChildren();
   });
 
-  test('renders the utility navigation with accessible labels', () => {
-    const manager = createWindowManager();
-    renderLayer(manager);
+  test('removes the bottom-right utility rail, search action, and notification-center action', () => {
+    renderLayer();
 
-    expect(screen.getByRole('complementary', {
+    expect(screen.queryByRole('complementary', {
       name: 'Kent Rehberi yardımcı araçları',
-    })).toBeInTheDocument();
-
-    expect(screen.getByRole('navigation', {
-      name: 'Hızlı araçlar',
-    })).toBeInTheDocument();
-
-    expect(screen.getByRole('button', {
-      name: 'Genel aramayı aç',
-    })).toBeInTheDocument();
-
-    expect(screen.queryByRole('button', {
-      name: 'Katman yönetimini aç',
     })).not.toBeInTheDocument();
-
-    expect(screen.queryByRole('button', {
-      name: 'Lejandı aç',
-    })).not.toBeInTheDocument();
-
-    expect(screen.getByRole('button', {
-      name: 'Bildirim merkezini aç',
-    })).toBeInTheDocument();
-
-    expect(screen.queryByRole('button', {
-      name: /Kısayolları ve yardım bilgisini aç/i,
-    })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Genel aramayı aç' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Bildirim merkezini aç' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Koyu temaya geç' })).not.toBeInTheDocument();
   });
 
-  test('routes search actions through the canonical window manager', () => {
+  test('routes search commands through the canonical window manager', () => {
     const manager = createWindowManager();
     renderLayer(manager);
 
-    fireEvent.click(screen.getByRole('button', {
-      name: 'Genel aramayı aç',
-    }));
+    dispatchExperienceCommand('search');
 
-    expect(manager.ShowWindow).toHaveBeenCalledWith(
-      'genelarama-query-window',
-    );
+    expect(manager.ShowWindow).toHaveBeenCalledWith('genelarama-query-window');
   });
 
   test('does not render retired API-backed layer and legend controls', () => {
-    const manager = createWindowManager();
-    renderLayer(manager);
-
+    renderLayer();
     expect(screen.queryByRole('button', { name: 'Katman yönetimini aç' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Lejandı aç' })).not.toBeInTheDocument();
     expect(screen.queryByTestId('layer-list-widget')).not.toBeInTheDocument();
@@ -128,29 +100,11 @@ describe('ExperienceUXLayer', () => {
     expect(manager.ShowWindow).toHaveBeenCalledWith('genelarama-query-window');
   });
 
-  test('collapses and expands utility copy without removing controls', () => {
+  test('keeps notification drawers available through explicit commands without a floating trigger', () => {
     const manager = createWindowManager();
     renderLayer(manager);
-
-    const collapse = screen.getByRole('button', {
-      name: 'Yardımcı araçları daralt',
-    });
-    expect(collapse).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText('Çalışma alanı')).toBeInTheDocument();
-
-    fireEvent.click(collapse);
-
-    const expand = screen.getByRole('button', {
-      name: 'Yardımcı araçları genişlet',
-    });
-    expect(expand).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByText('Çalışma alanı')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', {
-      name: 'Genel aramayı aç',
-    })).toBeInTheDocument();
-
-    fireEvent.click(expand);
-    expect(screen.getByText('Çalışma alanı')).toBeInTheDocument();
+    dispatchExperienceCommand('notifications');
+    expect(screen.getByRole('dialog', { name: 'Bildirim merkezi' })).toBeInTheDocument();
   });
 
   test('opens help through the shared overlay stack and focuses the close control', () => {
@@ -179,8 +133,12 @@ describe('ExperienceUXLayer', () => {
     expect(document.body.style.overflow).toBe('hidden');
   });
 
-  test('opens the notification center as an accessible drawer using the canonical model', () => {
+  test('opens the notification center via command and restores focus to the header control', () => {
     const manager = createWindowManager();
+    const opener = document.createElement('button');
+    opener.id = 'mainbar-theme-toggle';
+    opener.textContent = 'Tema';
+    document.body.append(opener);
     const { notificationModel } = renderLayer(manager);
     act(() => notificationModel.push({
       id: 'shared-notification',
@@ -188,23 +146,16 @@ describe('ExperienceUXLayer', () => {
       message: 'Tek notification authority üzerinden geldi.',
     }));
 
-    const opener = screen.getByRole('button', {
-      name: 'Bildirim merkezini aç',
-    });
     opener.focus();
-    fireEvent.click(opener);
+    act(() => dispatchExperienceCommand('notifications'));
 
-    const dialog = screen.getByRole('dialog', {
-      name: 'Bildirim merkezi',
-    });
+    const dialog = screen.getByRole('dialog', { name: 'Bildirim merkezi' });
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(within(dialog).getByRole('heading', { name: 'Ortak bildirim' })).toBeInTheDocument();
     expect(document.body.style.overflow).toBe('hidden');
 
     fireEvent.keyDown(document, { key: 'Escape' });
-    expect(screen.queryByRole('dialog', {
-      name: 'Bildirim merkezi',
-    })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Bildirim merkezi' })).not.toBeInTheDocument();
     expect(document.activeElement).toBe(opener);
   });
 
@@ -265,12 +216,14 @@ describe('ExperienceUXLayer', () => {
     window.removeEventListener('kentrehberi:command', listener);
   });
 
-  test('Escape closes help and restores focus to the invoking control', () => {
+  test('Escape closes help and restores focus to the header theme control', () => {
     const manager = createWindowManager();
+    const opener = document.createElement('button');
+    opener.id = 'mainbar-theme-toggle';
+    opener.textContent = 'Tema';
+    document.body.append(opener);
     renderLayer(manager);
 
-    const opener = document.querySelector<HTMLElement>('.experience-utility');
-    if (!opener) throw new Error('Utility navigation was not rendered');
     opener.focus();
     dispatchHelpCommand();
 
@@ -329,28 +282,23 @@ describe('ExperienceUXLayer', () => {
     expect(manager.ShowWindow).not.toHaveBeenCalled();
   });
 
-  test('theme control exposes the next action, delegates to the provider, and emits bounded feedback', () => {
-    const manager = createWindowManager();
-    const { notificationModel } = renderLayer(manager);
+  test('delegates the header theme command to the canonical theme provider without a toast', () => {
+    const { notificationModel } = renderLayer();
 
-    const themeButton = screen.getByRole('button', {
-      name: 'Koyu temaya geç',
-    });
-    fireEvent.click(themeButton);
+    act(() => dispatchExperienceCommand('theme-toggle'));
 
     expect(mocks.toggleTheme).toHaveBeenCalledTimes(1);
-    expect(notificationModel.snapshot().items.some((item) => item.title === 'Koyu tema seçildi')).toBe(true);
-    expect(screen.getByText('Koyu tema seçildi')).toBeInTheDocument();
+    expect(notificationModel.snapshot().items.some((item) => item.id === 'experience-theme-feedback')).toBe(false);
+    expect(screen.queryByText('Koyu tema seçildi')).not.toBeInTheDocument();
   });
 
-  test('renders the dark-theme action label when dark theme is active', () => {
+  test('supports a theme-toggle command while dark theme is active', () => {
     mocks.themeState.theme = 'dark';
-    const manager = createWindowManager();
-    renderLayer(manager);
+    renderLayer();
 
-    expect(screen.getByRole('button', {
-      name: 'Açık temaya geç',
-    })).toBeInTheDocument();
+    act(() => dispatchExperienceCommand('theme-toggle'));
+
+    expect(mocks.toggleTheme).toHaveBeenCalledTimes(1);
   });
 
   test('leaves theme DOM and persistence to the canonical workspace preference owner', () => {
@@ -393,6 +341,10 @@ describe('ExperienceUXLayer', () => {
     window.removeEventListener('kentrehberi:command', listener);
   });
   test('opens full notification history from the bounded toast summary and returns keyboard focus', () => {
+    const opener = document.createElement('button');
+    opener.id = 'mainbar-theme-toggle';
+    opener.textContent = 'Tema';
+    document.body.append(opener);
     const { notificationModel } = renderLayer();
     act(() => {
       for (let index = 0; index < 5; index += 1) notificationModel.push({ id: `n-${index}`, title: `Kayıt ${index}` });
@@ -400,7 +352,7 @@ describe('ExperienceUXLayer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Tüm bildirimleri aç' }));
     expect(screen.getByRole('dialog', { name: 'Bildirim merkezi' })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'Escape' });
-    expect(screen.getByRole('button', { name: 'Bildirim merkezini aç' })).toHaveFocus();
+    expect(opener).toHaveFocus();
   });
 
 });
