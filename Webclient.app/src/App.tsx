@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './bootstrap-overrides.css';
 import './styles.responsive.css';
@@ -10,11 +10,9 @@ import './Components/Common/workspace-accessibility-guide-preference.css';
 import './experience/legacyPresentationModernization.css';
 import './Components/App/MapModeTransitionContinuity.css';
 import { MapComponent } from './Components/App/MapComponent';
-import { MapModeExperienceControl } from './Components/App/MapModeExperienceControl';
 import { ExperienceMapModePreferenceBridge } from './Components/App/ExperienceMapModePreferenceBridge';
 import { ExperienceMapModeFocusBridge } from './Components/App/ExperienceMapModeFocusBridge';
 import { AppConfig } from './Core/AppConfig';
-import Store from './Store/Store';
 import { installManagedWindowKeyboard } from './Components/Common/managedWindowKeyboard';
 import { useWindowManager } from './Store/Managers/WindowManager';
 import { ExperienceDataDisclaimer } from './Components/Common/ExperienceDataDisclaimer';
@@ -53,7 +51,6 @@ const describeBootstrapError = (error: unknown): string => {
 };
 
 function App() {
-  const mapViewAvailable = useSyncExternalStore(Store.subscribe, () => Boolean(Store.getState().Map.MapView), () => false);
   const windowManager = useWindowManager();
   useEffect(() => installManagedWindowKeyboard(windowManager), [windowManager]);
   const [bootstrapGeneration, setBootstrapGeneration] = useState(0);
@@ -179,7 +176,7 @@ function App() {
           >
             <ExperienceSkipNavigation />
             <MapComponent windowManager={windowManager} />
-            <ExperienceWorkspace mapModeControl={mapViewAvailable ? <MapModeExperienceControl /> : <span className="experience-sr-only">Harita hazırlanıyor</span>} />
+            <ExperienceWorkspace externalMapModeControl />
             <ExperienceUXLayer
               windowManager={windowManager}
               notificationModel={notificationCenter}
