@@ -3,7 +3,9 @@ import {
   EXPERIENCE_COMMAND_EVENT,
   EXPERIENCE_MAP_MODE_EVENT,
   EXPERIENCE_PREFERENCE_EVENT,
+  EXPERIENCE_STORAGE_KEY,
   normalizeExperiencePreferences,
+  parseExperiencePreferences,
   type ExperienceMapMode,
   type ExperiencePreferences,
   type StorageLike,
@@ -37,12 +39,22 @@ const dispatchModeRequest = (mode: ExperienceMapMode, source: string): boolean =
 
 export const ExperienceMapModePreferenceBridge = (): ReactNode => {
   const runtimeModeRef = useRef<ExperienceMapMode | null>(null);
+  const externalPreferenceModeRef = useRef<ExperienceMapMode | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     const storage = resolveStorage();
     const model = createMapModePreferenceModel();
     model.hydrate(storage);
+    // Track the preference store's original mode separately from the forced
+    // 3D startup mode. Theme or layout events may carry stale persisted 2D.
+    try {
+      externalPreferenceModeRef.current = parseExperiencePreferences(
+        storage?.getItem(EXPERIENCE_STORAGE_KEY),
+      ).lastMapMode;
+    } catch {
+      externalPreferenceModeRef.current = '3d';
+    }
 
     const onModeChange = (event: Event): void => {
       const detail = (event as CustomEvent<ModeChangeDetail>).detail;
@@ -63,8 +75,17 @@ export const ExperienceMapModePreferenceBridge = (): ReactNode => {
       const candidate = (event as CustomEvent<ExperiencePreferences>).detail;
       if (!candidate) return;
       const preferences = normalizeExperiencePreferences(candidate);
+      const previousPreferenceMode = externalPreferenceModeRef.current;
+      externalPreferenceModeRef.current = preferences.lastMapMode;
       const currentMode = runtimeModeRef.current;
-      if (!currentMode || currentMode === preferences.lastMapMode) return;
+      // Only react to an actual lastMapMode preference change. Unrelated
+      // preference events often repeat the old 2D value from an earlier session.
+      if (
+        !currentMode
+        || !previousPreferenceMode
+        || previousPreferenceMode === preferences.lastMapMode
+        || currentMode === preferences.lastMapMode
+      ) return;
       model.markRestoreRequested(preferences.lastMapMode);
       if (!dispatchModeRequest(preferences.lastMapMode, 'experience-preference-change')) {
         runtimeDiagnostics.record('experience.map-mode-preference.change-dispatch-failed', { mode: preferences.lastMapMode });

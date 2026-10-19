@@ -86,7 +86,7 @@ export const DEFAULT_EXPERIENCE_PREFERENCES: Readonly<ExperiencePreferences> = O
     density: "comfortable",
     motion: "system",
     panelPlacement: "auto",
-    lastMapMode: "2d",
+    lastMapMode: "3d",
     utilityCollapsed: false,
     showCoordinateReadout: true,
     highContrastMapControls: false
@@ -264,7 +264,7 @@ export function parseExperiencePreferences(serialized: string | null | undefined
     if (!serialized) return normalizeExperiencePreferences(null);
     try {
         return normalizeExperiencePreferences(JSON.parse(serialized));
-    } catch (_) {
+    } catch {
         return normalizeExperiencePreferences(null);
     }
 }
@@ -290,7 +290,7 @@ export function readExperiencePreferences(storage?: StorageLike | null): Experie
     if (!storage) return normalizeExperiencePreferences(null);
     try {
         return parseExperiencePreferences(storage.getItem(EXPERIENCE_STORAGE_KEY));
-    } catch (_) {
+    } catch {
         return normalizeExperiencePreferences(null);
     }
 }
@@ -303,7 +303,7 @@ export function writeExperiencePreferences(
     try {
         storage.setItem(EXPERIENCE_STORAGE_KEY, serializeExperiencePreferences(preferences));
         return true;
-    } catch (_) {
+    } catch {
         return false;
     }
 }

@@ -15,7 +15,18 @@ const MAX_ROWS_PER_TYPE = 20_000;
 const MAX_BYTES_PER_TYPE = 8 * 1024 * 1024;
 const MAX_TEXT = 4096;
 const MAX_LIMIT = 2000;
+const MAX_OVERVIEW_FEATURES = 20_000;
+const TYPE_CATALOG_CACHE_TTL_MS = 5 * 60 * 1000;
 const MAX_IN_FLIGHT = 4;
+
+interface TypeCatalogCacheEntry {
+  readonly expiresAt: number;
+  readonly catalog: KentRehberiTypeCatalog;
+}
+
+// Keep only the small sample catalog, not all point records. This lets a
+// follow-up POI query reuse the startup sweep without retaining a large dataset.
+const typeCatalogCache = new WeakMap<typeof fetch, TypeCatalogCacheEntry>();
 
 type RecordValue = Readonly<Record<string, unknown>>;
 
@@ -278,6 +289,34 @@ const fullSet = (groups: readonly (readonly KentRehberiGeoJsonFeature[])[]): rea
   return features;
 };
 
+const buildTypeCatalog = (
+  groups: readonly (readonly KentRehberiGeoJsonFeature[])[],
+): KentRehberiTypeCatalog => ({
+  types: groups.map((features, tur): KentRehberiTypeDescriptor => ({
+    tur,
+    count: features.length,
+    samples: features.slice(0, 8).map((feature) => ({
+      objectid: feature.properties.objectid as number,
+      adi: (feature.properties.adi as string | null)?.slice(0, 240) ?? null,
+      adres: (feature.properties.adres as string | null)?.slice(0, 240) ?? null,
+      durakNo: (feature.properties.durakNo as string | null)?.slice(0, 240) ?? null,
+    })),
+  })),
+});
+
+const cacheTypeCatalog = (
+  options: KentRehberiFetchOptions,
+  groups: readonly (readonly KentRehberiGeoJsonFeature[])[],
+): void => {
+  if (options.q || options.ilce || options.mahalle || options.tur !== undefined) return;
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  if (typeof fetchImpl !== 'function') return;
+  typeCatalogCache.set(fetchImpl, {
+    expiresAt: Date.now() + TYPE_CATALOG_CACHE_TTL_MS,
+    catalog: buildTypeCatalog(groups),
+  });
+};
+
 export const fetchPlanAskiGeoJsonDirect = async (
   options: KentRehberiFetchOptions = {},
 ): Promise<KentRehberiGeoJsonFeatureCollection> => {
@@ -305,6 +344,57 @@ export const fetchPlanAskiGeoJsonDirect = async (
   };
 };
 
+/**
+ * Purpose-built, bounded startup snapshot for records that have registered SVG
+ * symbols. The general query endpoint keeps its 2,000-row contract; this
+ * collector filters the already bounded per-category responses and applies a
+ * separate fixed cap to SVG-resolvable records only.
+ */
+export const fetchPlanAskiSvgOverviewDirect = async (
+  options: KentRehberiFetchOptions,
+  resolveIconKey: (properties: Readonly<Record<string, unknown>>) => string,
+): Promise<KentRehberiGeoJsonFeatureCollection> => {
+  if (typeof resolveIconKey !== 'function') {
+    throw new TypeError('A Kent Rehberi SVG icon resolver is required.');
+  }
+
+  const q = requestFilter(options.q, 'q', 120, 2);
+  const ilce = requestFilter(options.ilce, 'ilce', 50, 1);
+  const mahalle = requestFilter(options.mahalle, 'mahalle', 50, 1);
+  const groups = await fetchCategories(options, options.tur);
+  const all = fullSet(groups);
+  cacheTypeCatalog(options, groups);
+  const svgFeatures: KentRehberiGeoJsonFeature[] = all.flatMap((feature): KentRehberiGeoJsonFeature[] => {
+    const properties = feature.properties;
+    if (
+      (ilce && normalizeName(properties.ilce) !== ilce)
+      || (mahalle && normalizeName(properties.mahalle) !== mahalle)
+      || (q && ![properties.adi, properties.adres, properties.ilce, properties.mahalle]
+        .some((field) => normalizeName(field).includes(q)))
+    ) return [];
+
+    const iconKey = resolveIconKey(properties);
+    if (!iconKey || iconKey === 'default') return [];
+    return [{
+      ...feature,
+      properties: Object.freeze({ ...properties, iconKey }) as Readonly<Record<string, unknown>>,
+    }];
+  });
+  svgFeatures.sort((left, right) =>
+    (left.properties.objectid as number) - (right.properties.objectid as number));
+
+  const features = svgFeatures.slice(0, MAX_OVERVIEW_FEATURES);
+  return {
+    type: 'FeatureCollection',
+    features,
+    meta: {
+      count: features.length,
+      limit: MAX_OVERVIEW_FEATURES,
+      hasMore: svgFeatures.length > features.length,
+    },
+  };
+};
+
 export const fetchPlanAskiFeatureDirect = async (
   objectId: number,
   options: KentRehberiFetchOptions = {},
@@ -318,17 +408,17 @@ export const fetchPlanAskiFeatureDirect = async (
 export const fetchPlanAskiTypeCatalogDirect = async (
   options: KentRehberiFetchOptions = {},
 ): Promise<KentRehberiTypeCatalog> => {
+  options.signal?.throwIfAborted();
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  if (typeof fetchImpl === 'function') {
+    const cached = typeCatalogCache.get(fetchImpl);
+    if (cached && cached.expiresAt > Date.now()) return cached.catalog;
+    if (cached) typeCatalogCache.delete(fetchImpl);
+  }
+
   const groups = await fetchCategories(options);
-  const types: KentRehberiTypeDescriptor[] = groups.map((features, tur) => ({
-    tur,
-    count: features.length,
-    samples: features.slice(0, 8).map((feature) => ({
-      objectid: feature.properties.objectid as number,
-      adi: (feature.properties.adi as string | null)?.slice(0, 240) ?? null,
-      adres: (feature.properties.adres as string | null)?.slice(0, 240) ?? null,
-      durakNo: (feature.properties.durakNo as string | null)?.slice(0, 240) ?? null,
-    })),
-  }));
-  return { types };
+  const catalog = buildTypeCatalog(groups);
+  cacheTypeCatalog(options, groups);
+  return catalog;
 };
 

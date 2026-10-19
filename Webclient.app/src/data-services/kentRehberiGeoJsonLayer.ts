@@ -1,7 +1,10 @@
 import { loadArcgisModule } from '../gis-engine/arcgisModuleRuntime';
+import iconEntries from '../gis-engine/iconRegistry.json';
+import { normalizeIconKey } from '../gis-engine/iconResolver';
 import {
   fetchPlanAskiFeatureDirect,
   fetchPlanAskiGeoJsonDirect,
+  fetchPlanAskiSvgOverviewDirect,
   fetchPlanAskiTypeCatalogDirect,
 } from './kentRehberiPlanAskiDirect';
 
@@ -9,6 +12,86 @@ const DEFAULT_LIMIT = 500;
 const MAX_LIMIT = 2000;
 const LAYER_ID = 'kent-rehberi-postgis';
 const LAYER_TITLE = 'Kent Rehberi';
+
+interface OverviewIconRegistryEntry {
+  readonly id?: unknown;
+  readonly type?: unknown;
+  readonly aliases?: unknown;
+  readonly icon?: unknown;
+  readonly url?: unknown;
+  readonly src?: unknown;
+}
+
+interface OverviewSvgIcon {
+  readonly id: string;
+  readonly url: string;
+  readonly aliases: readonly string[];
+}
+
+const overviewSvgIcons: readonly OverviewSvgIcon[] = Object.freeze(
+  (iconEntries as readonly OverviewIconRegistryEntry[]).flatMap((entry): OverviewSvgIcon[] => {
+    const id = typeof entry.id === 'string' ? entry.id.trim() : '';
+    const url = [entry.icon, entry.url, entry.src].find(
+      (candidate): candidate is string => typeof candidate === 'string' && /\.svg(?:[?#].*)?$/i.test(candidate),
+    );
+    if (!id || !url) return [];
+    const rawAliases = [entry.id, entry.type, ...(Array.isArray(entry.aliases) ? entry.aliases : [])];
+    const aliases = Object.freeze([...new Set(rawAliases
+      .filter((alias): alias is string => typeof alias === 'string')
+      .map(normalizeIconKey)
+      .filter((alias) => alias.length >= 4))]);
+    return [Object.freeze({ id, url, aliases })];
+  }),
+);
+
+const overviewSvgAliasMatches = Object.freeze(overviewSvgIcons
+  .flatMap((entry) => entry.aliases.map((alias) => Object.freeze({ id: entry.id, alias })))
+  .sort((left, right) => right.alias.length - left.alias.length));
+
+/** Resolve known POI names to the same SVG assets used by the service icons. */
+export const resolveKentRehberiOverviewIconKey = (
+  properties: Readonly<Record<string, unknown>>,
+): string => {
+  const title = normalizeIconKey([
+    properties.adi,
+    properties.name,
+    properties.adres,
+    properties.webSayfasi,
+    properties.durakNo,
+  ].filter((value) => typeof value === 'string' && value.trim()).join(' '));
+  if (!title) return 'default';
+  const hasWholeAlias = (alias: string): boolean =>
+    title === alias
+    || title.startsWith(`${alias} `)
+    || title.endsWith(` ${alias}`)
+    || title.includes(` ${alias} `);
+  const match = overviewSvgAliasMatches.find(({ alias }) => hasWholeAlias(alias));
+  return match?.id ?? 'default';
+};
+
+const overviewSvgRenderer = Object.freeze({
+  type: 'unique-value',
+  field: 'iconKey',
+  uniqueValueInfos: Object.freeze(overviewSvgIcons.map((entry) => Object.freeze({
+    value: entry.id,
+    label: entry.id,
+    symbol: Object.freeze({
+      type: 'picture-marker',
+      url: entry.url,
+      width: '28px',
+      height: '32px',
+    }),
+  }))),
+  // Keep unclassified records from falling back to generic orange markers.
+  // Only registry entries with real SVG assets are painted on the overview.
+  defaultSymbol: Object.freeze({
+    type: 'simple-marker',
+    style: 'circle',
+    color: [0, 0, 0, 0],
+    size: 1,
+    outline: Object.freeze({ color: [0, 0, 0, 0], width: 0 }),
+  }),
+});
 
 type JsonObject = Readonly<Record<string, unknown>>;
 
@@ -348,6 +431,34 @@ export const fetchKentRehberiGeoJson = async (
   }
 };
 
+/**
+ * Loads every upstream category, keeps records with a registered SVG icon, and
+ * applies a separate fixed result cap. The ordinary query API remains limited
+ * to 2,000 results per call.
+ */
+export const fetchKentRehberiSvgOverviewGeoJson = async (
+  options: KentRehberiFetchOptions = {},
+): Promise<KentRehberiGeoJsonFeatureCollection> => {
+  const timeoutMs = normalizePositiveInteger(options.timeoutMs, 30_000, 60_000);
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  if (typeof fetchImpl !== 'function') {
+    throw new Error('Fetch API is unavailable for the Kent Rehberi overview layer.');
+  }
+
+  const request = createRequestSignal(options.signal, timeoutMs);
+  try {
+    return validateKentRehberiFeatureCollection(
+      await fetchPlanAskiSvgOverviewDirect(
+        { ...options, signal: request.signal },
+        resolveKentRehberiOverviewIconKey,
+      ),
+      20_000,
+    );
+  } finally {
+    request.dispose();
+  }
+};
+
 export const fetchKentRehberiFeature = async (
   objectId: number,
   options: KentRehberiFetchOptions = {},
@@ -391,6 +502,7 @@ const kentRehberiFields = Object.freeze([
   { name: 'x', alias: 'X', type: 'double' },
   { name: 'y', alias: 'Y', type: 'double' },
   { name: 'tur', alias: 'Tür', type: 'integer' },
+  { name: 'iconKey', alias: 'SVG simgesi', type: 'string', length: 80 },
   { name: 'yapan', alias: 'Yapan', type: 'integer' },
   { name: 'webSayfasi', alias: 'Web Sayfası', type: 'string', length: 255 },
   { name: 'durakNo', alias: 'Durak No', type: 'string', length: 254 },
@@ -433,10 +545,10 @@ export const createKentRehberiGeoJsonLayer = async (
       objectIdField: 'objectid',
       fields: kentRehberiFields,
       popupEnabled: true,
-      outFields: ['objectid', 'adi', 'adres', 'ilce', 'mahalle', 'tur', 'yapan', 'webSayfasi', 'durakNo'],
+      outFields: ['objectid', 'adi', 'adres', 'ilce', 'mahalle', 'tur', 'yapan', 'webSayfasi', 'durakNo', 'iconKey'],
       popupTemplate: {
         title: '{adi}',
-        outFields: ['objectid', 'adi', 'adres', 'ilce', 'mahalle', 'tur', 'yapan', 'webSayfasi', 'durakNo'],
+        outFields: ['objectid', 'adi', 'adres', 'ilce', 'mahalle', 'tur', 'yapan', 'webSayfasi', 'durakNo', 'iconKey'],
         content: [{ type: 'fields', fieldInfos: popupFieldInfos }],
       },
       ...(presentation.renderer ? { renderer: presentation.renderer } : {}),
@@ -476,13 +588,19 @@ export const attachKentRehberiGeoJsonLayer = async (
     throw new TypeError('Kent Rehberi layer requires an ArcGIS map with add/remove support.');
   }
 
-  const geojson = await fetchKentRehberiGeoJson(options);
+  const isSvgOverview = options.tur === undefined
+    && !options.q
+    && !options.ilce
+    && !options.mahalle;
+  const geojson = isSvgOverview
+    ? await fetchKentRehberiSvgOverviewGeoJson(options)
+    : await fetchKentRehberiGeoJson(options);
   if (options.signal?.aborted) throw createAbortError();
 
   const layer = await createKentRehberiGeoJsonLayer(
     geojson,
     options.moduleLoader ?? loadArcgisModule,
-    {},
+    isSvgOverview ? { id: LAYER_ID, title: LAYER_TITLE, renderer: overviewSvgRenderer } : {},
     options.signal,
   );
   if (options.signal?.aborted) {

@@ -53,8 +53,8 @@ describe("ExperienceWorkspace", () => {
         expect(screen.getByLabelText("Harita çalışma alanı durumu ve görünüm kontrolleri")).toBeInTheDocument();
         expect(screen.getByLabelText("Çalışma alanı durumu")).not.toHaveTextContent("Çevrimiçi");
         expect(screen.queryByRole("button", { name: /Komutlar|Deneyim ayarları/i })).not.toBeInTheDocument();
-        expect(screen.getByRole("button", { name: /2 boyutlu harita, etkin/i })).toHaveAttribute("aria-pressed", "true");
-        expect(screen.getByRole("button", { name: /3 boyutlu sahne/i })).toHaveAttribute("aria-pressed", "false");
+        expect(screen.getByRole("button", { name: /2 boyutlu harita/i })).toHaveAttribute("aria-pressed", "false");
+        expect(screen.getByRole("button", { name: /3 boyutlu sahne, etkin/i })).toHaveAttribute("aria-pressed", "true");
     });
 
     test("keeps an externally supplied 2D/3D control outside the fixed status dock", () => {
@@ -69,12 +69,12 @@ describe("ExperienceWorkspace", () => {
         window.addEventListener("kentrehberi:command", listener);
         render(<ExperienceWorkspace />);
 
-        fireEvent.click(screen.getByRole("button", { name: /3 boyutlu sahne/i }));
+        fireEvent.click(screen.getByRole("button", { name: /2 boyutlu harita/i }));
 
         expect(listener).toHaveBeenCalledTimes(1);
         expect(listener.mock.calls[0][0].detail).toEqual(expect.objectContaining({
             name: "map-mode",
-            mode: "3d",
+            mode: "2d",
             source: "experience-workspace"
         }));
         expect(screen.getByLabelText("Harita görünümü")).toHaveAttribute("aria-busy", "true");
@@ -83,14 +83,14 @@ describe("ExperienceWorkspace", () => {
 
     test("accepts runtime confirmation and updates the active map mode", async () => {
         render(<ExperienceWorkspace />);
-        fireEvent.click(screen.getByRole("button", { name: /3 boyutlu sahne/i }));
+        fireEvent.click(screen.getByRole("button", { name: /2 boyutlu harita/i }));
 
         window.dispatchEvent(new CustomEvent("kentrehberi:map-mode-changed", {
-            detail: { mode: "3d", source: "test-runtime" }
+            detail: { mode: "2d", source: "test-runtime" }
         }));
 
         await waitFor(() => {
-            expect(screen.getByRole("button", { name: /3 boyutlu sahne, etkin/i })).toHaveAttribute("aria-pressed", "true");
+            expect(screen.getByRole("button", { name: /2 boyutlu harita, etkin/i })).toHaveAttribute("aria-pressed", "true");
         });
         expect(screen.getByLabelText("Harita görünümü")).not.toHaveAttribute("aria-busy");
     });
