@@ -28,7 +28,8 @@ export const KentRehberiDataLayer = ({ map }: { readonly map: KentRehberiMapLike
     getKentRehberiMapFilterSnapshot,
     getKentRehberiMapFilterSnapshot,
   );
-  const loadedLayer = state.loadedLayers[0]?.layer;
+  const loadedHandle = state.loadedLayers[0]?.layer;
+  const loadedLayer = loadedHandle?.layer;
 
   useEffect(() => {
     void controller.start();
@@ -42,7 +43,7 @@ export const KentRehberiDataLayer = ({ map }: { readonly map: KentRehberiMapLike
 
   const failed = state.phase === 'degraded';
   const canRetry = state.canRetry && state.attempt < DATA_LAYER_RETRY_POLICY.maxAttempts;
-  const featureCount = state.loadedLayers[0]?.layer.featureCount ?? 0;
+  const featureCount = loadedHandle?.featureCount ?? 0;
   const announcement = failed
     ? 'Kent verileri yüklenemedi. Bağlantınızı kontrol edip tekrar deneyin.'
     : state.phase === 'ready'
