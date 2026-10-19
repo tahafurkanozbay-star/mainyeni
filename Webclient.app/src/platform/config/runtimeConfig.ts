@@ -325,7 +325,7 @@ const buildModeEvidence = (
   mode: RuntimeConfig['buildMode'],
 ): RuntimeConfigFieldEvidence => {
   if (mode === 'vite-ready') {
-    const supportedKeys = new Set(Object.values(RUNTIME_CONFIG_SOURCE_KEYS).flat());
+    const supportedKeys = new Set<string>(Object.values(RUNTIME_CONFIG_SOURCE_KEYS).flat());
     const key = Object.keys(source)
       .filter(
         (candidate) => supportedKeys.has(candidate) || VITE_BUILTIN_KEYS.has(candidate),
@@ -343,7 +343,7 @@ const buildModeEvidence = (
     );
   }
   if (mode === 'legacy-cra') {
-    const supportedKeys = new Set(Object.values(RUNTIME_CONFIG_SOURCE_KEYS).flat());
+    const supportedKeys = new Set<string>(Object.values(RUNTIME_CONFIG_SOURCE_KEYS).flat());
     const key = Object.keys(source)
       .filter((candidate) => supportedKeys.has(candidate) && candidate.startsWith('REACT_APP_'))
       .sort()[0];
