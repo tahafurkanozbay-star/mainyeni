@@ -99,6 +99,7 @@ describe("QuerySearchRuntime", () => {
         test("uses the address when a search result has only a numeric category label", () => {
             const record = { attr: { adi: "Kategori 34", adres: "Kızılay Mahallesi, Çankaya" }, type: "34" };
             expect(getRecordTitle(record)).toBe("Kızılay Mahallesi, Çankaya");
+            expect(getRecordTitle({ attr: { adi: "Kategori 34" } })).toBe("İsimsiz kayıt");
             expect(getRecordCategory(record)).toBe("Diğer");
         });
 
