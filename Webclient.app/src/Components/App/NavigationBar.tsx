@@ -36,6 +36,20 @@ export function NavigationBar({ id, windowManager }: NavigationBarProps) {
           <span id="kentrehberi-global-search-status" className="experience-sr-only" aria-live="polite" aria-atomic="true">{search.isComposing ? 'Metin girişi sürüyor.' : search.canSubmit ? 'Arama hazır.' : 'Arama için bir ifade yazın.'}</span>
         </form>
         <nav className="mainbar-right" aria-label="Üst menü">
+          <button
+            id="mainbar-theme-toggle"
+            className="kr-header-shortcut kr-header-theme"
+            type="button"
+            aria-label="Açık ve koyu tema arasında geçiş yap"
+            title="Açık / koyu görünüm"
+            onClick={() => window.dispatchEvent(new CustomEvent('kentrehberi:command', { detail: { name: 'theme-toggle' } }))}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="8.25" />
+              <path d="M12 3.75a8.25 8.25 0 0 1 0 16.5Z" fill="currentColor" stroke="none" />
+              <path d="M12 6v12" />
+            </svg>
+          </button>
           <a className="kr-header-shortcut kr-header-portal" href="https://cbsbaskent.ankara.bel.tr/" target="_blank" rel="noopener noreferrer" aria-label="CBS Başkent portalını yeni sekmede aç">
             <span aria-hidden="true">CBS Başkent</span>
           </a>
