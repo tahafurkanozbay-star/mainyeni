@@ -14,7 +14,7 @@ const MAX_TYPE = 42;
 const MAX_ROWS_PER_TYPE = 20_000;
 const MAX_BYTES_PER_TYPE = 8 * 1024 * 1024;
 const MAX_TEXT = 4096;
-const MAX_LIMIT = 20_000;
+const MAX_LIMIT = 2000;
 const MAX_IN_FLIGHT = 4;
 
 type RecordValue = Readonly<Record<string, unknown>>;
