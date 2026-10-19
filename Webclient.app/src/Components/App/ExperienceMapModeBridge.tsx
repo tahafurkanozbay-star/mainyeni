@@ -207,8 +207,10 @@ export function ExperienceMapModeBridge({
   const setMode = useCallback((mode: ExperienceMapMode) => {
     activeModeRef.current = mode;
     if (modeRef) modeRef.current = mode;
+    const visibleView = mode === '3d' ? sceneRef.current?.view : mapView;
+    MapManager.SetActiveMapView?.(visibleView && !visibleView.destroyed ? visibleView : mapView);
     setActiveMode(mode);
-  }, [modeRef]);
+  }, [mapView, modeRef]);
 
   const syncSceneUi = useCallback((snapshot: SceneExperienceSnapshot) => {
     if (disposedRef.current) return;
@@ -352,6 +354,7 @@ export function ExperienceMapModeBridge({
       const sceneState = normalizeSceneStateFromMap(mapView, bridge);
       if (modeRef) modeRef.current = '3d';
       activeModeRef.current = '3d';
+      MapManager.SetActiveMapView?.(scene.view);
       bridge.setState(sceneState);
 
       await applyViewStateToSceneView(scene.view, sceneState, {
@@ -410,6 +413,7 @@ export function ExperienceMapModeBridge({
       setSceneHostActive(false);
       activeModeRef.current = '2d';
       if (modeRef) modeRef.current = '2d';
+      MapManager.SetActiveMapView?.(mapView);
       setActiveMode('2d');
 
       // A failed SceneView is not safe to cache for the next retry. Dispose its
@@ -455,6 +459,7 @@ export function ExperienceMapModeBridge({
       sceneExperienceRef.current?.setActive(false);
       activeModeRef.current = '2d';
       if (modeRef) modeRef.current = '2d';
+      MapManager.SetActiveMapView?.(mapView);
       bridge?.setState?.(mapState);
 
       await applyViewStateToMapView(mapView as never, mapState, {
@@ -477,6 +482,7 @@ export function ExperienceMapModeBridge({
       setSceneHostActive(true);
       activeModeRef.current = '3d';
       if (modeRef) modeRef.current = '3d';
+      MapManager.SetActiveMapView?.(sceneRef.current?.view ?? mapView);
       setActiveMode('3d');
       publishMode('3d', 'map-runtime-recovery');
       announce('2B görünüme dönüş tamamlanamadı. 3B görünüm korunuyor.', 'assertive');
@@ -534,6 +540,7 @@ export function ExperienceMapModeBridge({
     if (sceneLifetimeRef.current.signal.aborted) sceneLifetimeRef.current = new AbortController();
     activeModeRef.current = '2d';
     if (modeRef) modeRef.current = '2d';
+    MapManager.SetActiveMapView?.(mapView);
 
     const onCommand = (event: Event) => {
       const detail = (event as CustomEvent<ExperienceCommandDetail>).detail;
@@ -587,6 +594,7 @@ export function ExperienceMapModeBridge({
     sceneNavigationHomeSetRef.current = false;
     if (sceneRef.current) destroySceneView(sceneRef.current, (error) => DebugHelper.Log({ context: 'scene-destroy', error }));
     sceneRef.current = null;
+    MapManager.SetActiveMapView?.(null);
   }, []);
 
   return (
