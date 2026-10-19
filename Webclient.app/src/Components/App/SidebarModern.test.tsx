@@ -155,7 +155,7 @@ describe('SidebarModern governed interaction integration', () => {
     seedPoiIndex([{
       id: 106,
       name: 'Test <em>Place</em>',
-      address: '<img src=x onerror=alert(1)>',
+      address: '\\u003cimg src=x onerror=alert(1)\\u003e',
       district: 'Çankaya',
       neighborhood: 'Kızılay',
       longitude: 32.854,
