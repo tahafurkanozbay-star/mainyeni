@@ -87,7 +87,7 @@ describe('MapModeExperienceControl', () => {
     expect(get3D()).toHaveAttribute('aria-disabled', 'true');
     expect(get2D()).not.toBeDisabled();
     expect(get3D()).not.toBeDisabled();
-    expect(screen.getByText(/3B görünüm hazırlanıyor/, { selector: 'strong' })).toBeInTheDocument();
+    expect(document.querySelector('.map-mode-experience__status-sr')).toHaveTextContent(/3B görünüm hazırlanıyor/);
 
     window.removeEventListener(EXPERIENCE_COMMAND_EVENT, onCommand as EventListener);
   });
@@ -138,7 +138,8 @@ describe('MapModeExperienceControl', () => {
     expect(get3D()).toHaveAttribute('aria-checked', 'true');
     expect(get2D()).toHaveAttribute('aria-checked', 'false');
     expect(screen.getByText('3B sahne')).toBeInTheDocument();
-    expect(screen.getByText(/3B kamera ve sahne araçları etkin/)).toBeInTheDocument();
+    expect(document.querySelector('.map-mode-experience__status-sr')).toHaveTextContent(/3B kamera ve sahne araçları etkin/);
+    expect(document.querySelector('.map-mode-experience__status')).not.toBeInTheDocument();
   });
 
   it('returns from 3B to 2B through the same command contract', () => {
