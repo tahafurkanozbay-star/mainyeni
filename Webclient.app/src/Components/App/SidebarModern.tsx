@@ -13,6 +13,9 @@ import type { ManagedWindowHandle, WindowManagerLike } from '../../experience/co
 import { createSidebarKeyboardController, type SidebarKeyboardFocusTarget } from '../../shell/sidebarKeyboardController';
 import { createSidebarNavigationModel, type SidebarNavigationView } from '../../shell/sidebarNavigationModel';
 import { createSidebarPreferenceStore } from '../../shell/sidebarPreferenceStore';
+import { normalizeIconKey } from '../../gis-engine/iconResolver';
+import iconRegistryEntries from '../../gis-engine/iconRegistry.json';
+import { setKentRehberiMapFilter } from '../../shell/kentRehberiMapFilter';
 import { SharedGISIcon } from '../Common/SharedGISIcon';
 import {
   SIDEBAR_GROUPS,
@@ -34,6 +37,41 @@ const ITEMS = SIDEBAR_ITEMS as readonly SidebarItem[];
 const MAX_RECENT_SERVICES = 6;
 const GROUP_IDS = Object.freeze(GROUPS.map((group) => group.id));
 const ITEM_IDS = Object.freeze(ITEMS.map((item) => item.windowId));
+
+interface SidebarIconRegistryEntry {
+  readonly id?: unknown;
+  readonly type?: unknown;
+  readonly aliases?: unknown;
+}
+
+const sidebarIconAliases = Object.freeze(
+  (iconRegistryEntries as readonly SidebarIconRegistryEntry[])
+    .flatMap((entry) => {
+      const id = typeof entry.id === 'string' ? entry.id.trim() : '';
+      if (!id) return [];
+      const aliases = [...new Set([entry.id, entry.type, ...(Array.isArray(entry.aliases) ? entry.aliases : [])]
+        .filter((alias): alias is string => typeof alias === 'string' && alias.trim())
+        .map(normalizeIconKey)
+        .filter(Boolean))];
+      return aliases.map((alias) => Object.freeze({ id, alias }));
+    })
+    .sort((left, right) => right.alias.length - left.alias.length),
+);
+
+const resolveSidebarIconKey = (item: SidebarItem): string => {
+  const title = normalizeIconKey([item.iconType, item.label, item.serviceKey].join(' '));
+  const match = sidebarIconAliases.find(({ alias }) => (
+    title === alias
+    || title.startsWith(`${alias} `)
+    || title.endsWith(` ${alias}`)
+    || title.includes(` ${alias} `)
+  ));
+  return match?.id ?? 'default';
+};
+
+const iconKeysForItems = (items: readonly SidebarItem[]): readonly string[] => Object.freeze(
+  [...new Set(items.map(resolveSidebarIconKey).filter((key) => key !== 'default'))],
+);
 
 const ServiceSearchGlyph = (): ReactNode => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -161,6 +199,13 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
   };
 
   const openWindow = (windowId: string): void => {
+    const selectedItem = ITEMS.find((item) => item.windowId === windowId);
+    if (selectedItem) {
+      setKentRehberiMapFilter({
+        label: selectedItem.label,
+        iconKeys: [resolveSidebarIconKey(selectedItem)].filter((key) => key !== 'default'),
+      });
+    }
     navigationModel.recordRecent(windowId);
     preferenceStore.saveRecents(navigationModel.getSnapshot().recentIds);
 
@@ -264,7 +309,20 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
             }}
             type="button"
             className={`kr-sidebar__group ns-btn${group.id} ${navigation.activeGroupId === group.id ? 'active' : ''}`}
-            onClick={() => navigationModel.toggleGroup(group.id)}
+            onClick={() => {
+              navigationModel.toggleGroup(group.id);
+              const selectedGroupId = navigationModel.getSnapshot().activeGroupId;
+              if (selectedGroupId === null) {
+                setKentRehberiMapFilter(null);
+              } else {
+                const selectedGroup = GROUPS.find((candidate) => candidate.id === selectedGroupId);
+                const groupItems = ITEMS.filter((item) => item.group === selectedGroupId);
+                setKentRehberiMapFilter({
+                  label: selectedGroup?.label ?? selectedGroupId,
+                  iconKeys: iconKeysForItems(groupItems),
+                });
+              }
+            }
             onKeyDown={(event) => handleGroupKeyDown(event, group.id)}
             aria-pressed={navigation.activeGroupId === group.id}
             aria-controls="kr-sidebar-services"
