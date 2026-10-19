@@ -34,6 +34,7 @@ import './SidebarInteraction.css';
 interface SidebarProps {
   readonly id: string;
   readonly windowManager: WindowManagerLike;
+  readonly onToolHostChange?: (element: HTMLDivElement | null) => void;
 }
 
 interface PointSearchMapViewLike {
@@ -79,7 +80,7 @@ const resolveLocalStorage = (): Storage | null => {
 };
 
 export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(function SidebarModern(
-  { id, windowManager },
+  { id, windowManager, onToolHostChange },
   ref,
 ) {
   const preferenceStore = useMemo(() => createSidebarPreferenceStore({
@@ -396,6 +397,10 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
           </button>
         ))}
       </nav>
+
+      {/* Query tools portal into this slot so results reuse Keşfet's existing panel
+          instead of creating a second floating panel over the category navigation. */}
+      <div className="kr-sidebar__tool-slot" ref={onToolHostChange} />
 
       <section id="kr-sidebar-services" className="kr-sidebar__panel" aria-labelledby="kr-sidebar-panel-title">
         <div className="kr-sidebar__discovery">
