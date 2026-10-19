@@ -372,3 +372,87 @@ html[data-experience-motion="reduced"] .experience-scene-controls button {
     width: auto;
   }
 }
+
+
+/* Kent Rehberi POI popup: address first, with clear Google Maps actions. */
+.kent-rehberi-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 220px;
+  max-width: min(360px, calc(100vw - 64px));
+  color: var(--exp-text, #0f172a);
+}
+
+.kent-rehberi-popup__address {
+  color: var(--exp-text, #0f172a);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.kent-rehberi-popup__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kent-rehberi-popup__action {
+  display: inline-flex;
+  flex: 1 1 145px;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--exp-border, #cbd5e1);
+  border-radius: 10px;
+  font: 700 13px/1.25 system-ui, sans-serif;
+  text-align: center;
+  text-decoration: none !important;
+  overflow-wrap: anywhere;
+  transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.kent-rehberi-popup__action--primary {
+  border-color: var(--exp-accent, #155eef);
+  background: var(--exp-accent, #155eef);
+  color: #fff !important;
+}
+
+.kent-rehberi-popup__action--secondary {
+  background: var(--exp-surface, #fff);
+  color: var(--exp-text, #0f172a) !important;
+}
+
+.kent-rehberi-popup__action:hover {
+  border-color: var(--exp-accent, #155eef);
+  filter: brightness(0.97);
+}
+
+.kent-rehberi-popup__action:active {
+  transform: translateY(1px);
+}
+
+.kent-rehberi-popup__action:focus-visible {
+  outline: 3px solid var(--exp-accent, #155eef);
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .kent-rehberi-popup {
+    min-width: min(220px, calc(100vw - 96px));
+  }
+
+  .kent-rehberi-popup__actions {
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kent-rehberi-popup__action {
+    transition: none;
+  }
+}
+
