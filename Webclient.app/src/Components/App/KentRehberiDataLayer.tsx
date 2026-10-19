@@ -4,7 +4,6 @@ import {
   type KentRehberiLayerHandle,
   type KentRehberiMapLike,
 } from '../../data-services/kentRehberiGeoJsonLayer';
-import { isDirectPlanAskiSource } from '../../data-services/kentRehberiPlanAskiDirect';
 import { createSidebarLayerLoadController } from '../../shell/sidebarLayerLoadController';
 import './KentRehberiDataLayer.css';
 const DATA_LAYER_RETRY_POLICY = Object.freeze({ maxAttempts: 3 });
@@ -14,7 +13,7 @@ export const KentRehberiDataLayer = ({ map }: { readonly map: KentRehberiMapLike
   const controller = useMemo(() => createSidebarLayerLoadController<KentRehberiLayerHandle>({
     serviceKeys: ['kent-rehberi'],
     concurrency: 1,
-    timeoutMs: isDirectPlanAskiSource() ? 30_000 : 15_000,
+    timeoutMs: 30_000,
     loadLayer: async (_key, { signal }) => attachKentRehberiGeoJsonLayer({ map, signal }),
     disposeLayer: (handle) => handle.dispose(),
   }), [map]);
