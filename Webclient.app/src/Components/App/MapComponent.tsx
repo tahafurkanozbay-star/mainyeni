@@ -28,6 +28,7 @@ import type { ExperienceMapMode } from '../../experience/experienceRuntime';
 import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
 import type { KentRehberiMapLike } from '../../data-services/kentRehberiGeoJsonLayer';
 import { geocodeAddress } from '../../data-services/addressGeocoding';
+import { clearActiveMapView, getActiveMapView, setActiveMapView } from '../../gis-engine/activeMapViewRuntime';
 import { KentRehberiDataLayer } from './KentRehberiDataLayer';
 import './MapComponent.css';
 import '../Widget/_shared/ExperienceWidgetModernization.css';
@@ -146,7 +147,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
         event.preventDefault();
 
         const activeView = (
-          MapManager.GetActiveMapView?.() ?? MapManager.GetMapView()
+          getActiveMapView(MapManager.GetMapView())
         ) as MapViewLike | null;
         if (!activeView || activeView.destroyed || typeof activeView.toMap !== 'function') return;
 
@@ -154,13 +155,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
         const rect = container?.getBoundingClientRect();
         const x = event.clientX - (rect?.left ?? 0);
         const y = event.clientY - (rect?.top ?? 0);
-        let mapPoint: unknown;
-        try {
-          mapPoint = activeView.toMap({ x, y });
-        } catch (error) {
-          DebugHelper.Log({ context: 'map-contextmenu-to-map', error });
-          return;
-        }
+        const mapPoint = activeView.toMap({ x, y });
         if (!mapPoint || typeof mapPoint !== 'object') return;
 
         MapManager.SetMapClickEvent?.({ x, y, mapPoint });
@@ -173,7 +168,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       window.addEventListener('resize', updatePadding, { passive: true });
       handles.push({ remove: () => window.removeEventListener('resize', updatePadding) });
       Store.dispatch({ type: MapReducer_ActionTypes.SetMapView, payload: view });
-      MapManager.SetActiveMapView?.(view);
+      setActiveMapView(view);
       setMapView(view);
       accessibilityModel.markReady();
       if (recoveryAttemptId !== null) recoveryModel.succeed(recoveryAttemptId);
@@ -185,7 +180,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       activeViewModeRef.current = '2d'; accessorWatchRef.current = null;
       unbindViewState(); performanceMonitor?.dispose?.(); MapManager.ClearViewPerformanceMonitor?.(performanceMonitor);
       MapManager.ClearViewStateBridge?.(bridge as never); bridge?.destroy?.(); handles.forEach(safeRemove); windowManager.SetMapUpdating(false);
-      MapManager.ClearActiveMapView?.(view);
+      clearActiveMapView(view);
       Store.dispatch({ type: MapReducer_ActionTypes.SetMapView, payload: null });
       setMapView(null);
       if (view) { try { view.container = null; view.destroy?.(); } catch (error) { DebugHelper.Log(error); } }
@@ -212,7 +207,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
   const searchAddress = useCallback(async (query: string, signal: AbortSignal): Promise<string> => {
     if (signal.aborted) throw signal.reason ?? new DOMException('Adres araması iptal edildi.', 'AbortError');
     const getActiveView = (): MapViewLike | null => (
-      (MapManager.GetActiveMapView?.() ?? MapManager.GetMapView()) as MapViewLike | null
+      (getActiveMapView(MapManager.GetMapView())) as MapViewLike | null
     );
     const view = getActiveView();
     if (!view || view.destroyed || typeof view.goTo !== 'function') {
