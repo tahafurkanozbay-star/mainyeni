@@ -1,9 +1,14 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { publishKentRehberiPoiSearchIndex } from '../../data-services/kentRehberiPoiSearchIndex';
+import { MapManager } from '../../Store/Managers/MapManager';
 import type { ManagedWindowHandle, WindowManagerLike } from '../../experience/contracts';
 import { SidebarModern } from './SidebarModern';
+
+vi.mock('../../Store/Managers/MapManager', () => ({
+  MapManager: { GetMapView: vi.fn() },
+}));
 
 vi.mock('../Common/SharedGISIcon', () => ({
   SharedGISIcon: ({ record }: { readonly record: { readonly title?: string } }) => (
@@ -58,6 +63,8 @@ beforeEach(() => {
   clearPoiIndex?.();
   clearPoiIndex = null;
   window.localStorage.clear();
+  vi.mocked(MapManager.GetMapView).mockReset();
+  vi.mocked(MapManager.GetMapView).mockReturnValue(null);
 });
 
 afterEach(() => {
@@ -142,6 +149,40 @@ describe('SidebarModern governed interaction integration', () => {
     expect(screen.queryByRole('button', { name: 'Ulus Metro Durağı noktasına git' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Parklar sorgusunu aç' })).not.toBeInTheDocument();
     expect(screen.getByText('2 nokta')).toBeInTheDocument();
+  });
+
+  it('zooms to a selected point and renders upstream popup text safely', async () => {
+    seedPoiIndex([{
+      id: 106,
+      name: 'Test <em>Place</em>',
+      address: '<img src=x onerror=alert(1)>',
+      district: 'Çankaya',
+      neighborhood: 'Kızılay',
+      longitude: 32.854,
+      latitude: 39.920,
+    }]);
+    const popupOpen = vi.fn();
+    const goTo = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(MapManager.GetMapView).mockReturnValue({
+      destroyed: false,
+      goTo,
+      popup: { open: popupOpen },
+    } as never);
+
+    const user = userEvent.setup();
+    renderSidebar();
+    await user.type(screen.getByRole('searchbox', { name: 'Harita noktalarında ara' }), 'test');
+    await user.click(screen.getByRole('button', { name: 'Test <em>Place</em> noktasına git' }));
+
+    expect(goTo).toHaveBeenCalledWith(
+      { center: [32.854, 39.920], zoom: 17 },
+      { duration: 650 },
+    );
+    await waitFor(() => expect(popupOpen).toHaveBeenCalledTimes(1));
+    const popupOptions = popupOpen.mock.calls[0]?.[0] as { readonly content: HTMLElement };
+    expect(popupOptions.content).toBeInstanceOf(HTMLElement);
+    expect(popupOptions.content.textContent).toContain('Test <em>Place</em>');
+    expect(popupOptions.content.querySelector('em, img')).toBeNull();
   });
 
   it('clears search with the explicit clear button', async () => {
