@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { clearActiveMapView, getActiveMapView, setActiveMapView } from './activeMapViewRuntime';
 
-afterEach(() => clearActiveMapView());
+afterEach(() => { clearActiveMapView(); });
 
 describe('active map view runtime', () => {
   it('uses a SceneView while 3D is active and falls back to MapView in 2D', () => {
