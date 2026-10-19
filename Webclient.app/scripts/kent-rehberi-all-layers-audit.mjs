@@ -372,22 +372,22 @@ const checkFrontendRuntimeContracts = (files, errors) => {
   requirePatterns(files, REQUIRED_PATHS.directSource, [
     {
       id: 'missing-official-planaski-endpoint',
-      pattern: /planaski\\.ankara\\.bel\\.tr\\/kentrehberiapi\\/api\\/kentrehberi/u,
+      pattern: /planaski\.ankara\.bel\.tr\/kentrehberiapi\/api\/kentrehberi/u,
       message: 'the browser data source must use the official PlanASKI Kent Rehberi endpoint',
     },
     {
       id: 'missing-browser-cors-mode',
-      pattern: /mode:\\s*'cors'/u,
+      pattern: /mode:\s*'cors'/u,
       message: 'direct PlanASKI requests must use browser CORS mode',
     },
     {
       id: 'missing-omitted-credentials',
-      pattern: /credentials:\\s*'omit'/u,
+      pattern: /credentials:\s*'omit'/u,
       message: 'direct PlanASKI requests must not send browser credentials',
     },
     {
       id: 'missing-no-store-cache',
-      pattern: /cache:\\s*'no-store'/u,
+      pattern: /cache:\s*'no-store'/u,
       message: 'direct PlanASKI requests must avoid implicit browser transport caching',
     },
     {
@@ -399,7 +399,7 @@ const checkFrontendRuntimeContracts = (files, errors) => {
 
   const vite = readRequired(files, REQUIRED_PATHS.vite, errors);
   if (vite) {
-    if (/resolveLocalApiProxyTarget|['\"]\\/api['\"]\\s*:/u.test(vite)) {
+    if (/resolveLocalApiProxyTarget|['"]\/api['"]\s*:/u.test(vite)) {
       errors.push(finding(
         'private-api-proxy-present',
         REQUIRED_PATHS.vite,
@@ -429,14 +429,14 @@ const checkFrontendRuntimeContracts = (files, errors) => {
         'startup configuration must use local public-map defaults',
       ));
     }
-    if (/apiClient|httpClient|\\.get<unknown>\\(/u.test(configuration)) {
+    if (/apiClient|httpClient|\.get<unknown>\(/u.test(configuration)) {
       errors.push(finding(
         'private-api-client-in-bootstrap',
         REQUIRED_PATHS.configurationBusiness,
         'public-map startup must not call the private application API',
       ));
     }
-    if (!/GetConfigServices/u.test(configuration) || !/data:\\s*\[\]/u.test(configuration)) {
+    if (!/GetConfigServices/u.test(configuration) || !/data:\s*\[\]/u.test(configuration)) {
       errors.push(finding(
         'missing-empty-service-catalog',
         REQUIRED_PATHS.configurationBusiness,
@@ -454,7 +454,7 @@ const checkFrontendRuntimeContracts = (files, errors) => {
         'the webclient environment template must select direct PlanASKI data access',
       ));
     }
-    if (/^\\s*VITE_(?:API_URL|API_PROXY_TARGET|API_TIMEOUT_MS|API_CACHE_TTL_MS|API_MAX_RETRIES|LOCAL_BOOTSTRAP_PREVIEW|PUBLIC_MAP_ONLY_MODE)=/mu.test(envExample)) {
+    if (/^\s*VITE_(?:API_URL|API_PROXY_TARGET|API_TIMEOUT_MS|API_CACHE_TTL_MS|API_MAX_RETRIES|LOCAL_BOOTSTRAP_PREVIEW|PUBLIC_MAP_ONLY_MODE)=/mu.test(envExample)) {
       errors.push(finding(
         'legacy-api-env-present',
         REQUIRED_PATHS.envExample,
