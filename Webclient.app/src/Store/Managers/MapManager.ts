@@ -7,7 +7,6 @@ import type { MapClickSelection, ViewPerformanceMonitor, ViewStateBridge } from 
 
 let viewStateBridge: ViewStateBridge | null = null;
 let viewPerformanceMonitor: ViewPerformanceMonitor | null = null;
-let activeMapView: unknown | null = null;
 
 const getGraphics = (): readonly unknown[] => {
   const graphics = Store.getState()?.Map?.Graphics;
@@ -28,20 +27,6 @@ const toGraphicArray = (value: unknown): readonly unknown[] => {
 
 export const MapManager = Object.freeze({
   GetMapView: (): unknown => Store.getState().Map.MapView,
-
-  /** The visible view is the SceneView in 3D and the MapView in 2D. */
-  GetActiveMapView: (): unknown => activeMapView ?? Store.getState().Map.MapView,
-
-  SetActiveMapView: (view: unknown | null | undefined): unknown | null => {
-    activeMapView = view ?? null;
-    return activeMapView;
-  },
-
-  ClearActiveMapView: (expectedView?: unknown): boolean => {
-    if (expectedView !== undefined && activeMapView !== expectedView) return false;
-    activeMapView = null;
-    return true;
-  },
 
   GetMapClickEvent: (): MapClickSelection | ((event: unknown) => void) => Store.getState().Map.LastMapClickEvent ?? Store.getState().Map.MapClick,
 
