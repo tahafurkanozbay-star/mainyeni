@@ -2,6 +2,7 @@ import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ManagedWindowHandle, WindowManagerLike } from '../../experience/contracts';
+import { getKentRehberiMapFilterSnapshot, setKentRehberiMapFilter } from '../../shell/kentRehberiMapFilter';
 import { SidebarModern } from './SidebarModern';
 
 vi.mock('../Common/SharedGISIcon', () => ({
@@ -53,6 +54,7 @@ const favoriteButton = (name: string): HTMLButtonElement =>
 
 beforeEach(() => {
   window.localStorage.clear();
+  setKentRehberiMapFilter(null);
 });
 
 describe('SidebarModern governed interaction integration', () => {
@@ -76,6 +78,34 @@ describe('SidebarModern governed interaction integration', () => {
     const list = screen.getByRole('list', { name: 'Tüm kent servisleri hizmet listesi' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(40);
     expect(screen.getByText('40 hizmet')).toBeInTheDocument();
+  });
+
+  it('filters the map to a selected service independently of the sidebar display state', async () => {
+    const user = userEvent.setup();
+    const { ShowWindow } = renderSidebar();
+
+    await user.click(serviceButton('Otobüs Durakları'));
+
+    expect(getKentRehberiMapFilterSnapshot()).toMatchObject({
+      label: 'Otobüs Durakları',
+      iconKeys: ['otobus'],
+    });
+    expect(ShowWindow).toHaveBeenCalledWith('egootobusduraklar-query-window');
+  });
+
+  it('filters the map to the selected institution and clears the filter when the institution is toggled off', async () => {
+    const user = userEvent.setup();
+    renderSidebar();
+    const institution = screen.getByRole('button', { name: 'EGO Genel Müdürlüğü' });
+
+    await user.click(institution);
+    const selected = getKentRehberiMapFilterSnapshot();
+    expect(selected.label).toBe('EGO Genel Müdürlüğü');
+    expect(selected.iconKeys).toEqual(expect.arrayContaining(['otobus', 'metro', 'teleferik']));
+    expect(selected.iconKeys).not.toHaveLength(0);
+
+    await user.click(institution);
+    expect(getKentRehberiMapFilterSnapshot().iconKeys).toBeNull();
   });
 
   it('keeps exactly one service button in the roving tab sequence', () => {
