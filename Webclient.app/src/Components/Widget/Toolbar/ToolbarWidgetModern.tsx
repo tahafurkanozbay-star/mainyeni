@@ -225,7 +225,7 @@ export const ToolbarWidgetModern = ({ id, windowManager, accessorWatch }: Toolba
     signal.addEventListener('abort', retire, { once: true });
     try {
       GisGraphicsHelper.AddGraphics(view, graphic);
-      await awaitOwnedNavigation(view, signal, () => GisGraphicsHelper.ZoomToGeometry(view, point, 15));
+      await awaitOwnedNavigation(view, signal, () => GisGraphicsHelper.ZoomToGeometry(view, point, 18));
       assertCurrentView(view, signal);
     } catch (error) {
       retire(); throw error;
