@@ -227,7 +227,7 @@ export const getRecordAddress = (
   '',
 ));
 
-const TECHNICAL_CATEGORY_LABEL = /^(?:kategori\\s*)?\\d+$/iu;
+const TECHNICAL_CATEGORY_LABEL = /^(?:kategori\s*)?\d+$/iu;
 
 export const getRecordTitle = (
   record: SearchRecordInput | null | undefined,
