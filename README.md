@@ -1,4 +1,4 @@
-# 3D Altyapı / Üstyapı Koordinasyon Web Uygulaması
+# KENT REHBERİ
 
 Bu deponun yayımlanan ürünü, **`Webclient.app/`** altındaki React, TypeScript, Vite ve ArcGIS tabanlı istemcidir. Üretim paketi statik web dosyalarından oluşur; uygulamanın çalışması için ayrı ABB User API, Admin API, uygulama veritabanı veya Kent Rehberi proxy'si gerekmez.
 

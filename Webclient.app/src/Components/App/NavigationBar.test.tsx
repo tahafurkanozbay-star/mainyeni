@@ -31,6 +31,14 @@ describe('NavigationBar', () => {
     themeMocks.toggleTheme.mockReset();
   });
 
+  it('uses Kent Rehberi branding in the header', () => {
+    render(<NavigationBar onAddressSearch={createAddressSearch()} />);
+    const homeLink = screen.getByRole('link', { name: 'KENT REHBERİ ana sayfası' });
+
+    expect(homeLink).toHaveAttribute('href', './');
+    expect(homeLink).toHaveTextContent('KENT REHBERİ');
+  });
+
   it('submits the trimmed address to the address geocoder instead of the legacy category query', async () => {
     const user = userEvent.setup();
     const onAddressSearch = createAddressSearch();
