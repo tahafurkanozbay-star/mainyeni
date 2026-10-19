@@ -239,7 +239,6 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
 
   const handlePointResultKeyDown = (
     event: ReactKeyboardEvent<HTMLButtonElement>,
-    pointId: number,
     currentIndex: number,
   ): void => {
     let targetIndex = currentIndex;
@@ -252,7 +251,6 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
     event.preventDefault();
     const target = pointSearchResults.items[targetIndex];
     if (target) pointButtonRefs.current.get(target.id)?.focus({ preventScroll: true });
-    void pointId;
   };
 
   const focusPointResult = (point: KentRehberiPoiSearchPoint): void => {
