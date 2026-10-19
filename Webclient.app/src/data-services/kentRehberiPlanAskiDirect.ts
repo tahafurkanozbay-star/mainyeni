@@ -323,7 +323,7 @@ export const fetchPlanAskiSvgOverviewDirect = async (
   const ilce = requestFilter(options.ilce, 'ilce', 50, 1);
   const mahalle = requestFilter(options.mahalle, 'mahalle', 50, 1);
   const all = fullSet(await fetchCategories(options, options.tur));
-  const svgFeatures = all.flatMap((feature) => {
+  const svgFeatures: KentRehberiGeoJsonFeature[] = all.flatMap((feature): KentRehberiGeoJsonFeature[] => {
     const properties = feature.properties;
     if (
       (ilce && normalizeName(properties.ilce) !== ilce)
@@ -336,10 +336,11 @@ export const fetchPlanAskiSvgOverviewDirect = async (
     if (!iconKey || iconKey === 'default') return [];
     return [{
       ...feature,
-      properties: Object.freeze({ ...properties, iconKey }),
+      properties: Object.freeze({ ...properties, iconKey }) as Readonly<Record<string, unknown>>,
     }];
-  }).sort((left, right) =>
-    (left.properties.objectid as number) - (right.properties.objectid as number));
+  });
+  svgFeatures.sort((left, right) =>
+    Number(left.properties.objectid ?? 0) - Number(right.properties.objectid ?? 0));
 
   const features = svgFeatures.slice(0, 20_000);
   return {
