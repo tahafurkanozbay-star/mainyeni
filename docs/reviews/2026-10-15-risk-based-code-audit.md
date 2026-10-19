@@ -1,5 +1,7 @@
 # Codebase audit — 2026-10-15
 
+> **Tarihsel inceleme notu:** Bu risk değerlendirmesi 15 Ekim 2026 tarihinde, PR #538 ile PlanASKI-only statik istemci mimarisine geçilmeden önceki kod ağacı üzerinden yazılmıştır. İçindeki .NET hosting, aynı-köken API/proxy ve source-mode açıklamaları o tarihteki durumun kaydıdır; güncel yayın mimarisini tanımlamaz. Güncel mimari için depo kökündeki `README.md` ve `KENT_REHBERI_PROGRESS.md` dosyalarına bakın. Bu belge, güncel canlı IIS/CORS doğrulaması yerine geçmez.
+
 ## Method and scope
 
 The checked baseline was `main` at
