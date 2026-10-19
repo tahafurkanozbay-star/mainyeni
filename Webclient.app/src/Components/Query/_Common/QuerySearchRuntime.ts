@@ -263,7 +263,9 @@ export const getRecordCategory = (
     ['Category', 'category', 'kategori', 'KATEGORI'],
     '',
   ));
-  if (semanticCategory) return semanticCategory;
+  if (semanticCategory && !TECHNICAL_CATEGORY_LABEL.test(semanticCategory)) {
+    return semanticCategory;
+  }
 
   const technicalType = normalizeWhitespace(readFirstValue(record, ['type', 'Type'], ''));
   return technicalType && !TECHNICAL_CATEGORY_LABEL.test(technicalType)
