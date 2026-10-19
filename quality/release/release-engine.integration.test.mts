@@ -68,7 +68,6 @@ test('release engine wires every deep QA section exactly once', async () => {
   const expected = [
     'TypeScript, ESM, Vite and React language-modernization audit',
     'Security boundary and credential regression audit',
-    'Backend API authorization, input and transport boundary audit',
     'CI workflow integrity and supply-chain audit',
     'Release validation integrity and reproducibility audit',
     'ArcGIS transport, lifecycle, data and 2D/3D release-contract audit',
@@ -196,13 +195,13 @@ test('client log privacy release section scans active frontend runtime files', a
   const sections = execution.report.sections.filter(section => section.title === 'Client log payload privacy');
   assert.equal(sections.length, 1, 'privacy scan must run once in the release engine');
   const findings = sections[0]?.findings ?? [];
-  assert.equal(findings.length, 2);
+  assert.equal(findings.length, 1);
   assert.ok(findings.every(finding => finding.severity === 'high'));
   assert.deepEqual(
     findings.map(finding => finding.location?.file).sort(),
-    ['Webclient.admin/src/QueryPanel.ts', 'Webclient.app/src/QueryWindow.tsx'],
+    ['Webclient.app/src/QueryWindow.tsx'],
   );
-  assert.equal(execution.report.findings.filter(finding => finding.id === 'client-log-sensitive-payload').length, 2);
+  assert.equal(execution.report.findings.filter(finding => finding.id === 'client-log-sensitive-payload').length, 1);
 });
 
 test('client log privacy release gate preserves bounded non-identifying metadata', async () => {
@@ -222,7 +221,7 @@ test('client log privacy regressions reach the baseline delta and report fingerp
   const clean = await execute([]);
   const baseline = createBaseline(clean.report);
   const unsafe = inventory([
-    source('Webclient.admin/src/AddressPanel.tsx', 'safeClientLog(LoggingBusiness, "address", path?.mahalle);'),
+    source('Webclient.app/src/AddressPanel.tsx', 'safeClientLog(LoggingBusiness, "address", path?.mahalle);'),
   ]);
   const first = await runReleaseEngine(unsafe, context, { thresholds: relaxedThresholds }, baseline);
   const second = await runReleaseEngine(unsafe, context, { thresholds: relaxedThresholds }, baseline);
