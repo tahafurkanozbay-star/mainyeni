@@ -346,8 +346,8 @@ html[data-experience-motion='reduced'] .map-mode-experience__status-dot,
 @media (min-width: 881px) and (max-width: 1120px) {
   #esri-map-container:has(.common-query-window-right.is-visible) .map-mode-experience {
     inset-inline-start: max(354px, calc(env(safe-area-inset-left) + 354px));
-    inline-size: min(150px, calc(100vw - 730px));
-    max-inline-size: calc(100vw - 730px);
+    inline-size: min(150px, max(108px, calc(100vw - 780px)));
+    max-inline-size: min(150px, max(108px, calc(100vw - 780px)));
     padding: 6px;
   }
 
