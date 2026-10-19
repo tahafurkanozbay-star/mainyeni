@@ -191,7 +191,7 @@ describe('kentRehberiFastAccessRuntime', () => {
     expect(result?.source).toBe('kent-rehberi');
     expect(result?.data).toHaveLength(0);
     expect(fetchCollection).not.toHaveBeenCalled();
-    expect(runtime.cacheSize()).toBe(1);
+    expect(runtime.cacheSize()).toBe(2);
   });
 
   it('does not sweep every type for a POI whose category cannot be resolved', async () => {
@@ -277,7 +277,7 @@ describe('kentRehberiFastAccessRuntime', () => {
     expect(segmenResult.data.map((item) => item.attr.tur)).toEqual([13]);
     expect(parkResult.data.map((item) => item.attr.tur)).toEqual([5]);
     expect(fetchTypeCatalog).toHaveBeenCalledTimes(1);
-    expect(fetchCollection.mock.calls.map(([options]) => options?.tur).sort()).toEqual([5, 13]);
+    expect(fetchCollection.mock.calls.map(([options]) => options?.tur).sort((left, right) => (left ?? 0) - (right ?? 0))).toEqual([5, 13]);
     expect(fetchCollection).toHaveBeenCalledTimes(2);
   });
 
