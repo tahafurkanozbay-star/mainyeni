@@ -155,7 +155,7 @@ describe('SidebarModern governed interaction integration', () => {
     seedPoiIndex([{
       id: 106,
       name: 'Test <em>Place</em>',
-      address: '\\u003cimg src=x onerror=alert(1)\\u003e',
+      address: '\u003cimg src=x onerror=alert(1)\u003e',
       district: 'Çankaya',
       neighborhood: 'Kızılay',
       longitude: 32.854,
@@ -182,6 +182,7 @@ describe('SidebarModern governed interaction integration', () => {
     const popupOptions = popupOpen.mock.calls[0]?.[0] as { readonly content: HTMLElement };
     expect(popupOptions.content).toBeInstanceOf(HTMLElement);
     expect(popupOptions.content.textContent).toContain('Test <em>Place</em>');
+    expect(popupOptions.content.textContent).toContain('<img src=x onerror=alert(1)>');
     expect(popupOptions.content.querySelector('em, img')).toBeNull();
   });
 
