@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import Store from '../../Store/Store';
 import { MapReducer_ActionTypes } from '../../Store/Reducers/MapReducer';
 import { NavigationBar } from './NavigationBar';
@@ -85,6 +86,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
   const recoveryModel = recoveryModelRef.current;
   const [mapGeneration, setMapGeneration] = useState(0);
   const [mapView, setMapView] = useState<MapViewLike | null>(null);
+  const [sidebarToolHost, setSidebarToolHost] = useState<HTMLDivElement | null>(null);
   const sidebarRef = useRef<unknown>(null);
 
   useEffect(() => {
@@ -213,14 +215,19 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
         <KentRehberiDataLayer map={mapView.map as KentRehberiMapLike} />
         <ExperienceMapModeBridge mapView={mapView as never} modeRef={activeViewModeRef} accessorWatch={accessorWatchRef.current ?? undefined} />
         <NavigationBar id="mainbar" onAddressSearch={searchAddress} />
-        <LegacySidebar id="sidebar" windowManager={windowManager} ref={sidebarRef} />
+        <LegacySidebar id="sidebar" windowManager={windowManager} ref={sidebarRef} onToolHostChange={setSidebarToolHost} />
         <ModernToolbarWidget
           id="toolbar-widget"
           windowManager={windowManager}
           accessorWatch={accessorWatchRef.current ?? undefined}
         />
         {WIDGET_WINDOW_DEFINITIONS.map((definition) => <LazyManagedWindow key={definition.id} {...definition} keepMounted windowManager={windowManager} />)}
-        {QUERY_WINDOW_DEFINITIONS.map((definition) => <LazyManagedWindow key={definition.id} {...definition} windowManager={windowManager} />)}
+        {sidebarToolHost ? createPortal(
+          QUERY_WINDOW_DEFINITIONS.map((definition) => (
+            <LazyManagedWindow key={definition.id} {...definition} windowManager={windowManager} />
+          )),
+          sidebarToolHost,
+        ) : null}
       </>}
     </div>
   );

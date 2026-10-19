@@ -97,6 +97,25 @@ describe('SidebarModern governed interaction integration', () => {
     expect(UnregisterWindow).toHaveBeenCalledWith('services-sidebar', expect.any(Object));
   });
 
+  it('exposes the existing in-panel host for service query content', () => {
+    const harness = createManager();
+    const onToolHostChange = vi.fn();
+    const result = render(
+      <SidebarModern
+        id="services-sidebar"
+        windowManager={harness.manager}
+        onToolHostChange={onToolHostChange}
+      />,
+    );
+    const sidebar = screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' });
+    const host = sidebar.querySelector<HTMLDivElement>('.kr-sidebar__tool-slot');
+
+    expect(host).toBeInTheDocument();
+    expect(onToolHostChange).toHaveBeenCalledWith(host);
+    result.unmount();
+    expect(onToolHostChange).toHaveBeenLastCalledWith(null);
+  });
+
   it('renders the governed all-services view with semantic list structure', () => {
     renderSidebar();
     const sidebar = screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' });
@@ -276,7 +295,7 @@ describe('SidebarModern governed interaction integration', () => {
     expect(window.localStorage.getItem('kentrehberi:service-recents')).toContain('egometroduraklar-query-window');
   });
 
-  it('starts expanded on mobile and collapses only when opening a query', async () => {
+  it('keeps the existing category panel expanded on mobile when opening a service', async () => {
     const originalWidth = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
     try {
@@ -289,14 +308,14 @@ describe('SidebarModern governed interaction integration', () => {
 
       await user.click(serviceButton('Parklar'));
       expect(ShowWindow).toHaveBeenCalledWith('park-query-window');
-      expect(aside).toHaveClass('is-collapsed');
-      expect(screen.getByRole('button', { name: 'Hizmet panelini genişlet' })).toHaveFocus();
+      expect(aside).not.toHaveClass('is-collapsed');
+      expect(screen.getByRole('button', { name: 'Hizmet panelini daralt' })).toHaveAttribute('aria-expanded', 'true');
     } finally {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
     }
   });
 
-  it('keeps keyboard focus on the rail when a mobile service is activated with Enter', async () => {
+  it('keeps the selected service focused and the panel expanded after mobile keyboard activation', async () => {
     const originalWidth = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
     try {
@@ -309,14 +328,14 @@ describe('SidebarModern governed interaction integration', () => {
       await user.keyboard('{Enter}');
 
       expect(ShowWindow).toHaveBeenCalledWith('park-query-window');
-      expect(aside).toHaveClass('is-collapsed');
-      expect(screen.getByRole('button', { name: 'Hizmet panelini genişlet' })).toHaveFocus();
+      expect(aside).not.toHaveClass('is-collapsed');
+      expect(park).toHaveFocus();
     } finally {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
     }
   });
 
-  it('starts expanded on tablet and collapses only when opening a query window', async () => {
+  it('keeps the existing category panel expanded on tablet when opening a service', async () => {
     const originalWidth = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 768 });
     try {
@@ -328,14 +347,14 @@ describe('SidebarModern governed interaction integration', () => {
       await user.click(serviceButton('Parklar'));
 
       expect(ShowWindow).toHaveBeenCalledWith('park-query-window');
-      expect(aside).toHaveClass('is-collapsed');
-      expect(screen.getByRole('button', { name: 'Hizmet panelini genişlet' })).toHaveFocus();
+      expect(aside).not.toHaveClass('is-collapsed');
+      expect(screen.getByRole('button', { name: 'Hizmet panelini daralt' })).toHaveAttribute('aria-expanded', 'true');
     } finally {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
     }
   });
 
-  it('preserves rail focus when a tablet service is activated with Enter', async () => {
+  it('keeps the selected service focused and the panel expanded after tablet keyboard activation', async () => {
     const originalWidth = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 768 });
     try {
@@ -348,8 +367,8 @@ describe('SidebarModern governed interaction integration', () => {
       await user.keyboard('{Enter}');
 
       expect(ShowWindow).toHaveBeenCalledWith('park-query-window');
-      expect(aside).toHaveClass('is-collapsed');
-      expect(screen.getByRole('button', { name: 'Hizmet panelini genişlet' })).toHaveFocus();
+      expect(aside).not.toHaveClass('is-collapsed');
+      expect(park).toHaveFocus();
     } finally {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
     }
@@ -427,15 +446,39 @@ describe('SidebarModern governed interaction integration', () => {
     expect(screen.queryByRole('button', { name: 'Parklar sorgusunu aç' })).not.toBeInTheDocument();
   });
 
-  it('toggles the selected institution back to all services', async () => {
+  it('keeps the selected institution and its subcategory list open when the same main category is clicked again', async () => {
     const user = userEvent.setup();
-    renderSidebar();
+    const { ShowWindow } = renderSidebar();
+    const sidebar = screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' });
     const ego = screen.getByRole('button', { name: 'EGO Genel Müdürlüğü' });
+
     await user.click(ego);
     expect(ego).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('8 hizmet')).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).toBe(sidebar);
+
     await user.click(ego);
-    expect(ego).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByText('40 hizmet')).toBeInTheDocument();
+    expect(ego).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('8 hizmet')).toBeInTheDocument();
+    expect(screen.queryByText('40 hizmet')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).toHaveLength(1);
+    expect(ShowWindow).not.toHaveBeenCalled();
+  });
+
+  it('switches the existing category panel to another institution without creating a new panel', async () => {
+    const user = userEvent.setup();
+    const { ShowWindow } = renderSidebar();
+    const sidebar = screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' });
+
+    await user.click(screen.getByRole('button', { name: 'EGO Genel Müdürlüğü' }));
+    expect(screen.getByText('8 hizmet')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'ASKİ Genel Müdürlüğü' }));
+    expect(screen.getByRole('heading', { name: 'ASKİ Genel Müdürlüğü' })).toBeInTheDocument();
+    expect(screen.getByText('6 hizmet')).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).toBe(sidebar);
+    expect(screen.getAllByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).toHaveLength(1);
+    expect(ShowWindow).not.toHaveBeenCalled();
   });
 
   it('moves group focus with ArrowRight without selecting the next group', async () => {

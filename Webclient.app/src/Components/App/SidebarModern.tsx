@@ -34,6 +34,7 @@ import './SidebarInteraction.css';
 interface SidebarProps {
   readonly id: string;
   readonly windowManager: WindowManagerLike;
+  readonly onToolHostChange?: (element: HTMLDivElement | null) => void;
 }
 
 interface PointSearchMapViewLike {
@@ -79,7 +80,7 @@ const resolveLocalStorage = (): Storage | null => {
 };
 
 export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(function SidebarModern(
-  { id, windowManager },
+  { id, windowManager, onToolHostChange },
   ref,
 ) {
   const preferenceStore = useMemo(() => createSidebarPreferenceStore({
@@ -165,9 +166,6 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
     serviceButtonRefs.current.get(target.windowId)?.focus({ preventScroll: true });
   };
 
-  const isConstrainedViewport = (): boolean =>
-    typeof window !== 'undefined' && window.innerWidth <= 880;
-
   const setSidebarCollapsed = (collapsed: boolean): void => {
     if (navigation.collapsed === collapsed) return;
 
@@ -191,13 +189,8 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
     navigationModel.recordRecent(windowId);
     preferenceStore.saveRecents(navigationModel.getSnapshot().recentIds);
 
-    // A query needs room on phone/tablet widths. Keep the persistent rail
-    // available and collapse it only for this explicit space-constrained case.
-    if (isConstrainedViewport()) {
-      setSidebarCollapsed(true);
-      sidebarToggleRef.current?.focus({ preventScroll: true });
-    }
-
+    // Keep the existing Keşfet panel open when a service is selected. The selected
+    // service view must not collapse the category/subcategory navigation surface.
     windowManager.ShowWindow(windowId);
   };
 
@@ -212,9 +205,9 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
     event.preventDefault();
     if (result.activateWindowId !== null) {
       openWindow(result.activateWindowId);
-      // On compact screens, openWindow moves focus to the visible sidebar rail
-      // because the selected service button is hidden by the collapsed panel.
-      if (!isConstrainedViewport()) focusKeyboardTarget(result.focus);
+      // The Keşfet rail stays expanded when a service is selected, including on
+      // compact screens, so keyboard focus can remain on the current service.
+      focusKeyboardTarget(result.focus);
       return;
     }
     focusKeyboardTarget(result.focus);
@@ -391,7 +384,7 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
             }}
             type="button"
             className={`kr-sidebar__group ns-btn${group.id} ${navigation.activeGroupId === group.id ? 'active' : ''}`}
-            onClick={() => navigationModel.toggleGroup(group.id)}
+            onClick={() => navigationModel.setGroup(group.id)}
             onKeyDown={(event) => handleGroupKeyDown(event, group.id)}
             aria-pressed={navigation.activeGroupId === group.id}
             aria-controls="kr-sidebar-services"
@@ -404,6 +397,10 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
           </button>
         ))}
       </nav>
+
+      {/* Query tools portal into this slot so results reuse Keşfet's existing panel
+          instead of creating a second floating panel over the category navigation. */}
+      <div className="kr-sidebar__tool-slot" ref={onToolHostChange} />
 
       <section id="kr-sidebar-services" className="kr-sidebar__panel" aria-labelledby="kr-sidebar-panel-title">
         <div className="kr-sidebar__discovery">

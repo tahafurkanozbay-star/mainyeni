@@ -500,3 +500,53 @@
   appearance: none;
   display: none;
 }
+
+/* Query results live in the existing Keşfet shell, below its institution tabs.
+   Activating a service replaces the list area rather than stacking a new panel. */
+.kr-sidebar--governed .kr-sidebar__groups {
+  flex: 0 0 auto;
+}
+
+.kr-sidebar--governed .kr-sidebar__tool-slot {
+  display: none;
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.kr-sidebar--governed:has(.kr-sidebar__tool-slot > .sidebar-container[aria-hidden="false"]) .kr-sidebar__tool-slot,
+.kr-sidebar--governed:has(.kr-sidebar__tool-slot > .kr-lazy-window) .kr-sidebar__tool-slot {
+  display: block;
+}
+
+.kr-sidebar--governed:has(.kr-sidebar__tool-slot > .sidebar-container[aria-hidden="false"]) .kr-sidebar__panel,
+.kr-sidebar--governed:has(.kr-sidebar__tool-slot > .kr-lazy-window) .kr-sidebar__panel {
+  display: none;
+}
+
+.kr-sidebar__tool-slot > .sidebar-container:not(.kr-sidebar),
+.kr-sidebar__tool-slot > .sidebar-container1:not(.kr-sidebar) {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kr-sidebar--governed .kr-sidebar__tool-slot > * {
+    scroll-behavior: auto;
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+}
