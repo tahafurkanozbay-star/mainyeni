@@ -322,7 +322,7 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
                   iconKeys: iconKeysForItems(groupItems),
                 });
               }
-            }
+            }}
             onKeyDown={(event) => handleGroupKeyDown(event, group.id)}
             aria-pressed={navigation.activeGroupId === group.id}
             aria-controls="kr-sidebar-services"
