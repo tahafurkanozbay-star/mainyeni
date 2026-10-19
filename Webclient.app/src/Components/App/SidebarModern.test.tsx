@@ -7,7 +7,7 @@ import type { ManagedWindowHandle, WindowManagerLike } from '../../experience/co
 import { SidebarModern } from './SidebarModern';
 
 vi.mock('../../Store/Managers/MapManager', () => ({
-  MapManager: { GetMapView: vi.fn() },
+  MapManager: { GetMapView: vi.fn(), GetActiveMapView: vi.fn() },
 }));
 
 vi.mock('../Common/SharedGISIcon', () => ({
@@ -65,6 +65,8 @@ beforeEach(() => {
   window.localStorage.clear();
   vi.mocked(MapManager.GetMapView).mockReset();
   vi.mocked(MapManager.GetMapView).mockReturnValue(null);
+  vi.mocked(MapManager.GetActiveMapView).mockReset();
+  vi.mocked(MapManager.GetActiveMapView).mockReturnValue(null);
 });
 
 afterEach(() => {
@@ -184,6 +186,20 @@ describe('SidebarModern governed interaction integration', () => {
     expect(popupOptions.content.textContent).toContain('Test <em>Place</em>');
     expect(popupOptions.content.textContent).toContain('\u003cimg src=x onerror=alert(1)\u003e');
     expect(popupOptions.content.querySelector('em, img')).toBeNull();
+  });
+
+  it('uses the active 3D view instead of the hidden 2D view for point results', async () => {
+    seedPoiIndex([{ id: 107, name: 'Aktif görünüm noktası', address: 'Çankaya', district: 'Çankaya', neighborhood: '', longitude: 32.854, latitude: 39.920 }]);
+    const activeGoTo = vi.fn().mockResolvedValue(undefined);
+    const inactiveGoTo = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(MapManager.GetMapView).mockReturnValue({ destroyed: false, goTo: inactiveGoTo } as never);
+    vi.mocked(MapManager.GetActiveMapView).mockReturnValue({ destroyed: false, goTo: activeGoTo } as never);
+    const user = userEvent.setup();
+    renderSidebar();
+    await user.type(screen.getByRole('searchbox', { name: 'Harita noktalarında ara' }), 'aktif görünüm');
+    await user.click(screen.getByRole('button', { name: 'Aktif görünüm noktası noktasına git' }));
+    expect(activeGoTo).toHaveBeenCalledWith({ center: [32.854, 39.920], zoom: 17 }, { duration: 650 });
+    expect(inactiveGoTo).not.toHaveBeenCalled();
   });
 
   it('clears search with the explicit clear button', async () => {
