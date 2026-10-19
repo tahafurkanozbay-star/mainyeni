@@ -639,13 +639,32 @@ export const createKentRehberiFastAccessRuntime = (
 
         if (objectId !== null) {
           const cachedFeature = findCachedFeature(serviceKey, objectId, control);
-          const feature = cachedFeature ?? await fetchFeature(
-            objectId,
-            buildFetchOptions(control, { limit: 1 }),
-          );
+          let feature = cachedFeature;
+          let resolvedTypes: readonly number[] = [];
+          if (!feature && profile) {
+            // A profile identifies the relevant POI categories. Resolve the
+            // object ID only inside those tur values instead of calling the
+            // unscoped feature lookup, which scans all 43 categories.
+            resolvedTypes = await resolveCatalogTypes(profile, control);
+            for (const tur of resolvedTypes) {
+              feature = await fetchFeature(
+                objectId,
+                buildFetchOptions(control, { limit: 1, tur }),
+              );
+              if (feature) break;
+            }
+          } else if (!feature) {
+            // Only general/unscoped lookups lack enough category context to
+            // safely narrow an object-ID lookup.
+            feature = await fetchFeature(
+              objectId,
+              buildFetchOptions(control, { limit: 1 }),
+            );
+          }
           collection = makeFeatureCollection(
             feature ? [feature] : [],
             serviceKey,
+            resolvedTypes,
           );
         } else if (profile) {
           collection = filterByQueryName(
