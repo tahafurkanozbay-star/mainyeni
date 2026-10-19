@@ -86,6 +86,18 @@ describe('NavigationBar', () => {
     }
   });
 
+  it('dispatches the explicit theme-toggle command from the header control', () => {
+    const listener = vi.fn();
+    window.addEventListener('kentrehberi:command', listener);
+
+    render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Açık ve koyu tema arasında geçiş yap' }));
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect((listener.mock.calls[0][0] as CustomEvent).detail).toEqual({ name: 'theme-toggle' });
+    window.removeEventListener('kentrehberi:command', listener);
+  });
+
   it('exposes CBS Başkent as a safe external link', () => {
     const { container } = render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
     const cbsLink = container.querySelector<HTMLAnchorElement>('a.kr-header-portal');
