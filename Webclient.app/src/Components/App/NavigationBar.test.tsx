@@ -43,6 +43,13 @@ describe('NavigationBar', () => {
     expect(onAddressSearch.mock.calls[0]?.[0]).toBe('Kızılay');
     expect(onAddressSearch.mock.calls[0]?.[1]).toBeInstanceOf(AbortSignal);
     expect(await screen.findByText('Bulundu: Kızılay, Çankaya, Ankara')).toBeInTheDocument();
+    const googleMapsLink = screen.getByRole('link', { name: 'Google Haritalar’da adresi aç' });
+    expect(googleMapsLink).toHaveAttribute(
+      'href',
+      'https://www.google.com/maps/search/?api=1&query=K%C4%B1z%C4%B1lay',
+    );
+    expect(googleMapsLink).toHaveAttribute('target', '_blank');
+    expect(googleMapsLink).toHaveAttribute('rel', 'noopener noreferrer');
     expect(screen.queryByText(/Kategori\s+\d+/i)).not.toBeInTheDocument();
   });
 
