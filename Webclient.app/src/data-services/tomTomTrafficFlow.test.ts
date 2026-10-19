@@ -2,7 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
   buildTomTomTrafficFlowUrlTemplate,
   normalizeTomTomTrafficCredential,
+  resolveTomTomTrafficCredential,
 } from './tomTomTrafficFlow';
+
+describe('TomTom browser credential configuration', () => {
+  it('prefers the documented API key and accepts the legacy credential alias', () => {
+    expect(resolveTomTomTrafficCredential({ VITE_TOMTOM_TRAFFIC_API_KEY: ' api-key ', VITE_TOMTOM_TRAFFIC_CREDENTIAL: 'legacy' })).toBe('api-key');
+    expect(resolveTomTomTrafficCredential({ VITE_TOMTOM_TRAFFIC_CREDENTIAL: ' legacy-key ' })).toBe('legacy-key');
+    expect(resolveTomTomTrafficCredential({})).toBe('');
+  });
+});
 
 describe('TomTom traffic flow tile URL template', () => {
   it('normalizes absent and whitespace-only credentials safely', () => {
