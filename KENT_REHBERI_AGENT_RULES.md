@@ -44,11 +44,11 @@ Bu depo, ABB'nin **3D Altyapı / Üstyapı Koordinasyon Web Uygulaması** içind
 12. `KENT_REHBERI_PROGRESS.md` içinde net sonraki tur başlangıcı bırak.
 
 ## Network / Veri Erişimi Güvenlik Politikası
-- Aktif Kent Rehberi veri akışı, statik-only mimari gereği tarayıcıdan doğrudan `https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur=N` adresine gider. Bu akış için User API, Admin API, veritabanı/PostGIS, BFF veya aynı-köken proxy ekleme.
-- Yalnızca sabit resmi host/path kullanılmalı; kategori aralığı, yanıt byte/kayıt sayısı ve eşzamanlılık sınırları, timeout/cancellation, JSON/şema/koordinat doğrulaması korunmalıdır. `credentials: omit`, `redirect: error` ve güvenli CORS isteği kullanılmalı; secret/API key/token istemciye gömülmemelidir.
-- Üretimde CORS izni olduğu varsayılmamalı; `https://cbs.ankara.bel.tr` origin'inden gerçek tarayıcı isteğiyle doğrulanmalıdır. CORS sorunu varsa veri servisi sahibinin allowlist'i düzeltilmeli; tarayıcı güvenlik denetimini aşmak için gizli/örtük bir proxy eklenmemelidir.
-- Ek dış veri kaynağı veya endpoint yalnızca açık ürün gereksinimi, response sözleşmesi, güvenlik incelemesi ve regression testiyle eklenebilir. Gereksiz analytics, telemetry, remote fonts, CDN, geocoding veya başka üçüncü taraf çağrıları ekleme.
-- Arama/katalog işlemleri birden fazla kategori isteği oluşturabileceği için request sınırları, iptal, deduplication ve ölçülebilir davranış korunmalıdır. Cache eklemeden önce veri güncelliği ve resmi hizmet koşulları doğrulanmalıdır.
+- Kent Rehberi'nin aktif veri akışı kullanıcı tarafından seçilen statik-only mimariye uygun olarak tarayıcıdan doğrudan `https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur=N` adresine gider. Bu akış için User API, Admin API, veritabanı/PostGIS, BFF veya aynı-köken proxy ekleme.
+- Kaynak URL'si sabit resmi host/path olmalı; kategori aralığı, yanıt bayt/kayıt sayısı ve eşzamanlılık sınırları, iptal/zaman aşımı, JSON/şema/koordinat doğrulaması korunmalıdır. `credentials: omit`, `redirect: error` ve CORS modu kullanılmalı; secret/API key/token istemciye gömülmemelidir.
+- Üretimde CORS izni olduğu varsayılmamalı; `https://cbs.ankara.bel.tr` origin'inden gerçek tarayıcı isteğiyle doğrulanmalıdır. CORS sorunu varsa veri servisinin izin listesi sahibi tarafından düzeltilmeli; tarayıcı güvenlik denetimini aşmak için gizli/örtük proxy eklenmemelidir.
+- İlave veri kaynağı veya endpoint yalnızca açık ürün gereksinimi, doğrulanmış response sözleşmesi, güvenlik incelemesi ve regresyon testi ile eklenebilir. Gereksiz analytics, telemetry, remote font/CDN, geocoding veya başka üçüncü taraf çağrıları ekleme.
+- Katalog ve filtrelenmemiş arama birden fazla kategori isteği oluşturabilir; request sınırları, iptal, deduplication ve ölçülebilir performans korunmalıdır. Cache eklemeden önce veri güncelliği ve kaynak servisinin davranışı ölçülmelidir.
 
 ## GIS Veri Protokolü
 - Bu proje kapsamında WMS ve WFS servisleri varsayılmayacak ve yeni WMS/WFS entegrasyonu eklenmeyecek; mevcut ve gerekli servisler repository'deki gerçek konfigürasyona göre doğrulanacak.
