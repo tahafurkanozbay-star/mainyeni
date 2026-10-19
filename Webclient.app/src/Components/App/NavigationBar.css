@@ -89,6 +89,15 @@
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+.kr-address-search-feedback .kr-google-maps-link {
+  color: var(--exp-accent-strong, #175cd3);
+  font-size: 12px;
+  font-weight: 800;
+}
+.kr-address-search-feedback .kr-google-maps-link:focus-visible {
+  outline: 2px solid var(--exp-accent, #155eef);
+  outline-offset: 3px;
+}
 .kr-search-spinner {
   width: 17px;
   height: 17px;
