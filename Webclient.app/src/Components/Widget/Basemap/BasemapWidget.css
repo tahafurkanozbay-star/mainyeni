@@ -63,3 +63,47 @@
   .basemap-picker__option[aria-busy='true'] { border-color: Highlight; }
   .basemap-picker__symbol { forced-color-adjust: none; }
 }
+
+/* Preview imagery is sourced from the ArcGIS basemap catalog when supplied.
+   The accessible local illustrations below are distinct fallbacks by basemap. */
+.basemap-picker__image { display: block; object-fit: cover; background: var(--exp-surface-2); }
+.basemap-picker__fallback { overflow: hidden; }
+.basemap-preview__background { fill: #e8eee8; }
+.basemap-preview__fallback { stroke-linecap: round; stroke-linejoin: round; }
+.basemap-picker__fallback path { fill: none; stroke: #f9fbfd; stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; }
+.basemap-picker__fallback .basemap-preview__minor-road { stroke: #d2b18a; stroke-width: 1.7; }
+.basemap-picker__fallback .basemap-preview__vegetation { fill: #527d46; stroke: #719966; stroke-width: 1.2; }
+.basemap-picker__fallback .basemap-preview__satellite-road { stroke: #dbc9a3; stroke-width: 2; }
+.basemap-picker__fallback .basemap-preview__label { stroke: #fff; stroke-width: 1.1; }
+.basemap-picker__fallback .basemap-preview__grid { stroke: #c4ccd4; stroke-width: 1; }
+.basemap-picker__fallback .basemap-preview__blocks { fill: #c9d2d9; stroke: #fff; stroke-width: 1.2; }
+.basemap-picker__fallback .basemap-preview__contours { stroke: #a49a75; stroke-width: 1; }
+.basemap-picker__fallback .basemap-preview__highlight-road { stroke: #d35c4a; stroke-width: 2.5; }
+.basemap-picker__fallback .basemap-preview__waves { stroke: #7caecc; stroke-width: 1.4; }
+.basemap-picker__fallback .basemap-preview__landmass { fill: #c4d7bd; stroke: #fff; stroke-width: 1; }
+.basemap-picker__fallback .basemap-preview__parks { fill: #c2dfb5; stroke: #fff; stroke-width: 1; }
+.basemap-picker__fallback .basemap-preview__elevation { fill: #d5c69a; stroke: none; }
+.basemap-picker__fallback .basemap-preview__vector-road { stroke: #8b98a8; stroke-width: 2; }
+.basemap-picker__fallback .basemap-preview__night-road { stroke: #e4c866; stroke-width: 2.2; }
+.basemap-picker__fallback .basemap-preview__night-label { stroke: #b9c7d8; stroke-width: 1.2; }
+.basemap-picker__fallback .basemap-preview__route-casing { stroke: #fff; stroke-width: 5; }
+.basemap-picker__fallback .basemap-preview__route { stroke: #2087ec; stroke-width: 2.5; }
+.basemap-picker__fallback--satellite .basemap-preview__background,
+.basemap-picker__fallback--hybrid .basemap-preview__background { fill: #294b36; }
+.basemap-picker__fallback--dark-gray .basemap-preview__background,
+.basemap-picker__fallback--dark-gray-vector .basemap-preview__background { fill: #3e4a55; }
+.basemap-picker__fallback--dark-gray path { stroke: #8294a2; }
+.basemap-picker__fallback--dark-gray-vector .basemap-preview__vector-road { stroke: #b8c4d0; }
+.basemap-picker__fallback--gray-vector .basemap-preview__background { fill: #edf0f3; }
+.basemap-picker__fallback--gray-vector .basemap-preview__grid { stroke: #d3d9df; }
+.basemap-picker__fallback--streets-night-vector .basemap-preview__background { fill: #152a40; }
+.basemap-picker__fallback--streets-vector .basemap-preview__background,
+.basemap-picker__fallback--streets-navigation-vector .basemap-preview__background { fill: #e6e8df; }
+.basemap-picker__fallback--oceans .basemap-preview__background { fill: #82b6d8; }
+.basemap-picker__fallback--oceans .basemap-preview__landmass { fill: #cdd9be; }
+.basemap-picker__fallback--terrain .basemap-preview__background { fill: #e8d7ad; }
+.basemap-picker__fallback--topo .basemap-preview__background,
+.basemap-picker__fallback--topo-vector .basemap-preview__background,
+.basemap-picker__fallback--national-geographic .basemap-preview__background { fill: #e8e1c9; }
+.basemap-picker__fallback--osm .basemap-preview__background { fill: #f3f0e8; }
+.basemap-picker__fallback--streets-relief-vector .basemap-preview__background { fill: #ddd8c5; }
