@@ -123,6 +123,16 @@ export const MapManager = Object.freeze({
     setGraphics(next);
     return next;
   },
+
+  /** The view currently visible to the user (2D MapView or active 3D SceneView). */
+  GetActiveMapView: (): unknown => activeMapView ?? Store.getState().Map.MapView,
+
+  /** Update navigation ownership when the visible map mode changes. */
+  SetActiveMapView: (view: unknown): void => {
+    activeMapView = view ?? null;
+  },
 });
+
+let activeMapView: unknown = null;
 
 export default MapManager;

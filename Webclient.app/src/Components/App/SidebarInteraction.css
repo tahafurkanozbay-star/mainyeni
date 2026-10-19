@@ -286,3 +286,97 @@
     box-shadow: none;
   }
 }
+
+/* Collapsing the persistent rail now gives the map its width back instead of
+   merely hiding the rail contents inside a still-470px-wide box. */
+.kr-sidebar.sidebar-container.kr-sidebar--governed {
+  box-sizing: border-box;
+  width: var(--sidebar-hover-width, 470px);
+  min-width: 0;
+  align-items: stretch;
+}
+
+.kr-sidebar--governed .kr-sidebar__topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px;
+  box-sizing: border-box;
+}
+
+.kr-sidebar--governed .kr-sidebar__title {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  text-align: left;
+}
+
+.kr-sidebar--governed .kr-sidebar__title > span {
+  color: var(--exp-text-muted, #657184);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .11em;
+}
+
+.kr-sidebar--governed .kr-sidebar__title > strong {
+  color: var(--exp-text, #172033);
+  font-size: 18px;
+  line-height: 1.15;
+}
+
+.kr-sidebar--governed .kr-sidebar__toggle {
+  display: grid;
+  flex: 0 0 var(--kr-sidebar-target, 44px);
+  place-items: center;
+  width: var(--kr-sidebar-target, 44px);
+  min-width: var(--kr-sidebar-target, 44px);
+  min-height: var(--kr-sidebar-target, 44px);
+  border: 1px solid var(--exp-border, #dbe2ea);
+  border-radius: 11px;
+  background: var(--exp-surface, #fff);
+  color: var(--exp-text, #172033);
+  cursor: pointer;
+}
+
+.kr-sidebar--governed .kr-sidebar__toggle:hover {
+  background: var(--exp-surface-2, #f7f9fb);
+  border-color: var(--exp-border-strong, #94a3b8);
+}
+
+.kr-sidebar.sidebar-container.kr-sidebar--governed.is-collapsed {
+  width: 68px;
+  min-width: 68px;
+  max-width: 68px;
+  padding-inline: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+}
+
+.kr-sidebar--governed.is-collapsed .kr-sidebar__panel,
+.kr-sidebar--governed.is-collapsed .kr-sidebar__groups {
+  display: none;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.kr-sidebar--governed.is-collapsed .kr-sidebar__topline {
+  justify-content: center;
+  padding-inline: 8px;
+}
+
+.kr-sidebar--governed.is-collapsed .kr-sidebar__title {
+  display: none;
+}
+
+.kr-sidebar--governed.is-collapsed .kr-sidebar__toggle svg {
+  transform: rotate(180deg);
+}
+
+[data-experience-theme='dark'] .kr-sidebar--governed .kr-sidebar__toggle {
+  border-color: var(--exp-border, #334155);
+  background: var(--exp-surface, #172033);
+  color: var(--exp-text, #e8eef5);
+}

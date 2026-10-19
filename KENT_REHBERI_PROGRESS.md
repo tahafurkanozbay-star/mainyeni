@@ -2,6 +2,17 @@
 
 > Bu dosya kısa ve güncel başlangıç kaydıdır. Eski, ayrıntılı durum kayıtlarının tam kopyaları [`progress/archive/`](./progress/archive/) altındadır. Yapısal düzenleme öncesindeki eksiksiz kayıt [`KENT_REHBERI_PROGRESS_ARCHIVE_MAIN_THROUGH_20261019_PRE_STRUCTURE_HYGIENE.md`](./progress/archive/KENT_REHBERI_PROGRESS_ARCHIVE_MAIN_THROUGH_20261019_PRE_STRUCTURE_HYGIENE.md) dosyasında korunur.
 
+## 2026-10-19 — Keşfet paneli, sonuç pencereleri, altlık önizlemeleri ve trafik
+
+- Dal: `agent/kesfet-panel-basemap-traffic-20261019-1747-964b860`; başlangıç tabanı: `964b8609465bfab9a6f06bc199a2c926e421e87a`.
+- Keşfet kategori pencereleri için eski `.sidebar-container` kökleri ayrı ve daha yüksek bir katmanda konumlandırıldı; pencereler açık harita alanına, panel daraltıldığında ise dar rayın yanına taşınıyor. Daraltma artık yalnızca içeriği gizlemiyor, panel genişliğini de gerçekten azaltıyor.
+- Nokta arama alanında tarayıcının ikinci temizleme X'i gizlendi. Sonuç tıklaması görünür 2B/3B harita görünümünü temel alacak biçimde aktif MapView/SceneView sahipliği eklendi.
+- Altlık galerisi artık SDK'nın güvenli HTTPS küçük resim adresi bulunduğunda onu gösteriyor; bulunmadığında her altlık kimliği için ayrı yerel SVG önizlemesi kullanıyor.
+- TomTom için `VITE_TOMTOM_TRAFFIC_API_KEY` standart değişkeni kullanılıyor; önceki `VITE_TOMTOM_TRAFFIC_CREDENTIAL` adı geriye dönük uyumluluk amacıyla destekleniyor. Anahtar uygulama deposuna eklenmedi. Canlı trafik, dağıtımda bir TomTom tarayıcı anahtarı yapılandırılmış olmasını ve yeniden derlemeyi gerektirir.
+- Regresyon testleri eklendi: aktif 3B görünümde noktaya yakınlaşma, altlık thumbnail/fallback gösterimi ve TomTom anahtar önceliği/geriye dönük uyumluluğu.
+- PR: [#561](https://github.com/tahafurkanozbay-star/mainyeni/pull/561). İlk CI turunda Vite ortam-kontratı yeni public-key istisnasının eksik olduğunu yakaladı; izin listesi ve izin verilen/yasaklanan değişken öz testleri eklendi. Son exact-head kalite/derleme kontrolleri PR'da takip ediliyor; kontroller başarıyla sonuçlanmadan merge edilmemeli. Canlı IIS dağıtımı yapılmadı.
+- Etkilenen alanlar: `Webclient.app/src/Components/App/SidebarModern*`, `MapComponent*`, `ExperienceMapModeBridge.tsx`, `MapManager.ts`, `Webclient.app/src/Components/Widget/Basemap/BasemapWidget*`, `Webclient.app/src/data-services/tomTomTrafficFlow*`, `Webclient.app/scripts/vite-migration-audit.mjs`, `.env.example`.
+
 ## Etkin mimari
 
 - Yayınlanan tek ön yüz: `Webclient.app/` (React + TypeScript + Vite + ArcGIS Maps SDK).
