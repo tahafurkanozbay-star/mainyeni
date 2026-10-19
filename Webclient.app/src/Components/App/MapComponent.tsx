@@ -28,6 +28,8 @@ import type { ExperienceMapMode } from '../../experience/experienceRuntime';
 import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
 import type { KentRehberiMapLike } from '../../data-services/kentRehberiGeoJsonLayer';
 import { geocodeAddress } from '../../data-services/addressGeocoding';
+import { getTomTomTrafficApiKey } from '../../data-services/tomTomTrafficFlow';
+import { TrafficFlowLayer } from './TrafficFlowLayer';
 import { KentRehberiDataLayer } from './KentRehberiDataLayer';
 import './MapComponent.css';
 import '../Widget/_shared/ExperienceWidgetModernization.css';
@@ -85,7 +87,30 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
   const recoveryModel = recoveryModelRef.current;
   const [mapGeneration, setMapGeneration] = useState(0);
   const [mapView, setMapView] = useState<MapViewLike | null>(null);
+  const [trafficEnabled, setTrafficEnabled] = useState(false);
+  const [trafficStatus, setTrafficStatus] = useState('');
+  const trafficApiKeyConfigured = Boolean(getTomTomTrafficApiKey());
   const sidebarRef = useRef<unknown>(null);
+
+  const toggleTraffic = useCallback((): void => {
+    if (!trafficApiKeyConfigured) {
+      setTrafficStatus('Gerçek zamanlı trafik için Webclient.app/.env dosyasında VITE_TOMTOM_TRAFFIC_API_KEY ayarlanmalı.');
+      return;
+    }
+    setTrafficEnabled((enabled) => {
+      const next = !enabled;
+      setTrafficStatus(next ? 'Trafik yoğunluğu açılıyor…' : 'Trafik yoğunluğu kapatıldı.');
+      return next;
+    });
+  }, [trafficApiKeyConfigured]);
+
+  const reportTrafficStatus = useCallback((message: string): void => {
+    setTrafficStatus(message);
+  }, []);
+
+  const clearTrafficStatus = useCallback((): void => {
+    setTrafficStatus('');
+  }, []);
 
 
   useEffect(() => {
@@ -208,10 +233,20 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       <MapWorkspaceRecoverySurface model={recoveryModel} onRetry={restartMapWorkspace} />
       {mapView && <>
         <KentRehberiDataLayer map={mapView.map as KentRehberiMapLike} />
+        <TrafficFlowLayer map={mapView.map} visible={trafficEnabled} onStatusChange={reportTrafficStatus} />
         <ExperienceMapModeBridge mapView={mapView as never} modeRef={activeViewModeRef} accessorWatch={accessorWatchRef.current ?? undefined} />
         <NavigationBar id="mainbar" onAddressSearch={searchAddress} />
         <LegacySidebar id="sidebar" windowManager={windowManager} ref={sidebarRef} />
-        <ModernToolbarWidget id="toolbar-widget" windowManager={windowManager} accessorWatch={accessorWatchRef.current ?? undefined} />
+        <ModernToolbarWidget
+          id="toolbar-widget"
+          windowManager={windowManager}
+          accessorWatch={accessorWatchRef.current ?? undefined}
+          trafficEnabled={trafficEnabled}
+          trafficConfigured={trafficApiKeyConfigured}
+          trafficStatus={trafficStatus}
+          onTrafficToggle={toggleTraffic}
+          onClearTrafficStatus={clearTrafficStatus}
+        />
         {WIDGET_WINDOW_DEFINITIONS.map((definition) => <LazyManagedWindow key={definition.id} {...definition} keepMounted windowManager={windowManager} />)}
         {QUERY_WINDOW_DEFINITIONS.map((definition) => <LazyManagedWindow key={definition.id} {...definition} windowManager={windowManager} />)}
       </>}
