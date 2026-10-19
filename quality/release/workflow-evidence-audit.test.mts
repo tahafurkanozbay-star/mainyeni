@@ -85,7 +85,7 @@ function cleanReleaseQa(): FixtureFileInput {
       + checkoutSteps()
       + namedRun('Dependency and lockfile contract', 'npm run dependency:verify')
       + namedRun('Production dependency audit', 'npm audit --omit=dev --audit-level=high')
-      + namedRun('Release build', 'npm run build')
+      + namedRun('Production build and integrity manifest', 'npm run build')
   };
 }
 

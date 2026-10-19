@@ -219,7 +219,7 @@ export const RELEASE_EVIDENCE_REQUIREMENTS: readonly ReleaseEvidenceRequirement[
     job: 'webclient-release-validation',
     step: 'Dependency and lockfile contract',
     critical: true,
-    purpose: 'Independent Release QA Webclient lane proves dependency and lockfile policy separately from typed and backend validation.',
+    purpose: 'Independent Release QA Webclient lane proves dependency and lockfile policy separately from typed release validation.',
   }),
   Object.freeze({
     id: 'architecture-module-graph',

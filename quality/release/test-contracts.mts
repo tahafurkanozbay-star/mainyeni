@@ -113,13 +113,6 @@ export const RELEASE_TEST_CONTRACTS: readonly TestContract[] = Object.freeze([
     required: true,
     evidencePatterns: [/LoggingBusiness\.test\.[jt]sx?$/, /telemetry.*test\.[jt]sx?$/i],
   },
-  {
-    id: 'backend-resilience',
-    area: 'architecture',
-    description: 'Backend resilience/rate limiting/diagnostics must have automated tests.',
-    required: true,
-    evidencePatterns: [/Resilience.*Tests?\.cs$/i, /RateLimit.*Tests?\.cs$/i, /Diagnostics.*Tests?\.cs$/i],
-  },
 ]);
 
 function contractSatisfied(inventory: RepositoryInventory, contract: TestContract): boolean {

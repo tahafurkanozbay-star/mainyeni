@@ -805,7 +805,7 @@ function workflowSpecificFindings(workflow: WorkflowDocumentEvidence): Finding[]
       'Enforce exact-base PR regression gate',
       'Dependency and lockfile contract',
       'Production dependency audit',
-      'Release build',
+      'Production build and integrity manifest',
     ]));
     findings.push(...exactBaseFindings(workflow));
     return findings;

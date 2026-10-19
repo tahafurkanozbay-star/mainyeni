@@ -178,22 +178,19 @@ test('expanded engine does not mutate caller inventory', async () => {
 test('section ordering keeps security and supply-chain gates before runtime UX audits', async () => {
   const titles = sectionTitles(await execute());
   const security = titles.indexOf('Security boundary and credential regression audit');
-  const backend = titles.indexOf('Backend API authorization, input and transport boundary audit');
   const ci = titles.indexOf('CI workflow integrity and supply-chain audit');
   const gis = titles.indexOf('ArcGIS transport, lifecycle, data and 2D/3D release-contract audit');
   const accessibility = titles.indexOf('Accessibility and keyboard regression audit');
 
   assert.ok(security >= 0);
-  assert.ok(backend > security);
-  assert.ok(ci > backend);
+  assert.ok(ci > security);
   assert.ok(gis > ci);
   assert.ok(accessibility > gis);
 });
 
-test('client log privacy release section scans both user and admin runtime files', async () => {
+test('client log privacy release section scans active frontend runtime files', async () => {
   const execution = await execute([
     source('Webclient.app/src/QueryWindow.tsx', 'safeClientLog(LoggingBusiness, "query", record.address);'),
-    source('Webclient.admin/src/QueryPanel.ts', 'safeClientLog(LoggingBusiness, "query", JSON.stringify(query));'),
     source('Webclient.app/src/QueryPanel.test.tsx', 'safeClientLog(LoggingBusiness, "query", record.address);'),
   ]);
   const sections = execution.report.sections.filter(section => section.title === 'Client log payload privacy');

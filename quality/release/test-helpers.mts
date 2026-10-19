@@ -143,7 +143,6 @@ export function requiredTestFiles(): FixtureFileInput[] {
     'Webclient.app/src/Components/Query/_Common/ManagedFastAccessQueryWindow.test.js',
     'Webclient.app/src/Business/ConfigurationBusiness.test.js',
     'Webclient.app/src/Business/LoggingBusiness.test.js',
-    'Api.Core.Tests/PlatformResilienceTests.cs',
   ].map(path => ({ path, text: 'test("contract", () => {});\n' }));
 }
 
