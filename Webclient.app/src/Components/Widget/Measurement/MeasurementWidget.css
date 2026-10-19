@@ -265,3 +265,33 @@
 }
 .measurement-widget .experience-toolbar { align-items: stretch; }
 .measurement-experience .experience-status::before { display: none; }
+
+
+/* Dock the measuring tool beside the map controls. The position is viewport-
+   based so it cannot drift when the 2D/3D map container changes size. */
+.common-query-window.measurement-widget {
+  position: fixed !important;
+  inset-block-start: calc(var(--mainbar-height, 60px) + 190px) !important;
+  inset-inline-start: auto !important;
+  inset-inline-end: max(12px, calc(var(--toolbar-width, 48px) + 12px)) !important;
+  inline-size: min(420px, calc(100dvw - var(--toolbar-width, 48px) - 32px)) !important;
+  min-inline-size: 0 !important;
+  max-inline-size: calc(100dvw - var(--toolbar-width, 48px) - 32px) !important;
+  max-block-size: calc(100dvh - var(--mainbar-height, 60px) - 206px) !important;
+  overflow: auto;
+  overscroll-behavior: contain;
+  z-index: 1016 !important;
+}
+
+@media (max-width: 640px) {
+  .common-query-window.measurement-widget {
+    inset-block-start: auto !important;
+    inset-block-end: max(12px, env(safe-area-inset-bottom)) !important;
+    inset-inline-start: max(10px, env(safe-area-inset-left)) !important;
+    inset-inline-end: max(62px, calc(var(--toolbar-width, 48px) + 12px)) !important;
+    inline-size: auto !important;
+    max-inline-size: none !important;
+    max-block-size: min(62dvh, calc(100dvh - var(--mainbar-height, 60px) - 100px)) !important;
+    border-radius: 16px;
+  }
+}
