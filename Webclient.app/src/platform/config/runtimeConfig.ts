@@ -307,11 +307,11 @@ export const normalizeEsriApiVersion = (value: unknown): string => {
 const detectBuildMode = (
   source: RuntimeEnvironmentSource,
 ): RuntimeConfig['buildMode'] => {
-  const keys = Object.keys(source);
-  const hasVite = keys.some((key) => key.startsWith('VITE_'))
+  const knownKeys = Object.values(RUNTIME_CONFIG_SOURCE_KEYS).flat();
+  const hasVite = knownKeys.some((key) => key.startsWith('VITE_') && key in source)
     || ['MODE', 'DEV', 'PROD', 'SSR', 'BASE_URL'].some((key) => key in source);
   if (hasVite) return 'vite-ready';
-  const hasCra = keys.some((key) => key.startsWith('REACT_APP_'));
+  const hasCra = knownKeys.some((key) => key.startsWith('REACT_APP_') && key in source);
   if (hasCra) return 'legacy-cra';
   return 'unknown';
 };
