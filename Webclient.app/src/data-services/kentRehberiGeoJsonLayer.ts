@@ -148,6 +148,8 @@ export interface KentRehberiMapLike {
 export interface KentRehberiGeoJsonLayerLike {
   readonly id?: string;
   readonly title?: string;
+  /** ArcGIS client-side filter applied consistently in MapView and SceneView. */
+  definitionExpression?: string | null;
   load?: (options?: { readonly signal?: AbortSignal }) => Promise<unknown>;
   cancelLoad?: () => void;
   destroy?: () => void;
