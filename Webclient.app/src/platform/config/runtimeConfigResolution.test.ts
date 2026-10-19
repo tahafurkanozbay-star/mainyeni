@@ -30,6 +30,8 @@ describe('runtime config source classification', () => {
     ['SSR', 'vite-builtin'],
     ['BASE_URL', 'vite-builtin'],
     ['REACT_APP_RELEASE', 'legacy-cra'],
+    ['VITE_API_URL', 'derived'],
+    ['REACT_APP_API_URL', 'derived'],
     ['CUSTOM_VALUE', 'derived'],
   ] as const)('classifies %s as %s', (key, expected) => {
     expect(classifyRuntimeConfigSourceKey(key)).toBe(expected);
@@ -204,9 +206,16 @@ describe('runtime config source precedence and shadowing', () => {
     expect(JSON.stringify(resolution.evidence)).not.toContain(raw);
   });
 
-  test('uses the Vite build mode marker when a recognized Vite key is provided', () => {
-    expect(resolveRuntimeConfig({ VITE_RELEASE: 'r1' }).config.buildMode).toBe('vite-ready');
+  test('uses only recognized environment keys for build-mode provenance', () => {
+    const releaseOnly = resolveRuntimeConfig({ VITE_RELEASE: 'r1' });
+    expect(releaseOnly.config.buildMode).toBe('vite-ready');
     expect(resolveRuntimeConfig({ VITE_API_URL: '/retired-api' }).config.buildMode).toBe('unknown');
+
+    const mixed = resolveRuntimeConfig({
+      VITE_API_URL: '/retired-api',
+      VITE_RELEASE: 'r1',
+    });
+    expect(evidenceFor(mixed.evidence, 'buildMode').sourceKey).toBe('VITE_RELEASE');
   });
 });
 
