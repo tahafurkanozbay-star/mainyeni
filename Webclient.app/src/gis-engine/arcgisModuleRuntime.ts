@@ -2,6 +2,7 @@ import { invokeArcgisModuleTransportBatch } from './arcgisModuleTransport';
 import { createDefaultArcgisEsmTransport } from './arcgisEsmTransport';
 
 export interface ArcgisModuleRuntimeConfiguration {
+  apiKey?: string;
   version?: string;
   css?: boolean;
   insertCssBefore?: string;

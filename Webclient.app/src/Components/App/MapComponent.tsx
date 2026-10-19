@@ -107,7 +107,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       ]);
       if (disposed || signal.aborted || !mapDiv.current) return;
       accessorWatchRef.current = watchUtils.watch;
-      const map = new MapCtor({ basemap: 'osm' });
+      const map = new MapCtor({ basemap: 'osm', ground: 'world-elevation' });
       view = new MapViewCtor(createMapViewOptions({ container: mapDiv.current, map, configuration: mapConfig, viewportWidth: window.innerWidth }));
       await waitForArcgisView(view, { signal, accessorWatch: watchUtils.watch });
       if (disposed || signal.aborted) return;

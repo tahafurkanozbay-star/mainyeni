@@ -244,21 +244,56 @@ export const importArcgisCoreModule: ArcgisEsmImporter = async (specifierInput: 
 export const getDefaultArcgisEsmSpecifiers = (): readonly string[] =>
   Object.freeze(Object.keys(defaultImporters).sort());
 
-export const createArcgisEsmTransport = (importModule: ArcgisEsmImporter): ArcgisModuleTransport => {
+const normalizeApiKey = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
+
+export const createArcgisEsmTransport = (
+  importModule: ArcgisEsmImporter,
+  initialApiKey = '',
+): ArcgisModuleTransport => {
   if (typeof importModule !== 'function') {
     throw new TypeError('ArcGIS ESM transport requires an import function.');
   }
 
+  let configuredApiKey = normalizeApiKey(initialApiKey);
+  let appliedApiKey = '';
+
+  const applyApiKeyBeforeServiceImports = async (): Promise<void> => {
+    if (!configuredApiKey || configuredApiKey === appliedApiKey) return;
+    const namespace = await importModule('@arcgis/core/config.js');
+    const configuration = unwrapArcgisEsmModule(namespace) as { apiKey?: string };
+    configuration.apiKey = configuredApiKey;
+    appliedApiKey = configuredApiKey;
+  };
+
   return Object.freeze({
     name: 'arcgis-core-esm',
-    loadModules: async (moduleIds: readonly string[]) => Promise.all(
-      moduleIds.map(async (moduleId) => {
-        const namespace = await importModule(resolveArcgisEsmSpecifier(moduleId));
-        return adaptArcgisEsmModule(moduleId, namespace);
-      }),
-    ),
+    configure: (configuration: { apiKey?: string }) => {
+      const nextApiKey = normalizeApiKey(configuration.apiKey);
+      if (nextApiKey && nextApiKey !== configuredApiKey) {
+        configuredApiKey = nextApiKey;
+        appliedApiKey = '';
+      }
+    },
+    loadModules: async (moduleIds: readonly string[]) => {
+      // API keys must be set on esriConfig before a map/basemap module starts
+      // requesting authenticated Esri services.
+      await applyApiKeyBeforeServiceImports();
+      return Promise.all(
+        moduleIds.map(async (moduleId) => {
+          const namespace = await importModule(resolveArcgisEsmSpecifier(moduleId));
+          return adaptArcgisEsmModule(moduleId, namespace);
+        }),
+      );
+    },
   });
 };
 
+const readConfiguredApiKey = (): string => {
+  const environment = (import.meta as ImportMeta & {
+    readonly env?: Readonly<Record<string, unknown>>;
+  }).env;
+  return normalizeApiKey(environment?.VITE_ESRI_BASEMAP_CREDENTIAL);
+};
+
 export const createDefaultArcgisEsmTransport = (): ArcgisModuleTransport =>
-  createArcgisEsmTransport(importArcgisCoreModule);
+  createArcgisEsmTransport(importArcgisCoreModule, readConfiguredApiKey());

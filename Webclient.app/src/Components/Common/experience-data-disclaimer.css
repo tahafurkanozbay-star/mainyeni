@@ -1,8 +1,8 @@
 .experience-data-disclaimer {
   position: fixed;
   inset-inline-start: max(0.5rem, env(safe-area-inset-left));
-  inset-block-end: max(0.35rem, env(safe-area-inset-bottom));
-  z-index: 1004;
+  inset-block-end: max(0px, env(safe-area-inset-bottom));
+  z-index: 2100;
   display: flex;
   align-items: center;
   gap: 0.45rem;
@@ -99,13 +99,13 @@ html[data-exp-motion='reduced'] .experience-data-disclaimer {
 
 @media (max-width: 780px) {
   .experience-data-disclaimer {
-    inset-block-end: max(0.35rem, env(safe-area-inset-bottom));
+    inset-block-end: max(0px, env(safe-area-inset-bottom));
   }
 }
 
 @media (max-width: 40rem) {
   .experience-data-disclaimer {
-    inset-block-end: max(0.35rem, env(safe-area-inset-bottom));
+    inset-block-end: max(0px, env(safe-area-inset-bottom));
     gap: 0.3rem;
     padding: 0.45rem 0.45rem 0.22rem;
     font-size: clamp(0.62rem, 2.25vw, 0.72rem);
