@@ -30,10 +30,7 @@ if ($npmVersion -lt [version]"11.0.0") {
 }
 
 $keys = @(
-    "VITE_API_URL",
     "VITE_KENT_REHBERI_SOURCE",
-    "VITE_PUBLIC_MAP_ONLY_MODE",
-    "VITE_LOCAL_BOOTSTRAP_PREVIEW",
     "VITE_KENT_REHBERI_OVERVIEW_ON_STARTUP"
 )
 $oldValues = @{}
@@ -71,13 +68,9 @@ try {
     Write-Host "1/4 - Kilitli bağımlılıklar yükleniyor..." -ForegroundColor Cyan
     Invoke-NpmChecked -Arguments @("ci")
 
-    # Run tests and repository quality gates without the production-only flag.
-    # This ensures unit tests exercise the normal API contract as well as the
-    # separately tested public map-only mode.
-    $env:VITE_API_URL = "/api"
+    # The application bootstraps locally and fetches Kent Rehberi data directly
+    # from the fixed official PlanASKI endpoint in both tests and production.
     $env:VITE_KENT_REHBERI_SOURCE = "planaski"
-    $env:VITE_PUBLIC_MAP_ONLY_MODE = "false"
-    $env:VITE_LOCAL_BOOTSTRAP_PREVIEW = "true"
     $env:VITE_KENT_REHBERI_OVERVIEW_ON_STARTUP = "false"
 
     Write-Host "2/4 - CI ile uyumlu kalite kapıları çalıştırılıyor..." -ForegroundColor Cyan
@@ -141,14 +134,10 @@ try {
     Invoke-NpmChecked -Arguments @("run", "test:build-budget")
     Invoke-NpmChecked -Arguments @("audit", "--omit=dev", "--audit-level=high")
 
-    # Build the actual IIS release only after the complete normal-mode checks pass.
-    # Kent Rehberi data is fetched directly from the official PlanASKI endpoint
-    # by the browser. The upstream must allow CORS from the deployed CBS origin.
-    # Keep the same-origin API base for other application endpoints.
-    $env:VITE_API_URL = "/kentrehberiumit/api"
+    # Build a static-only client. No same-origin or local User API is configured.
+    # Kent Rehberi data is fetched from PlanASKI by the browser; the upstream must
+    # allow CORS from the deployed CBS origin.
     $env:VITE_KENT_REHBERI_SOURCE = "planaski"
-    $env:VITE_PUBLIC_MAP_ONLY_MODE = "true"
-    $env:VITE_LOCAL_BOOTSTRAP_PREVIEW = "false"
     $env:VITE_KENT_REHBERI_OVERVIEW_ON_STARTUP = "false"
 
     Write-Host "3/4 - IIS alt-yoluna göre üretim paketi derleniyor..." -ForegroundColor Cyan
@@ -179,7 +168,7 @@ try {
     Write-Host "Üretim paketi hazır:" -ForegroundColor Green
     Write-Host $buildRoot
     Write-Host "Hedef URL: https://cbs.ankara.bel.tr/kentrehberiumit/"
-    Write-Host "API tabanı: /kentrehberiumit/api"
+    Write-Host "Dağıtım modeli: statik istemci; uygulama API'si yok"
     Write-Host "Kent Rehberi veri kaynağı: doğrudan resmi PlanASKI API (tarayıcı CORS izni gerektirir)"
 }
 finally {
