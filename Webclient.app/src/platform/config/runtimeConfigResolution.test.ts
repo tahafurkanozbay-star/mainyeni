@@ -22,31 +22,38 @@ const evidenceFor = (
 
 describe('runtime config source classification', () => {
   test.each([
-    ['VITE_API_URL', 'vite'],
+    ['VITE_RELEASE', 'vite'],
     ['VITE_FEATURE_X', 'vite'],
     ['MODE', 'vite-builtin'],
     ['DEV', 'vite-builtin'],
     ['PROD', 'vite-builtin'],
     ['SSR', 'vite-builtin'],
     ['BASE_URL', 'vite-builtin'],
-    ['REACT_APP_API_URL', 'legacy-cra'],
+    ['REACT_APP_RELEASE', 'legacy-cra'],
     ['CUSTOM_VALUE', 'derived'],
   ] as const)('classifies %s as %s', (key, expected) => {
     expect(classifyRuntimeConfigSourceKey(key)).toBe(expected);
   });
 
-  test('publishes deterministic source-key precedence', () => {
-    expect(RUNTIME_CONFIG_SOURCE_KEYS.apiBaseUrl).toEqual([
-      'VITE_API_URL',
-      'VITE_API_BASE_URL',
-      'REACT_APP_API_URL',
-      'REACT_APP_API_BASE_URL',
+  test('publishes only supported runtime configuration source keys', () => {
+    expect(RUNTIME_CONFIG_SOURCE_KEYS.requestTimeoutMs).toEqual([
+      'VITE_REQUEST_TIMEOUT_MS',
+      'REACT_APP_REQUEST_TIMEOUT_MS',
+    ]);
+    expect(RUNTIME_CONFIG_SOURCE_KEYS.cacheTtlMs).toEqual([
+      'VITE_CACHE_TTL_MS',
+      'REACT_APP_CACHE_TTL_MS',
+    ]);
+    expect(RUNTIME_CONFIG_SOURCE_KEYS.maxRetries).toEqual([
+      'VITE_MAX_RETRIES',
+      'REACT_APP_MAX_RETRIES',
     ]);
     expect(RUNTIME_CONFIG_SOURCE_KEYS.environment).toEqual([
       'VITE_ENV',
       'MODE',
       'REACT_APP_ENV',
     ]);
+    expect(RUNTIME_CONFIG_SOURCE_KEYS).not.toHaveProperty('apiBaseUrl');
   });
 
   test('freezes default feature policy', () => {
@@ -56,10 +63,9 @@ describe('runtime config source classification', () => {
 });
 
 describe('runtime config provenance defaults', () => {
-  test('resolves canonical defaults from an empty source', () => {
+  test('resolves canonical defaults without any application API field', () => {
     const resolution = resolveRuntimeConfig({});
     expect(resolution.config).toEqual({
-      apiBaseUrl: '/api',
       requestTimeoutMs: 15_000,
       cacheTtlMs: 30_000,
       maxRetries: 2,
@@ -76,6 +82,7 @@ describe('runtime config provenance defaults', () => {
         strictEndpointPolicy: true,
       },
     });
+    expect(resolution.config).not.toHaveProperty('apiBaseUrl');
   });
 
   test('marks every direct config field as defaulted when source is empty', () => {
@@ -86,7 +93,7 @@ describe('runtime config provenance defaults', () => {
       expect(item.shadowedSourceCount).toBe(0);
     }
     expect(resolution.summary.configuredFields).toBe(0);
-    expect(resolution.summary.defaultedFields).toBe(14);
+    expect(resolution.summary.defaultedFields).toBe(13);
   });
 
   test('uses derived evidence for unknown build mode', () => {
@@ -109,24 +116,37 @@ describe('runtime config provenance defaults', () => {
 
   test('preserves createRuntimeConfig compatibility with resolution config', () => {
     const source = {
-      VITE_API_URL: '/api/v2',
-      VITE_API_TIMEOUT_MS: '2000',
+      VITE_REQUEST_TIMEOUT_MS: '2000',
       VITE_RELEASE: 'r2',
     };
     expect(createRuntimeConfig(source)).toEqual(resolveRuntimeConfig(source).config);
   });
+
+  test('ignores retired API URL keys instead of treating them as runtime configuration', () => {
+    const empty = resolveRuntimeConfig({});
+    const retiredOnly = resolveRuntimeConfig({
+      VITE_API_URL: 'https://private.example/api',
+      VITE_API_BASE_URL: '/old-api',
+      REACT_APP_API_URL: '/legacy-api',
+      REACT_APP_API_BASE_URL: '/legacy-base',
+    });
+    expect(retiredOnly.config).toEqual(empty.config);
+    expect(retiredOnly.config).not.toHaveProperty('apiBaseUrl');
+    expect(retiredOnly.evidence).toEqual(empty.evidence);
+    expect(retiredOnly.config.buildMode).toBe('unknown');
+  });
 });
 
 describe('runtime config source precedence and shadowing', () => {
-  test('prefers Vite API key and records shadowed legacy source', () => {
+  test('prefers a Vite timeout and records a shadowed legacy alias', () => {
     const resolution = resolveRuntimeConfig({
-      VITE_API_URL: '/api/v2',
-      REACT_APP_API_URL: '/legacy',
+      VITE_REQUEST_TIMEOUT_MS: '9000',
+      REACT_APP_REQUEST_TIMEOUT_MS: '5000',
     });
-    const item = evidenceFor(resolution.evidence, 'apiBaseUrl');
-    expect(resolution.config.apiBaseUrl).toBe('/api/v2');
+    const item = evidenceFor(resolution.evidence, 'requestTimeoutMs');
+    expect(resolution.config.requestTimeoutMs).toBe(9000);
     expect(item).toMatchObject({
-      sourceKey: 'VITE_API_URL',
+      sourceKey: 'VITE_REQUEST_TIMEOUT_MS',
       sourceKind: 'vite',
       configured: true,
       shadowedSourceCount: 1,
@@ -134,43 +154,19 @@ describe('runtime config source precedence and shadowing', () => {
     expect(resolution.summary.shadowedSourceCount).toBe(1);
   });
 
-  test('records every lower-precedence configured alias as shadowed', () => {
+  test('uses a legacy generic timeout only when the Vite alias is absent', () => {
     const resolution = resolveRuntimeConfig({
-      VITE_API_URL: '/api/v4',
-      VITE_API_BASE_URL: '/api/v3',
-      REACT_APP_API_URL: '/api/v2',
-      REACT_APP_API_BASE_URL: '/api/v1',
+      REACT_APP_REQUEST_TIMEOUT_MS: '7000',
     });
-    expect(evidenceFor(resolution.evidence, 'apiBaseUrl').shadowedSourceCount).toBe(3);
-    expect(resolution.summary.shadowedSourceCount).toBe(3);
-  });
-
-  test('uses VITE_API_BASE_URL when primary Vite key is blank', () => {
-    const resolution = resolveRuntimeConfig({
-      VITE_API_URL: '   ',
-      VITE_API_BASE_URL: '/gateway',
-    });
-    expect(resolution.config.apiBaseUrl).toBe('/gateway');
-    expect(evidenceFor(resolution.evidence, 'apiBaseUrl')).toMatchObject({
-      sourceKey: 'VITE_API_BASE_URL',
-      sourceKind: 'vite',
+    expect(resolution.config.requestTimeoutMs).toBe(7000);
+    expect(evidenceFor(resolution.evidence, 'requestTimeoutMs')).toMatchObject({
+      sourceKey: 'REACT_APP_REQUEST_TIMEOUT_MS',
+      sourceKind: 'legacy-cra',
       shadowedSourceCount: 0,
     });
   });
 
-  test('uses legacy API key only when modern aliases are absent', () => {
-    const resolution = resolveRuntimeConfig({
-      REACT_APP_API_URL: '/legacy-api',
-    });
-    expect(resolution.config.apiBaseUrl).toBe('/legacy-api');
-    expect(evidenceFor(resolution.evidence, 'apiBaseUrl')).toMatchObject({
-      sourceKey: 'REACT_APP_API_URL',
-      sourceKind: 'legacy-cra',
-    });
-    expect(resolution.summary.legacySourceFields).toBeGreaterThan(0);
-  });
-
-  test('prefers explicit VITE_ENV over MODE and legacy environment', () => {
+  test('prefers VITE_ENV and records lower-precedence environment aliases', () => {
     const resolution = resolveRuntimeConfig({
       VITE_ENV: 'staging',
       MODE: 'production',
@@ -184,175 +180,58 @@ describe('runtime config source precedence and shadowing', () => {
     });
   });
 
-  test('classifies MODE as Vite built-in source', () => {
-    const resolution = resolveRuntimeConfig({ MODE: 'test' });
-    expect(resolution.config.environment).toBe('test');
-    expect(evidenceFor(resolution.evidence, 'environment')).toMatchObject({
-      sourceKey: 'MODE',
-      sourceKind: 'vite-builtin',
+  test('selects and clamps generic timeout, cache and retry controls', () => {
+    const resolution = resolveRuntimeConfig({
+      VITE_REQUEST_TIMEOUT_MS: '1',
+      VITE_CACHE_TTL_MS: '999999999',
+      VITE_MAX_RETRIES: '99',
     });
-    expect(resolution.config.buildMode).toBe('vite-ready');
-  });
-});
-
-describe('runtime config integer evidence', () => {
-  test('accepts a valid timeout unchanged', () => {
-    const resolution = resolveRuntimeConfig({ VITE_API_TIMEOUT_MS: '9000' });
-    expect(resolution.config.requestTimeoutMs).toBe(9000);
-    expect(evidenceFor(resolution.evidence, 'requestTimeoutMs').disposition)
-      .toBe('accepted');
-  });
-
-  test('clamps timeout below minimum', () => {
-    const resolution = resolveRuntimeConfig({ VITE_API_TIMEOUT_MS: '1' });
     expect(resolution.config.requestTimeoutMs).toBe(1000);
-    expect(evidenceFor(resolution.evidence, 'requestTimeoutMs').disposition)
-      .toBe('clamped');
-    expect(resolution.summary.clampedFields).toBe(1);
-  });
-
-  test('clamps timeout above maximum', () => {
-    const resolution = resolveRuntimeConfig({ VITE_API_TIMEOUT_MS: '999999' });
-    expect(resolution.config.requestTimeoutMs).toBe(60_000);
-    expect(evidenceFor(resolution.evidence, 'requestTimeoutMs').disposition)
-      .toBe('clamped');
-  });
-
-  test('falls back for non-numeric timeout', () => {
-    const resolution = resolveRuntimeConfig({ VITE_API_TIMEOUT_MS: 'never' });
-    expect(resolution.config.requestTimeoutMs).toBe(15_000);
-    expect(evidenceFor(resolution.evidence, 'requestTimeoutMs').disposition)
-      .toBe('invalid-fallback');
-    expect(resolution.summary.rejectedFields).toBe(1);
-  });
-
-  test('clamps cache ttl to zero', () => {
-    const resolution = resolveRuntimeConfig({ VITE_API_CACHE_TTL_MS: '-1' });
-    expect(resolution.config.cacheTtlMs).toBe(0);
-    expect(evidenceFor(resolution.evidence, 'cacheTtlMs').disposition)
-      .toBe('clamped');
-  });
-
-  test('clamps cache ttl to configured upper bound', () => {
-    const resolution = resolveRuntimeConfig({
-      VITE_API_CACHE_TTL_MS: '999999999',
-    });
     expect(resolution.config.cacheTtlMs).toBe(600_000);
-  });
-
-  test('accepts zero retries', () => {
-    const resolution = resolveRuntimeConfig({ VITE_API_MAX_RETRIES: '0' });
-    expect(resolution.config.maxRetries).toBe(0);
-    expect(evidenceFor(resolution.evidence, 'maxRetries').disposition)
-      .toBe('accepted');
-  });
-
-  test('clamps retries above four', () => {
-    const resolution = resolveRuntimeConfig({ VITE_API_MAX_RETRIES: '9' });
     expect(resolution.config.maxRetries).toBe(4);
-    expect(evidenceFor(resolution.evidence, 'maxRetries').disposition)
-      .toBe('clamped');
+    expect(evidenceFor(resolution.evidence, 'requestTimeoutMs').disposition).toBe('clamped');
+    expect(evidenceFor(resolution.evidence, 'cacheTtlMs').disposition).toBe('clamped');
+    expect(evidenceFor(resolution.evidence, 'maxRetries').disposition).toBe('clamped');
   });
 
-  test('retains legacy parseInt compatibility for numeric prefix', () => {
-    const resolution = resolveRuntimeConfig({ VITE_API_MAX_RETRIES: '3attempts' });
-    expect(resolution.config.maxRetries).toBe(3);
-    expect(evidenceFor(resolution.evidence, 'maxRetries').disposition)
-      .toBe('accepted');
+  test('marks malformed numeric settings as rejected without retaining raw values', () => {
+    const raw = 'not-a-timeout-secret';
+    const resolution = resolveRuntimeConfig({
+      VITE_REQUEST_TIMEOUT_MS: raw,
+    });
+    expect(resolution.config.requestTimeoutMs).toBe(15_000);
+    expect(evidenceFor(resolution.evidence, 'requestTimeoutMs').disposition).toBe('invalid-fallback');
+    expect(JSON.stringify(resolution.evidence)).not.toContain(raw);
+  });
+
+  test('uses the Vite build mode marker when a recognized Vite key is provided', () => {
+    expect(resolveRuntimeConfig({ VITE_RELEASE: 'r1' }).config.buildMode).toBe('vite-ready');
+    expect(resolveRuntimeConfig({ VITE_API_URL: '/retired-api' }).config.buildMode).toBe('unknown');
   });
 });
 
-describe('runtime config boolean evidence', () => {
-  test.each([
-    ['1', true],
-    ['true', true],
-    ['yes', true],
-    ['on', true],
-    ['enabled', true],
-    ['0', false],
-    ['false', false],
-    ['no', false],
-    ['off', false],
-    ['disabled', false],
-  ])('accepts adaptive runtime boolean token %s', (value, expected) => {
-    const resolution = resolveRuntimeConfig({ VITE_ADAPTIVE_RUNTIME: value });
-    expect(resolution.config.features.adaptiveRuntime).toBe(expected);
-    expect(evidenceFor(
-      resolution.evidence,
-      'features.adaptiveRuntime',
-    ).disposition).toBe('accepted');
-  });
-
-  test('accepts native boolean input', () => {
-    const resolution = resolveRuntimeConfig({ VITE_ENV_DEBUG: true });
-    expect(resolution.config.features.debugLogging).toBe(true);
-    expect(evidenceFor(
-      resolution.evidence,
-      'features.debugLogging',
-    ).disposition).toBe('accepted');
-  });
-
-  test('falls back for unknown boolean token', () => {
-    const resolution = resolveRuntimeConfig({ VITE_ENV_DEBUG: 'perhaps' });
-    expect(resolution.config.features.debugLogging).toBe(false);
-    expect(evidenceFor(
-      resolution.evidence,
-      'features.debugLogging',
-    ).disposition).toBe('invalid-fallback');
-  });
-
-  test('keeps privacy telemetry enabled by default', () => {
-    const resolution = resolveRuntimeConfig({});
-    expect(resolution.config.features.privacyTelemetry).toBe(true);
-    expect(evidenceFor(
-      resolution.evidence,
-      'features.privacyTelemetry',
-    ).disposition).toBe('defaulted');
-  });
-
-  test('records shadowed feature aliases', () => {
+describe('runtime config value normalization', () => {
+  test('normalizes environment and release text', () => {
     const resolution = resolveRuntimeConfig({
-      VITE_TYPED_BOOTSTRAP: 'true',
-      REACT_APP_TYPED_BOOTSTRAP: 'false',
+      VITE_ENV: ' staging ',
+      VITE_RELEASE: ' release-1 ',
     });
-    expect(resolution.config.features.typedBootstrap).toBe(true);
-    expect(evidenceFor(
-      resolution.evidence,
-      'features.typedBootstrap',
-    ).shadowedSourceCount).toBe(1);
-  });
-});
-
-describe('runtime config text evidence', () => {
-  test('accepts canonical environment text', () => {
-    const resolution = resolveRuntimeConfig({ VITE_ENV: 'staging' });
     expect(resolution.config.environment).toBe('staging');
-    expect(evidenceFor(resolution.evidence, 'environment').disposition)
-      .toBe('accepted');
+    expect(resolution.config.release).toBe('release-1');
+    expect(evidenceFor(resolution.evidence, 'environment').disposition).toBe('normalized');
+    expect(evidenceFor(resolution.evidence, 'release').disposition).toBe('normalized');
   });
 
-  test('normalizes environment boundary whitespace', () => {
-    const resolution = resolveRuntimeConfig({ VITE_ENV: ' staging ' });
-    expect(resolution.config.environment).toBe('staging');
-    expect(evidenceFor(resolution.evidence, 'environment').disposition)
-      .toBe('normalized');
-  });
-
-  test('normalizes release line breaks without retaining raw text in evidence', () => {
-    const resolution = resolveRuntimeConfig({
-      VITE_RELEASE: 'release-1\nprivate-tail',
-    });
-    expect(resolution.config.release).toBe('release-1 private-tail');
-    const item = evidenceFor(resolution.evidence, 'release');
-    expect(item.disposition).toBe('normalized');
-    expect(JSON.stringify(item)).not.toContain('private-tail');
-  });
-
-  test('bounds long release text', () => {
+  test('bounds oversized release text', () => {
     const resolution = resolveRuntimeConfig({ VITE_RELEASE: 'x'.repeat(300) });
     expect(resolution.config.release).toHaveLength(120);
-    expect(evidenceFor(resolution.evidence, 'release').disposition)
-      .toBe('normalized');
+    expect(evidenceFor(resolution.evidence, 'release').disposition).toBe('normalized');
+  });
+
+  test('pins ArcGIS version to the bundled package contract', () => {
+    const resolution = resolveRuntimeConfig({ VITE_ESRI_API_VERSION: 'next' });
+    expect(resolution.config.esriApiVersion).toBe('5.1.24');
+    expect(evidenceFor(resolution.evidence, 'esriApiVersion').disposition).toBe('policy-pinned');
   });
 
   test('marks TKGM evidence sensitive without exposing the identifier', () => {
@@ -364,181 +243,41 @@ describe('runtime config text evidence', () => {
     expect(JSON.stringify(item)).not.toContain(secret);
     expect(resolution.config.tkgmCityId).toBe(secret);
   });
-});
 
-describe('runtime config API boundary evidence', () => {
-  test('accepts canonical same-origin relative path', () => {
-    const resolution = resolveRuntimeConfig({ VITE_API_URL: '/gateway/api' });
-    expect(resolution.config.apiBaseUrl).toBe('/gateway/api');
-    expect(evidenceFor(resolution.evidence, 'apiBaseUrl').disposition)
-      .toBe('accepted');
-  });
-
-  test('normalizes trailing slash on safe API path', () => {
-    const resolution = resolveRuntimeConfig({ VITE_API_URL: '/gateway/api/' });
-    expect(resolution.config.apiBaseUrl).toBe('/gateway/api');
-    expect(evidenceFor(resolution.evidence, 'apiBaseUrl').disposition)
-      .toBe('normalized');
-  });
-
-  test.each([
-    'https://evil.example/api',
-    '//evil.example/api',
-    '/api\\admin',
-    '/api/%2e%2e/admin',
-    '/api/%252e%252e/admin',
-    '/api?token=private',
-    '/api#fragment',
-  ])('fails closed and records rejected API input %s', (value) => {
-    const resolution = resolveRuntimeConfig({ VITE_API_URL: value });
-    expect(resolution.config.apiBaseUrl).toBe('/api');
-    expect(evidenceFor(resolution.evidence, 'apiBaseUrl').disposition)
-      .toBe('invalid-fallback');
-  });
-
-  test('does not place rejected API input in evidence', () => {
-    const privateUrl = 'https://private.example/internal';
-    const resolution = resolveRuntimeConfig({ VITE_API_URL: privateUrl });
-    expect(JSON.stringify(resolution.evidence)).not.toContain(privateUrl);
-  });
-});
-
-describe('runtime config ArcGIS evidence', () => {
-  test('accepts bundled ArcGIS version', () => {
-    const resolution = resolveRuntimeConfig({
-      VITE_ESRI_API_VERSION: '5.1.24',
-    });
-    expect(resolution.config.esriApiVersion).toBe('5.1.24');
-    expect(evidenceFor(resolution.evidence, 'esriApiVersion').disposition)
-      .toBe('accepted');
-  });
-
-  test('normalizes benign ArcGIS version whitespace', () => {
-    const resolution = resolveRuntimeConfig({
-      VITE_ESRI_API_VERSION: ' 5.1.24 ',
-    });
-    expect(resolution.config.esriApiVersion).toBe('5.1.24');
-    expect(evidenceFor(resolution.evidence, 'esriApiVersion').disposition)
-      .toBe('accepted');
-  });
-
-  test.each([
-    'next',
-    '5.2.0',
-    'https://evil.example/sdk',
-    '5.1.24\nhttps://evil.example',
-  ])('pins unsupported ArcGIS value %s to bundled version', (value) => {
-    const resolution = resolveRuntimeConfig({ VITE_ESRI_API_VERSION: value });
-    expect(resolution.config.esriApiVersion).toBe('5.1.24');
-    expect(evidenceFor(resolution.evidence, 'esriApiVersion').disposition)
-      .toBe('policy-pinned');
-    expect(resolution.summary.pinnedFields).toBe(1);
-  });
-});
-
-describe('runtime config build-mode evidence', () => {
-  test('detects Vite mode from custom VITE key', () => {
-    const resolution = resolveRuntimeConfig({ VITE_RELEASE: 'r1' });
-    expect(resolution.config.buildMode).toBe('vite-ready');
-    expect(evidenceFor(resolution.evidence, 'buildMode').sourceKind)
-      .toBe('vite');
-  });
-
-  test('detects Vite mode from built-in key', () => {
-    const resolution = resolveRuntimeConfig({ PROD: true });
-    expect(resolution.config.buildMode).toBe('vite-ready');
-    expect(evidenceFor(resolution.evidence, 'buildMode').sourceKind)
-      .toBe('vite-builtin');
-  });
-
-  test('detects legacy CRA mode when only legacy keys exist', () => {
-    const resolution = resolveRuntimeConfig({
-      REACT_APP_RELEASE: 'legacy',
-    });
-    expect(resolution.config.buildMode).toBe('legacy-cra');
-    expect(evidenceFor(resolution.evidence, 'buildMode')).toMatchObject({
-      sourceKind: 'legacy-cra',
-      disposition: 'accepted',
-    });
-  });
-
-  test('Vite markers win build-mode detection when legacy aliases coexist', () => {
-    const resolution = resolveRuntimeConfig({
-      VITE_RELEASE: 'modern',
-      REACT_APP_RELEASE: 'legacy',
-    });
-    expect(resolution.config.buildMode).toBe('vite-ready');
-  });
-});
-
-describe('runtime config deterministic evidence fingerprints', () => {
-  test('config fingerprint is stable for equal normalized values', () => {
-    const first = resolveRuntimeConfig({ VITE_API_URL: '/api/' });
-    const second = resolveRuntimeConfig({ VITE_API_URL: '/api' });
+  test('normalizes equivalent setting values to a stable config fingerprint', () => {
+    const first = resolveRuntimeConfig({ VITE_REQUEST_TIMEOUT_MS: '15000' });
+    const second = resolveRuntimeConfig({ VITE_REQUEST_TIMEOUT_MS: '15000 ' });
     expect(first.configFingerprint).toBe(second.configFingerprint);
   });
 
-  test('evidence fingerprint distinguishes normalized from accepted source', () => {
-    const first = resolveRuntimeConfig({ VITE_API_URL: '/api/' });
-    const second = resolveRuntimeConfig({ VITE_API_URL: '/api' });
+  test('evidence fingerprint distinguishes source normalization from accepted input', () => {
+    const first = resolveRuntimeConfig({ VITE_RELEASE: 'r1' });
+    const second = resolveRuntimeConfig({ VITE_RELEASE: ' r1 ' });
+    expect(first.configFingerprint).toBe(second.configFingerprint);
     expect(first.evidenceFingerprint).not.toBe(second.evidenceFingerprint);
   });
 
-  test('evidence fingerprint changes when source family changes with equal canonical config', () => {
-    const modern = resolveRuntimeConfig({
-      VITE_API_URL: '/api',
-      VITE_RELEASE: 'r1',
-    });
-    const legacy = resolveRuntimeConfig({
-      REACT_APP_API_URL: '/api',
-      VITE_RELEASE: 'r1',
-    });
-    expect(modern.configFingerprint).toBe(legacy.configFingerprint);
-    expect(modern.evidenceFingerprint).not.toBe(legacy.evidenceFingerprint);
-  });
-
-  test('fingerprints are independent of source object insertion order', () => {
+  test('fingerprints are independent of source insertion order', () => {
     const first = resolveRuntimeConfig({
-      VITE_API_URL: '/api/v2',
+      VITE_REQUEST_TIMEOUT_MS: '8000',
       VITE_RELEASE: 'r1',
       VITE_ENV: 'staging',
     });
     const second = resolveRuntimeConfig({
       VITE_ENV: 'staging',
       VITE_RELEASE: 'r1',
-      VITE_API_URL: '/api/v2',
+      VITE_REQUEST_TIMEOUT_MS: '8000',
     });
     expect(second.configFingerprint).toBe(first.configFingerprint);
     expect(second.evidenceFingerprint).toBe(first.evidenceFingerprint);
   });
 
-  test('standalone evidence fingerprint matches resolution fingerprint', () => {
+  test('standalone evidence fingerprint matches the resolution fingerprint', () => {
     const resolution = resolveRuntimeConfig({
       VITE_RELEASE: 'r5',
-      VITE_API_MAX_RETRIES: '4',
+      VITE_MAX_RETRIES: '4',
     });
-    expect(runtimeConfigEvidenceFingerprint(resolution.evidence))
-      .toBe(resolution.evidenceFingerprint);
-  });
-
-  test('config fingerprint changes when a non-sensitive field changes', () => {
-    const first = resolveRuntimeConfig({ VITE_RELEASE: 'r1' });
-    const second = resolveRuntimeConfig({ VITE_RELEASE: 'r2' });
-    expect(second.configFingerprint).not.toBe(first.configFingerprint);
-  });
-
-  test('config fingerprint changes when sensitive identifier changes without revealing it', () => {
-    const first = resolveRuntimeConfig({ VITE_TKGM_CITY_ID: 'city-a' });
-    const second = resolveRuntimeConfig({ VITE_TKGM_CITY_ID: 'city-b' });
-    expect(second.configFingerprint).not.toBe(first.configFingerprint);
-    expect(first.configFingerprint).not.toContain('city-a');
-    expect(second.configFingerprint).not.toContain('city-b');
-  });
-
-  test('legacy runtimeConfigFingerprint call remains deterministic', () => {
-    const config = createRuntimeConfig({ VITE_RELEASE: 'compat' });
-    expect(runtimeConfigFingerprint(config)).toMatch(/^[0-9a-f]{8}$/u);
-    expect(runtimeConfigFingerprint(config)).toBe(runtimeConfigFingerprint(config));
+    expect(runtimeConfigEvidenceFingerprint(resolution.evidence)).toBe(resolution.evidenceFingerprint);
   });
 });
 
@@ -554,19 +293,12 @@ describe('runtime config privacy-safe support description', () => {
     expect(serialized).not.toContain(secret);
     expect(serialized).toContain('VITE_TKGM_CITY_ID');
     expect(serialized).toContain('tkgmCityId');
-  });
-
-  test('does not retain invalid raw API value in support description', () => {
-    const raw = 'https://secret-host.example/api';
-    const description = describeRuntimeConfigResolution(resolveRuntimeConfig({
-      VITE_API_URL: raw,
-    }));
-    expect(JSON.stringify(description)).not.toContain(raw);
+    expect(serialized).not.toContain('apiBaseUrl');
   });
 
   test('includes bounded summary counts and fingerprints', () => {
     const description = describeRuntimeConfigResolution(resolveRuntimeConfig({
-      VITE_API_TIMEOUT_MS: '1',
+      VITE_REQUEST_TIMEOUT_MS: '1',
       VITE_ENV_DEBUG: 'perhaps',
     }));
     expect(description).toMatchObject({
