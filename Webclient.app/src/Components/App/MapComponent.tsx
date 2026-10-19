@@ -49,6 +49,7 @@ interface MapViewLike {
   popup: PopupLike;
   padding?: unknown;
   goTo?: (target: unknown, options?: unknown) => PromiseLike<unknown> | unknown;
+  toMap?: (screenPoint: { x: number; y: number }) => unknown;
   updating?: boolean;
   on?: (eventName: string, callback: (event: MapClickEvent) => void) => RemovableHandle;
   destroy?: () => void;
@@ -126,15 +127,53 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
         watchUtils.whenFalse(view, 'updating', () => { windowManager.SetMapUpdating(false); accessibilityModel.markUpdating(false); }),
       );
       const clickHandle = view.on?.('click', (event) => {
-        if (event.button === 2 || MapManager.GetMobileRightClick?.()) {
-          MapManager.SetMapClickEvent?.(event); windowManager.ShowWindow('context-menu-widget');
-        } else windowManager.HideWindow('context-menu-widget');
+        if (MapManager.GetMobileRightClick?.()) {
+          MapManager.SetMapClickEvent?.(event);
+          windowManager.ShowWindow('global-identify-widget');
+        } else {
+          windowManager.HideWindow('context-menu-widget');
+        }
       });
       if (clickHandle) handles.push(clickHandle);
+
+      // Native contextmenu is the reliable secondary-button event. Resolve the
+      // screen coordinate against whichever ArcGIS view is currently visible.
+      const mapRoot = mapDiv.current?.parentElement;
+      const handleMapContextMenu = (event: MouseEvent): void => {
+        const target = event.target;
+        if (!(target instanceof Element)
+          || !target.closest('.experience-mapview-host, .experience-scene-host')) return;
+        event.preventDefault();
+
+        const activeView = (
+          MapManager.GetActiveMapView?.() ?? MapManager.GetMapView()
+        ) as MapViewLike | null;
+        if (!activeView || activeView.destroyed || typeof activeView.toMap !== 'function') return;
+
+        const container = activeView.container instanceof HTMLElement ? activeView.container : mapRoot;
+        const rect = container?.getBoundingClientRect();
+        const x = event.clientX - (rect?.left ?? 0);
+        const y = event.clientY - (rect?.top ?? 0);
+        let mapPoint: unknown;
+        try {
+          mapPoint = activeView.toMap({ x, y });
+        } catch (error) {
+          DebugHelper.Log({ context: 'map-contextmenu-to-map', error });
+          return;
+        }
+        if (!mapPoint || typeof mapPoint !== 'object') return;
+
+        MapManager.SetMapClickEvent?.({ x, y, mapPoint });
+        windowManager.HideWindow('context-menu-widget');
+        windowManager.ShowWindow('global-identify-widget');
+      };
+      mapRoot?.addEventListener('contextmenu', handleMapContextMenu);
+      if (mapRoot) handles.push({ remove: () => mapRoot.removeEventListener('contextmenu', handleMapContextMenu) });
       const updatePadding = (): void => { if (view && !view.destroyed) view.padding = createResponsivePadding(window.innerWidth, mapConfig); };
       window.addEventListener('resize', updatePadding, { passive: true });
       handles.push({ remove: () => window.removeEventListener('resize', updatePadding) });
       Store.dispatch({ type: MapReducer_ActionTypes.SetMapView, payload: view });
+      MapManager.SetActiveMapView?.(view);
       setMapView(view);
       accessibilityModel.markReady();
       if (recoveryAttemptId !== null) recoveryModel.succeed(recoveryAttemptId);
@@ -146,6 +185,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       activeViewModeRef.current = '2d'; accessorWatchRef.current = null;
       unbindViewState(); performanceMonitor?.dispose?.(); MapManager.ClearViewPerformanceMonitor?.(performanceMonitor);
       MapManager.ClearViewStateBridge?.(bridge as never); bridge?.destroy?.(); handles.forEach(safeRemove); windowManager.SetMapUpdating(false);
+      MapManager.ClearActiveMapView?.(view);
       Store.dispatch({ type: MapReducer_ActionTypes.SetMapView, payload: null });
       setMapView(null);
       if (view) { try { view.container = null; view.destroy?.(); } catch (error) { DebugHelper.Log(error); } }
@@ -171,18 +211,21 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
 
   const searchAddress = useCallback(async (query: string, signal: AbortSignal): Promise<string> => {
     if (signal.aborted) throw signal.reason ?? new DOMException('Adres araması iptal edildi.', 'AbortError');
-    const view = MapManager.GetMapView() as MapViewLike | null;
+    const getActiveView = (): MapViewLike | null => (
+      (MapManager.GetActiveMapView?.() ?? MapManager.GetMapView()) as MapViewLike | null
+    );
+    const view = getActiveView();
     if (!view || view.destroyed || typeof view.goTo !== 'function') {
       throw new Error('Harita henüz hazır değil. Birkaç saniye sonra yeniden deneyin.');
     }
     const result = await geocodeAddress(query, { signal });
     if (signal.aborted) throw signal.reason ?? new DOMException('Adres araması iptal edildi.', 'AbortError');
-    if (view !== MapManager.GetMapView() || view.destroyed) {
+    if (view !== getActiveView() || view.destroyed) {
       throw new DOMException('Harita görünümü değişti.', 'AbortError');
     }
     await view.goTo({ center: [result.longitude, result.latitude], zoom: result.zoom }, { duration: 650 });
     if (signal.aborted) throw signal.reason ?? new DOMException('Adres araması iptal edildi.', 'AbortError');
-    if (view !== MapManager.GetMapView() || view.destroyed) {
+    if (view !== getActiveView() || view.destroyed) {
       throw new DOMException('Harita görünümü değişti.', 'AbortError');
     }
     return result.displayName;
