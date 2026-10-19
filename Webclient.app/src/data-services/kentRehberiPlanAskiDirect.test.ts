@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import {
   fetchKentRehberiGeoJson,
@@ -49,7 +49,6 @@ const mockTypes = (
   return { requests, fetchImpl };
 };
 
-afterEach(() => vi.unstubAllEnvs());
 
 describe('direct PlanASKI browser transport', () => {
   it('converts official flat JSON with multiline names and addresses to bounded GeoJSON', async () => {
@@ -72,8 +71,7 @@ describe('direct PlanASKI browser transport', () => {
     });
   });
 
-  it('connects existing React request functions directly to PlanASKI regardless of legacy flags', async () => {
-    vi.stubEnv('VITE_KENT_REHBERI_SOURCE', 'api');
+  it('connects existing React request functions directly to PlanASKI without a source-mode setting', async () => {
     const { requests, fetchImpl } = mockTypes({ 13: [row(13, 201)] });
     const result = await fetchKentRehberiGeoJson({ tur: 13, limit: 10, fetchImpl });
     expect(result.features).toHaveLength(1);
@@ -93,7 +91,6 @@ describe('direct PlanASKI browser transport', () => {
     expect(catalog.types[10]?.count).toBe(1);
     expect(catalog.types[13]?.samples).toMatchObject([{ objectid: 202 }]);
     expect(catalog.types[42]?.count).toBe(0);
-    vi.stubEnv('VITE_KENT_REHBERI_SOURCE', 'planaski');
     const directCatalog = await fetchKentRehberiTypeCatalog({ fetchImpl });
     expect(directCatalog.types[13]?.samples[0]?.adi).toBe('Kadin Danisma Merkezi');
   });
@@ -108,7 +105,6 @@ describe('direct PlanASKI browser transport', () => {
     const feature = await fetchPlanAskiFeatureDirect(202, { fetchImpl });
     expect(feature?.properties.tur).toBe(13);
     expect(await fetchPlanAskiFeatureDirect(999999, { fetchImpl })).toBeNull();
-    vi.stubEnv('VITE_KENT_REHBERI_SOURCE', 'planaski');
     expect((await fetchKentRehberiFeature(202, { fetchImpl }))?.id).toBe(202);
   });
 
