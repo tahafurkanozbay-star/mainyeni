@@ -86,7 +86,7 @@ export const DEFAULT_EXPERIENCE_PREFERENCES: Readonly<ExperiencePreferences> = O
     density: "comfortable",
     motion: "system",
     panelPlacement: "auto",
-    lastMapMode: "2d",
+    lastMapMode: "3d",
     utilityCollapsed: false,
     showCoordinateReadout: true,
     highContrastMapControls: false
