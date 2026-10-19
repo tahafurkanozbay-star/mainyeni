@@ -54,7 +54,7 @@ export const setKentRehberiMapFilter = (filter: KentRehberiMapFilterInput | null
     iconKeys,
   });
 
-  for (const listener of [...listeners]) {
+  for (const listener of listeners) {
     try {
       listener();
     } catch {
