@@ -124,7 +124,7 @@ describe('ExperienceUXLayer', () => {
       message: 'Tek bildirim modeli üzerinden geldi.',
     }));
 
-    dispatchExperienceCommand('notifications');
+    act(() => dispatchExperienceCommand('notifications'));
 
     const dialog = screen.getByRole('dialog', { name: 'Bildirim merkezi' });
     expect(dialog).toHaveAttribute('aria-modal', 'true');
