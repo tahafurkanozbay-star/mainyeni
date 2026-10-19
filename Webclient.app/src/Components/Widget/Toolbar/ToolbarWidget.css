@@ -342,3 +342,21 @@
 @media (max-width: 780px) { .toolbarwidget-notice { top: 132px; right: 80px; inline-size: calc(100dvw - 96px); max-inline-size: 320px; max-block-size: calc(100dvh - 148px); } }
 @media (pointer: coarse) { .toolbarwidget-notice__actions button { min-block-size: 48px; } }
 @media (forced-colors: active) { .toolbarwidget-notice, .experience-toolbar-tooltip .tooltip-inner { color: CanvasText; background: Canvas; border-color: CanvasText; box-shadow: none; } .toolbarwidget-notice__detail { color: CanvasText; } .toolbarwidget-notice__actions button { color: ButtonText; background: ButtonFace; border-color: ButtonText; } }
+
+
+/* Live traffic toggle in the persistent right-side map toolbar. */
+.toolbarwidget .experience-toolbar__button.toolbarwidget-traffic {
+  color: var(--exp-text-soft);
+}
+.toolbarwidget .experience-toolbar__button.toolbarwidget-traffic:hover,
+.toolbarwidget .experience-toolbar__button.toolbarwidget-traffic:focus-visible {
+  color: var(--exp-text);
+}
+.toolbarwidget .experience-toolbar__button.toolbarwidget-traffic[aria-pressed="true"] {
+  color: var(--exp-accent, #0e7490);
+  background: color-mix(in srgb, var(--exp-accent, #0e7490) 12%, transparent) !important;
+  outline: 1px solid color-mix(in srgb, var(--exp-accent, #0e7490) 45%, transparent);
+}
+.toolbarwidget .experience-toolbar__button.toolbarwidget-traffic[aria-pressed="true"] .experience-toolbar__icon {
+  opacity: 1;
+}
