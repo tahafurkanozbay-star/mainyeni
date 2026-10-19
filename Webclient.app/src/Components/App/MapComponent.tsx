@@ -97,12 +97,10 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       setTrafficStatus('Gerçek zamanlı trafik için Webclient.app/.env dosyasında VITE_TOMTOM_TRAFFIC_API_KEY ayarlanmalı.');
       return;
     }
-    setTrafficEnabled((enabled) => {
-      const next = !enabled;
-      setTrafficStatus(next ? 'Trafik yoğunluğu açılıyor…' : 'Trafik yoğunluğu kapatıldı.');
-      return next;
-    });
-  }, [trafficApiKeyConfigured]);
+    const next = !trafficEnabled;
+    setTrafficEnabled(next);
+    setTrafficStatus(next ? 'Trafik yoğunluğu açılıyor…' : 'Trafik yoğunluğu kapatıldı.');
+  }, [trafficApiKeyConfigured, trafficEnabled]);
 
   const reportTrafficStatus = useCallback((message: string): void => {
     setTrafficStatus(message);
