@@ -303,7 +303,7 @@ describe('mapToolbarModel', () => {
     model.resetLocation();
     expect(model.getSnapshot()).toMatchObject({ revision: 3, locationPhase: 'idle' });
   });
-  it('does not navigate to fallback after a user-interrupted requested navigation', async () => {
+  it('does not replace a valid position when the user interrupts camera navigation', async () => {
     const model = new MapToolbarModel(); const onError = vi.fn();
     const showLocation = vi.fn(async () => { throw new DOMException('User navigation interrupted.', 'AbortError'); });
     const sidebar = vi.fn();
@@ -311,10 +311,23 @@ describe('mapToolbarModel', () => {
     expect(showLocation).toHaveBeenCalledTimes(1); expect(sidebar).not.toHaveBeenCalled(); expect(onError).not.toHaveBeenCalled();
     expect(model.getSnapshot().announcement).toContain('Konum gösterimi durduruldu.');
   });
-  it('treats a user-interrupted location navigation as cancelled', async () => {
-    const model = new MapToolbarModel(); const onError = vi.fn();
-    expect(await model.locate({ requestPosition: async () => { throw new Error('Location unavailable.'); }, showLocation: async () => { throw new DOMException('User interruption.', 'AbortError'); }, showSidebar: vi.fn(), onError })).toBe('cancelled');
-    expect(onError).toHaveBeenCalledTimes(1);
+  it('treats an aborted position request as cancelled without inventing a location', async () => {
+    const model = new MapToolbarModel();
+    const onError = vi.fn();
+    const showLocation = vi.fn();
+    const showSidebar = vi.fn();
+
+    const result = await model.locate({
+      requestPosition: async () => { throw new DOMException('Position request cancelled.', 'AbortError'); },
+      showLocation,
+      showSidebar,
+      onError,
+    });
+
+    expect(result).toBe('cancelled');
+    expect(showLocation).not.toHaveBeenCalled();
+    expect(showSidebar).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
   });
 
 });
