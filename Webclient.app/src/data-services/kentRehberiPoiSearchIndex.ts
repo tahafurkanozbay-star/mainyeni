@@ -87,6 +87,8 @@ export const publishKentRehberiPoiSearchIndex = (
   const points = records.flatMap((record): KentRehberiPoiSearchPoint[] => {
     const id = Number(record.id);
     const name = cleanText(record.name) || cleanText(record.address);
+    if (record.longitude === null || record.longitude === undefined || record.longitude === ''
+      || record.latitude === null || record.latitude === undefined || record.latitude === '') return [];
     const longitude = Number(record.longitude);
     const latitude = Number(record.latitude);
     if (!Number.isSafeInteger(id) || id <= 0 || !name
