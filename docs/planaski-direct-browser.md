@@ -1,77 +1,42 @@
-# Browser-direct PlanASKI Kent Rehberi data (opt-in)
+# Doğrudan PlanASKI veri kaynağı
 
-The Kent Rehberi React client can read the official
+## Etkin mimari
+
+Yayımlanan `Webclient.app`, Kent Rehberi için tek veri kaynağı olarak resmi PlanASKI Kent Rehberi uç noktasına doğrudan tarayıcı isteği yapar:
+
 `https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur=N`
-endpoint **directly from the browser** in its data, search, detail and type
-catalog workflows. The official endpoint returns plain JSON arrays; the
-frontend validates and converts those records to EPSG:4326 GeoJSON, which is
-still what ArcGIS expects.
 
-## Activate in local development
+Bu mimari isteğe bağlı bir mod değildir. Üretim istemcisi için aşağıdakiler kullanılmaz:
 
-The source option is supplied at **Vite startup**, not inside the .NET API:
+- ABB User API/Admin API veya uygulama veritabanı/PostGIS,
+- aynı-köken `/api/kent-rehberi` ara servisi ya da Vite geliştirme proxy'si,
+- API kimlik bilgisi/token iletimi,
+- eski sunucu tabanlı GIS servis kataloğu.
+
+Desteklenen kategori aralığı `tur=0..42` olarak sabitlenmiştir. PlanASKI'nin düz JSON yanıtları, ArcGIS'e verilmeden önce sınırlandırılmış boyut ve kayıt sayısı, alan türleri, benzersiz kayıt kimliği ve WGS84 koordinat kontrollerinden geçirilip GeoJSON'a dönüştürülür.
+
+## İstek ve kaynak sınırları
+
+Tarayıcı isteği `GET`, `mode: cors`, `credentials: omit`, `cache: no-store` ve `redirect: error` seçeneklerini kullanır. Kaynak URL'si kod içinde sabittir; kullanıcı girdisi ile host/path oluşturulmaz. İstekler iptal edilebilir; her kategori için yanıt boyutu/kayıt sayısı sınırları ve kategori indirmelerinde eşzamanlılık sınırı vardır.
+
+Kategori başına kaynak sınırları 20.000 kayıt ve 8 MiB yanıttır. Uygulama sorgularında normal varsayılan sonuç üst sınırı 500, maksimum sınır 2.000 kayıttır. Filtrelenmemiş arama ve kategori kataloğu, 43 kategorinin taranmasını gerektirebilir; bu, gecikme ve PlanASKI isteği sayısını artırabilir. Gereksiz arama çağrılarını tetikleyen UI değişikliklerinden kaçınılmalı; cache/proxy eklenmeden önce kaynak servisinin gerçek davranışı ölçülmelidir.
+
+## CORS ve üretim kontrolü
+
+Tarayıcı aynı-origin politikası nedeniyle başka bir origin'in yanıtını ancak PlanASKI'nin ilgili yayın origin'ine CORS izni vermesi halinde okuyabilir. Üretim hedefi `https://cbs.ankara.bel.tr` olduğundan bu izin canlı tarayıcıdan ayrıca doğrulanmalıdır. Yerel ortamda daha önce başarılı bir HTTP yanıtı alınmış olması üretim origin'inde CORS izni olduğunu kanıtlamaz.
+
+Yayın sonrası tarayıcıda Developer Tools → Network açıp `kentrehberi?tur=` filtresi uygulanmalıdır. İsteklerin yalnızca `planaski.ankara.bel.tr` hostuna gittiği; yanıtların JSON olduğu ve konsolda CORS hatası olmadığı kontrol edilmelidir. CORS başarısızsa sorunun kaynağı/izin listesi veri servisi sahibiyle düzeltilmelidir. CORS kısıtını aşmak için özel API, proxy veya ikinci veri kaynağı eklenmemelidir.
+
+## Geliştirme ve dağıtım
 
 ```powershell
 cd Webclient.app
-$env:VITE_KENT_REHBERI_SOURCE = "planaski"
+npm ci
 npm run dev
 ```
 
-An existing `Webclient.app/.env` is **not overwritten** by the setup script.
-For a persistent local setup, add this to the ignored `.env`:
+IIS statik paketi için depo kökünden `Operations/build-webclient-iis.ps1`, ardından yetkili PowerShell oturumundan `Operations/deploy-webclient-iis.ps1` çalıştırılır. Bu betikler kod ve statik dosyaları hazırlar; DNS/TLS/CORS yapılandırması yapmaz ve eski IIS API eşlemelerini sessizce silmez.
 
-```dotenv
-VITE_KENT_REHBERI_SOURCE=planaski
-```
+## Doğrulama kapsamı
 
-In a new local setup, `.env.example` contains that option. Restart Vite
-after changing source mode; a refresh alone is insufficient.
-
-Open browser Developer Tools → Network and filter by `kentrehberi?tur=`.
-The network URL should now be the **PlanASKI host**, not `/api/kent-rehberi`.
-The direct source does not require the standalone .NET host for these
-four Kent Rehberi data operations; other app endpoints (e.g. AppSettings
-and unrelated admin/EGO services) may still require a backend. In
-development the existing map/bootstrap preview may provide map shell
-defaults if old database-backed AppSettings are unavailable.
-
-## Safe transport and limitations
-
-- Only the fixed official HTTPS host/path is used; category IDs are limited
-  to integers 0..42. No arbitrary URL override or credential forwarding.
-- `GET` with `credentials: omit`, `cache: no-store`, and `redirect: error`
-  is used. Direct mode does not cache PlanASKI JSON in this transport.
-- Every category payload must be a bounded JSON array (20,000 rows /
-  8 MiB per category); requests for all types use at most four concurrent
-  fetches. Browser requests remain abortable and have a bounded deadline.
-- Names and addresses may have CR/LF/CRLF normalized to spaces. All other
-  control characters, invalid IDs, duplicate IDs, nonnumeric/invalid
-  coordinates and unexpected data shapes remain rejected. No records are
-  silently discarded when malformed.
-- Existing UI collection limits still apply (500 default, 2,000 maximum,
-  with `meta.hasMore` indicating truncation).
-- Unfiltered search and type-catalog discovery require all 43 upstream
-  types. As requested, no proxy-level performance caching is used; latency
-  and official-service request volumes can be higher than the .NET proxy.
-- The browser origin **must be permitted by PlanASKI's CORS configuration**.
-  It was confirmed for `http://localhost:3000` when the user directly
-  fetched `tur=13` (HTTP 200, six records). This does *not* establish that
-  the same CORS headers will work on the production municipal domain.
-
-For existing same-origin .NET API behavior, set:
-
-```dotenv
-VITE_KENT_REHBERI_SOURCE=api
-```
-
-Omitting the setting also preserves the original API mode (the explicit
-local template is the opt-in). This branch contains only client and
-documentation changes. It does not alter production IIS or PostgreSQL.
-
-## Verification
-
-The direct-source test suite uses mocked responses for category parsing,
-control-character normalization, invalid records, full catalog/search,
-feature lookup, and same-origin fallback. CI tests alone cannot prove
-the cross-origin HTTP behavior of every deployment; use DevTools to
-check the actual production-origin CORS policy before switching production.
+CI testleri kategori dönüştürme, kayıt/koordinat reddi, sınırlandırma, iptal ve veri eşleştirme mantığını denetler. Testler tek başına üretim origin'inden CORS erişimini veya canlı IIS davranışını kanıtlamaz; yayın sonrası tarayıcı doğrulaması zorunludur.

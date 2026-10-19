@@ -1,3 +1,11 @@
+-- ARCHIVED / NOT USED BY THE ACTIVE APPLICATION.
+-- The production webclient now reads Kent Rehberi directly from the official
+-- PlanASKI browser endpoint. No application-owned Kent Rehberi API or PostgreSQL
+-- read path is built or published by this repository.
+-- This historical script is retained for reference only. Do not run it as part
+-- of the current webclient build/deployment without a separately approved
+-- database-backed service design and explicit review.
+--
 -- Kent Rehberi public JSON/GeoJSON API database preparation.
 -- Run with an appropriately privileged DBA role during deployment.
 -- Do not run CREATE INDEX CONCURRENTLY inside an explicit transaction block.
