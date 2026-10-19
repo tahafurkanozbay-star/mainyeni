@@ -509,3 +509,40 @@
     font-weight: 800;
   }
 }
+
+
+/* Tool windows are docked to the map UI, not positioned relative to a
+   legacy sidebar/container whose geometry changes between 2D and 3D. */
+.common-query-window.map-widget-surface {
+  position: fixed !important;
+  inset-block-start: calc(var(--mainbar-height, 60px) + 190px) !important;
+  inset-inline-start: auto !important;
+  inset-inline-end: max(12px, calc(var(--toolbar-width, 48px) + 12px)) !important;
+  inline-size: min(420px, calc(100dvw - var(--toolbar-width, 48px) - 32px)) !important;
+  min-inline-size: 0 !important;
+  max-inline-size: calc(100dvw - var(--toolbar-width, 48px) - 32px) !important;
+  max-block-size: calc(100dvh - var(--mainbar-height, 60px) - 206px) !important;
+  display: flex;
+  flex-direction: column;
+  z-index: 1016 !important;
+}
+
+.common-query-window.map-widget-surface .map-widget-surface__body {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 640px) {
+  .common-query-window.map-widget-surface {
+    inset-block-start: auto !important;
+    inset-block-end: max(12px, env(safe-area-inset-bottom)) !important;
+    inset-inline-start: max(10px, env(safe-area-inset-left)) !important;
+    inset-inline-end: max(62px, calc(var(--toolbar-width, 48px) + 12px)) !important;
+    inline-size: auto !important;
+    max-inline-size: none !important;
+    max-block-size: min(62dvh, calc(100dvh - var(--mainbar-height, 60px) - 100px)) !important;
+    border-radius: 16px;
+  }
+}
