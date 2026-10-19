@@ -32,6 +32,16 @@ describe('Kent Rehberi map category filter', () => {
     expect(buildKentRehberiDefinitionExpression(getKentRehberiMapFilterSnapshot())).toBe('1 = 2');
   });
 
+  it('rejects malformed keys before generating a SQL expression', () => {
+    setKentRehberiMapFilter({
+      label: 'Unsafe test input',
+      iconKeys: ['parklar', "parklar'); DROP TABLE poi; --", ' spaces are not keys '],
+    });
+
+    expect(buildKentRehberiDefinitionExpression(getKentRehberiMapFilterSnapshot()))
+      .toBe("iconKey IN ('parklar')");
+  });
+
   it('restores all markers when the selection is cleared and notifies subscribers', () => {
     const listener = vi.fn();
     const unsubscribe = subscribeKentRehberiMapFilter(listener);
