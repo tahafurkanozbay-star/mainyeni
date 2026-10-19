@@ -33,7 +33,7 @@ describe('MapModePreferenceModel', () => {
     expect(model.getSnapshot()).toMatchObject({ phase: 'idle', preferredMode: '3d' });
   });
 
-  it('normalizes an invalid persisted mode to 2B', () => {
+  it('normalizes an invalid persisted mode to the 3B startup default', () => {
     const storage = createStorage(JSON.stringify({ lastMapMode: '7d' }));
     const model = createMapModePreferenceModel();
     model.hydrate(storage);
