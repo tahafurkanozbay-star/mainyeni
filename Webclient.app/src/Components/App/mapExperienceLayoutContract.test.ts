@@ -20,6 +20,19 @@ const mobileModeBlock = (): string => {
 };
 
 describe('map experience layout collision contract', () => {
+  it('mounts service query results inside the existing Keşfet panel instead of as map siblings', () => {
+    const sidebarComponent = read('SidebarModern.tsx');
+    const sidebarCss = read('SidebarModern.css');
+
+    expect(mapComponent).toContain('createPortal(');
+    expect(mapComponent).toContain('onToolHostChange={setSidebarToolHost}');
+    expect(mapComponent).toContain('QUERY_WINDOW_DEFINITIONS.map');
+    expect(sidebarComponent).toContain('className="kr-sidebar__tool-slot"');
+    expect(sidebarCss).toContain(':has(.kr-sidebar__tool-slot > .sidebar-container[aria-hidden="false"])');
+    expect(sidebarCss).toContain('.kr-sidebar__panel {\\n  display: none;');
+  });
+
+
   it('keeps Keşfet out of the generic tool-panel stacking rule so opened subcategory panels can sit in front', () => {
     expect(mapCss).toMatch(
       /\.esri-map > \.sidebar-container:not\(\.kr-sidebar\),\s*\.esri-map > \.sidebar-container1:not\(\.kr-sidebar\)\s*\{\s*position:\s*relative;\s*z-index:\s*20;/u,
