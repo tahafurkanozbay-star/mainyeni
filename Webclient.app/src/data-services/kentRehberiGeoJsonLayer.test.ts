@@ -70,7 +70,7 @@ describe('PlanASKI-only Kent Rehberi GeoJSON layer', () => {
       defaultSymbol?: { url: string };
     };
     expect(renderer).toMatchObject({ type: 'unique-value', field: 'iconKey' });
-    expect(renderer.uniqueValueInfos?.every((entry) => /\\.svg$/i.test(entry.symbol.url))).toBe(true);
+    expect(renderer.uniqueValueInfos?.every((entry) => /\.svg$/i.test(entry.symbol.url))).toBe(true);
     expect(renderer.uniqueValueInfos?.find((entry) => entry.value === 'segmen')?.symbol.url).toContain('segmensu.svg');
     expect(renderer.defaultSymbol?.url).toContain('pictureMarker.png');
     expect(map.add).toHaveBeenCalledWith(layer);
