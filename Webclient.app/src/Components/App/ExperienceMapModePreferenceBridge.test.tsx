@@ -127,10 +127,10 @@ describe('ExperienceMapModePreferenceBridge', () => {
   });
 
   it('normalizes partial preference event payloads', () => {
+    window.localStorage.setItem(EXPERIENCE_STORAGE_KEY, JSON.stringify({ lastMapMode: '2d' }));
     const command = vi.fn();
     window.addEventListener(EXPERIENCE_COMMAND_EVENT, command);
     render(<ExperienceMapModePreferenceBridge />);
-    window.localStorage.setItem(EXPERIENCE_STORAGE_KEY, JSON.stringify({ lastMapMode: '2d' }));
     act(() => dispatchMode('2d', 'map-runtime'));
     act(() => {
       window.dispatchEvent(new CustomEvent(EXPERIENCE_PREFERENCE_EVENT, { detail: { lastMapMode: 'invalid' } }));
