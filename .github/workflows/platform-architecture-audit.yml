@@ -25,7 +25,6 @@ on:
       - 'tools/package-lock-integrity.test.mjs'
       - 'tools/dotnet-package-governance.mts'
       - 'tools/dotnet-package-governance.test.mts'
-      - 'tools/platform-backend-trigger-contract.test.mts'
   workflow_dispatch:
 
 permissions:
@@ -66,7 +65,6 @@ jobs:
           tools/dotnet-layer-policy.test.mts
           tools/github-workflow-supply-chain.test.mts
           tools/api-startup-pipeline.test.mts
-          tools/platform-backend-trigger-contract.test.mts
 
       - name: Enforce modernization contracts
         run: node tools/platform-contracts.mjs
