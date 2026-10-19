@@ -239,7 +239,7 @@ const checkPlanAskiOnlyContracts = (files, errors) => {
 
   const configuration = requirePatterns(files, REQUIRED_PATHS.configurationBusiness, [
     { id: 'missing-static-map-configuration', pattern: /STATIC_MAP_CONFIGURATION/u, message: 'initial map configuration must be local and deterministic' },
-    { id: 'missing-empty-legacy-service-list', pattern: /GetConfigServices[\s\S]*?Object\.freeze\(\[\]\)/u, message: 'legacy GIS service catalogue must remain empty' },
+    { id: 'missing-empty-legacy-service-list', pattern: /getConfigServices[\s\S]*?Object\.freeze\(\[\]\)/u, message: 'legacy GIS service catalogue must remain empty' },
   ], errors);
   if (/apiClient|AppSettings\/List|Gis\/ConfigService\/List|resolveLocalBootstrapPreviewEnabled/u.test(configuration)) {
     errors.push(finding('legacy-configuration-api', REQUIRED_PATHS.configurationBusiness, 'startup configuration must not call an API or use preview fallback flags'));
