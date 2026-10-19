@@ -1,42 +1,37 @@
-# 3D Altyapı / Üstyapı Koordinasyon Web Uygulaması — Güncel Geliştirme Kaydı
+# 3D Altyapı / Üstyapı Koordinasyon Web Uygulaması — Güncel İlerleme
 
-> Bu dosya yalnızca güncel durum ve sonraki işlerin kısa entrypoint'idir. Önceki ayrıntılı kayıtlar ve tam önceki progress snapshot'ı kayıpsız biçimde [`progress/archive/`](./progress/archive/) altında tutulur.
+> Bu dosya kısa ve güncel başlangıç kaydıdır. Eski, ayrıntılı durum kayıtlarının tam kopyaları [`progress/archive/`](./progress/archive/) altındadır. Yapısal düzenleme öncesindeki eksiksiz kayıt [`KENT_REHBERI_PROGRESS_ARCHIVE_MAIN_THROUGH_20261019_PRE_STRUCTURE_HYGIENE.md`](./progress/archive/KENT_REHBERI_PROGRESS_ARCHIVE_MAIN_THROUGH_20261019_PRE_STRUCTURE_HYGIENE.md) dosyasında korunur.
 
-## Güncel ana dal ve yayın mimarisi — 2026-10-19
+## Etkin mimari
 
-- **Ürün:** 3D Altyapı / Üstyapı Koordinasyon Web Uygulaması.
-- **Ana dal checkpoint'i:** `9d83821c132e43afe14d9924435e271d5506fbc6` (önceki PR #538'in merge commit'i). Bu commit'te Release QA, Webclient Quality, Typed Source Boundary, Release Evidence Contract, Pages build/deployment, Platform Governance Validation ve Platform Typed Test Validation iş akışları başarıyla tamamlandı.
-- **Aktif yayın ürünü:** `Webclient.app/` statik React/TypeScript/Vite/ArcGIS SPA'sı. Yayın paketi ayrı ABB User API/Admin API, veritabanı/PostGIS veya uygulamaya özel proxy gerektirmez.
-- **Kent Rehberi kaynağı:** tarayıcıdan doğrudan sabit PlanASKI uç noktası: `https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur=N`. `tur=0..42` sınırları, JSON şema/kimlik/koordinat doğrulaması, 8 MiB kategori yanıt bütçesi, 20.000 kayıt üst sınırı, eşzamanlılık kontrolü ve iptal kuralları korunur.
-- **Başlangıç haritası:** yerel, sabit Ankara görünümü. Eski API tabanlı başlangıç yapılandırması ve özel API proxy'si aktif çalışma yolundan çıkarılmıştır.
-- **Üretim önkoşulu:** PlanASKI'nin `https://cbs.ankara.bel.tr` origin'ine CORS izni canlı tarayıcıda ayrıca doğrulanmalıdır. Yerel test/CI bu üretim koşulunu kanıtlamaz.
-- **IIS:** kaynak değişikliği daha önce oluşturulmuş `/api` eşlemesini veya fiziksel `user` klasörünü canlı sunucudan otomatik kaldırmaz. Silmeden önce mevcut IIS uygulama eşlemeleri ve başka uygulamalar tarafından kullanım kontrol edilmelidir.
+- Yayınlanan tek ön yüz: `Webclient.app/` (React + TypeScript + Vite + ArcGIS Maps SDK).
+- Kent Rehberi verilerinin tek kaynağı: `https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur=N`; kategori aralığı `0..42`.
+- Tarayıcı PlanASKI'ye doğrudan CORS isteği yapar. Uygulama için özel User/Admin API, PostgreSQL/PostGIS, aynı-köken `/api` proxy'si veya kaynak seçme bayrağı yoktur.
+- Başlangıç harita görünümü uygulama içi sabit Ankara yapılandırmasından gelir; eski sunucu GIS kataloğu başlangıçta çağrılmaz.
+- Canlı üretimde `https://cbs.ankara.bel.tr` origin'inin PlanASKI CORS izin listesinde olduğu henüz gerçek tarayıcıdan doğrulanmış sayılmaz. Bu ön koşul yayımdan sonra kontrol edilmelidir.
+- IIS betikleri statik ön yüzü hazırlar ve yayımlar. Sunucuda önceki dağıtımdan kalmış `/api` eşlemesini veya `user` fiziksel klasörünü bilerek silmez.
 
-## Bu turdaki yapı ve tutarlılık denetimi
+## 2026-10-19 — Yapı ve mimari hijyeni
 
-- Root'taki büyük, tarihsel progress/arşiv dosyaları `progress/archive/` altında toplandı; tam önceki `KENT_REHBERI_PROGRESS.md` sürümü arşivlendi ve root dosyası kısa entrypoint'e dönüştürüldü. Arşiv içerikleri kopyalama öncesi/sonrası karşılaştırılarak korunmalıdır.
-- README, dağıtım/veri kaynağı belgeleri ve agent çalışma kuralları statik-only + doğrudan PlanASKI mimarisiyle uyumlu hale getiriliyor.
-- HTML sayfa title, açıklama ve sosyal meta verileri kullanıcı tarafından belirtilen resmi ürün adına göre düzeltildi.
-- Kullanılmayan `VITE_KENT_REHBERI_SOURCE` seçim bayrağı ve buna bağlı kaynak modu açıklamaları temizleniyor; doğrudan PlanASKI taşıması artık mod seçimine bağlı değildir.
-- Ayrı GIS çekirdek kaynakları (`KentRehberi/webclient/`, `WebClient/`) bağımsız test/kalite bağlamları kanıtlanmadan silinmedi veya üretim SPA'sına taşınmadı.
-- Tam kalite doğrulaması bu branch'in değişiklikleri için henüz raporlanmadı; PR açıldıktan sonra yeni exact-head CI sonuçları beklenmelidir.
+- Tarihsel kök seviye GIS/ilerleme dosyaları `progress/archive/` altına alındı; içerikleri arşiv blob doğrulamasıyla korundu. Kök `KENT_REHBERI_PROGRESS.md` kısa güncel giriş noktası olarak yeniden düzenlendi.
+- Root README, depo klasörleri ve statik-only yayın modelini açıklayacak biçimde güncellendi.
+- HTML title/description/Open Graph/Twitter metadata, istenen **3D Altyapı / Üstyapı Koordinasyon Web Uygulaması** adına hizalandı.
+- Doğrudan PlanASKI mimarisini "opt-in" veya "API ile geri dönülebilir" gösteren dokümantasyon düzeltildi.
+- Artık işlevi olmayan `VITE_KENT_REHBERI_SOURCE` runtime/config anahtarı uygulama kodundan, örnek ortam dosyasından, IIS build betiğinden ve kalite sözleşmesinden kaldırıldı.
+- `.gitignore` içindeki kaldırılmış .NET API/Business/Admin SPA projelerine ait eski kurallar temizlendi.
+- Eski PostgreSQL API kurulum SQL'i `database/archive/retired-kent-rehberi-api.sql` altına taşındı; aktif yayın girdisi olmaktan çıkarıldı.
+- `_docs` altında canlı `Webclient.app/public/fonts` kopyalarıyla bayt düzeyinde aynı olduğu Git blob SHA'larıyla doğrulanan 20 font dosyası tekrarını kaldırdı. Tarihsel CSV ve kaynak font CSS'i `docs/archive/legacy-site-reference/` altına alındı; eski görsel referansı derleme dışındaki `_docs/` içinde tutuldu.
 
-## Açık riskler / devam işleri
+## Doğrulama ve durum
 
-1. Bu turdaki yapısal/dokümantasyon düzenlemelerini test ve kalite iş akışlarından geçir; başarısız denetimleri kontrolü gevşetmeden düzelt.
-2. Arşivlenen dosyalardaki göreli bağlantıları ve tüm progress bağlantılarını doğrula. Arşivler içerik geçmişidir; canlı durum için yalnız root entrypoint kullanılmalı.
-3. Üretim `cbs.ankara.bel.tr` origin'inden gerçek tarayıcı Network testiyle PlanASKI CORS iznini doğrula. CORS başarısızsa PlanASKI yöneticisiyle izin-listesini düzelt; proxy ekleme.
-4. IIS üzerinde statik paket, `web.config`, alt yol varlıkları, yenileme/SPA fallback, 2D/3D geçişleri, sorgu pencereleri ve kategori katmanlarını smoke-test et. Bu kontroller canlı sunucu/browser üzerinden yapılmadı.
-5. Açık eski draft PR'ları (özellikle GIS/Experience/Search ve eski Admin odaklı iş) current main ile karşılaştırıp kanonik/superseded kararını ayrı ve kanıtlı biçimde ver; bu turda branch'leri körlemesine kapatma.
-6. `Webclient.app` bağımlılık grafiğinde artık kullanılmayan paketleri gerçek import/lockfile kanıtına göre belirle; sırf klasör yaşı veya ada bakarak silme.
+- Ana dal tabanı, bu çalışmanın başlangıcında `9d83821c132e43afe14d9924435e271d5506fbc6` idi; önceki statik-only API kaldırma değişikliği [PR #538](https://github.com/tahafurkanozbay-star/mainyeni/pull/538) ile birleştirilmişti.
+- Bu yapı/hijyen çalışması `agent/structure-hygiene-20261019-0520-9d83821` dalında. CI sonucu bu tam başlık SHA'sı için henüz onaylanmış sayılmamalıdır; PR oluşturulduktan sonra kalite iş akışları exact-head bazında kontrol edilecek.
+- Bu ortamda canlı IIS sunucusu veya üretim tarayıcısında değişiklik yapılmadı; dağıtım sonucu ya da üretim CORS başarısı iddia edilmiyor.
 
-## Bu turdaki branch ve PR
+## Sonraki adımlar
 
-- **Branch:** `agent/structure-hygiene-20261019-0520-9d83821`
-- **Base:** `9d83821c132e43afe14d9924435e271d5506fbc6`
-- **Durum:** açık değişiklik; PR/CI sonucunu doğruladıktan sonra güncelle.
-- **Merge kuralı:** tüm ilgili exact-head kalite iş akışları başarılı, branch güncel/mergeable, review ve regressions temiz olmadan merge etme.
-
-## Arşiv politikası
-
-`progress/archive/README.md` içindeki kuralları takip et. Tarihsel entry'leri silme; root progress dosyasını büyük olay günlüğüne dönüştürme. Yeni kayıtlar kısa, tarihli ve eylem odaklı olmalıdır.
+1. PR oluşturulduktan sonra bütün ilgili GitHub Actions iş akışlarını bu dalın son SHA'sında kontrol et.
+2. Başarısız lint/test/build/kalite kapılarını kapsamı düşürmeden düzelt; ardından exact-head CI'ı yeniden doğrula.
+3. Canlı yayından sonra Network panelinde Kent Rehberi isteklerinin yalnız PlanASKI hostuna gittiğini ve CORS nedeniyle tarayıcı hatası oluşmadığını doğrula.
+4. Eski IIS eşlemesi/klasörü için canlı sunucu envanteri çıkar; yalnız ayrı onaylı bakım adımında kaldır.
+5. Ayrı GIS modülleri `KentRehberi/webclient/` ve `WebClient/` dosyalarını otomatik silme veya birleştirme: aktif bağımlılık/CI rolünü kanıtlayan envanter tamamlandıktan sonra ayrı bir migration planı hazırla.
