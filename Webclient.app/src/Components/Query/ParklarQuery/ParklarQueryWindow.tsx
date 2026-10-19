@@ -12,7 +12,6 @@ import React, {
 import { Constants_MessageType, Constants_ServiceResultType } from '../../../Core/Constants';
 import MapManager from '../../../Store/Managers/MapManager';
 import { ParklarQeryBusiness } from '../../../Business/ParklarQeryBusiness';
-import { CommonBusiness } from '../../../Business/CommonBusiness';
 import { DebugHelper } from '../../../Toolbox/DebugHelper';
 import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
 import { LoggingBusiness } from '../../../Business/LoggingBusiness';
@@ -42,7 +41,6 @@ import './ParklarQueryWindow.css';
 
 const OWNER_ID = 'parklar-query-window';
 const MAX_EXTENT_HISTORY = 30;
-const PARK_SERVICE_KEY = 'YeniParklarQeryUrl';
 const PARK_ICON_TYPE = 'parklar';
 const PAGE_SIZE = 60;
 
@@ -396,14 +394,15 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
 
         if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
 
-        const clusterLayer: LayerEnvelope | null = result.source === 'kent-rehberi' && result.featureCollection
-          ? { layerObj: await createKentRehberiGeoJsonLayer(result.featureCollection, undefined, {
+        if (result.source !== 'kent-rehberi' || !result.featureCollection) {
+          throw new Error('Park katmanı için doğrudan PlanASKI verisi alınamadı.');
+        }
+        const clusterLayer: LayerEnvelope = {
+          layerObj: await createKentRehberiGeoJsonLayer(result.featureCollection, undefined, {
             id: `${id}-parks`, title: windowTitle,
             renderer: { type: 'simple', symbol: createParkMarkerSymbol(view.zoom) },
-          }, layerAbort.signal) as ParkLayerLike }
-          : await CommonBusiness.Clustering.CreateLayerWithoutClustering(
-            PARK_SERVICE_KEY, windowTitle, latestQuery, createParkMarkerSymbol(view.zoom),
-          ) as LayerEnvelope | null;
+          }, layerAbort.signal) as ParkLayerLike,
+        };
 
         if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) {
           clusterLayer?.layerObj?.destroy?.();
