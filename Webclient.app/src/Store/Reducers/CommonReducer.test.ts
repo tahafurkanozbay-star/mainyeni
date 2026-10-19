@@ -20,11 +20,12 @@ describe('CommonReducer window state', () => {
     expect(updated.WindowList[0].ref).toBe(secondRef);
   });
 
-  test('activating a window is atomic and hides previously visible windows', () => {
+  test('activating a tool preserves the persistent sidebar and hides other tools atomically', () => {
     const seeded = {
       ...initialCommonState,
       WindowList: [
         { id: 'sidebar', visible: true, minimized: false, query: {} },
+        { id: 'basemap-widget', visible: true, minimized: false, query: {} },
         { id: 'search', visible: false, minimized: false, query: {} }
       ]
     };
@@ -34,12 +35,14 @@ describe('CommonReducer window state', () => {
       payload: { windowid: 'search', query: { name: 'park' } }
     });
 
-    expect(next.WindowList.find(item => item.id === 'sidebar').visible).toBe(false);
+    expect(next.WindowList.find(item => item.id === 'sidebar').visible).toBe(true);
+    expect(next.WindowList.find(item => item.id === 'basemap-widget').visible).toBe(false);
     expect(next.WindowList.find(item => item.id === 'search')).toMatchObject({
       visible: true,
       query: { name: 'park' }
     });
     expect(seeded.WindowList[0].visible).toBe(true);
+    expect(seeded.WindowList[1].visible).toBe(true);
   });
 
   test('hiding an unknown window is a safe no-op for existing entries', () => {
