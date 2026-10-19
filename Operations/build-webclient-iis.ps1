@@ -30,7 +30,6 @@ if ($npmVersion -lt [version]"11.0.0") {
 }
 
 $keys = @(
-    "VITE_KENT_REHBERI_SOURCE",
     "VITE_KENT_REHBERI_OVERVIEW_ON_STARTUP"
 )
 $oldValues = @{}
@@ -70,7 +69,6 @@ try {
 
     # The application bootstraps locally and fetches Kent Rehberi data directly
     # from the fixed official PlanASKI endpoint in both tests and production.
-    $env:VITE_KENT_REHBERI_SOURCE = "planaski"
     $env:VITE_KENT_REHBERI_OVERVIEW_ON_STARTUP = "false"
 
     Write-Host "2/4 - CI ile uyumlu kalite kapıları çalıştırılıyor..." -ForegroundColor Cyan
