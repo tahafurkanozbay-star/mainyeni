@@ -121,6 +121,34 @@ describe('direct PlanASKI browser transport', () => {
     expect((await fetchKentRehberiFeature(202, { fetchImpl }))?.id).toBe(202);
   });
 
+  it('matches address terms across name, street, neighborhood and district fields', async () => {
+    const { fetchImpl } = mockTypes({
+      13: [
+        row(13, 201, {
+          adi: 'Kadin Danisma Merkezi',
+          adres: 'Merkez Sokak 8',
+          ilce: 'ÇANKAYA',
+          mahalle: 'KIZILAY',
+        }),
+        row(13, 202, {
+          adi: 'Gençlik Merkezi',
+          adres: 'Atatürk Bulvarı 12',
+          ilce: 'SİNCAN',
+          mahalle: 'FATİH',
+        }),
+      ],
+    });
+
+    const result = await fetchPlanAskiGeoJsonDirect({
+      tur: 13,
+      limit: 10,
+      q: 'Sokak 8 Kızılay Çankaya',
+      fetchImpl,
+    });
+
+    expect(result.features.map((feature) => feature.id)).toEqual([201]);
+  });
+
   it.each([
     { adi: 'Title\tTab' },
     { adi: 'Title\u0000Nul' },
