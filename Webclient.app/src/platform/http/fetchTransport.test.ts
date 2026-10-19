@@ -332,7 +332,7 @@ describe('fetchTransport executeFetch', () => {
     });
     expect(onStart).toHaveBeenCalledWith({ method: 'get', url: '/items', timeout: 5000 });
     expect(onSuccess).toHaveBeenCalledWith(expect.objectContaining({
-      method: 'get', url: '/api/items', status: 200, durationMs: 25
+      method: 'get', url: '/items', status: 200, durationMs: 25
     }));
   });
 
