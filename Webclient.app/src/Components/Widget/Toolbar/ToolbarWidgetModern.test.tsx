@@ -289,7 +289,8 @@ describe('ToolbarWidgetModern', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Konum Bul' }));
     await waitFor(() => expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole('button', { name: 'Başlangıç görünümüne dön' }));
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Başlangıç görünümü gösterildi.'));
+    await waitFor(() => expect(map.goTo).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole('status')).toBeEmptyDOMElement());
     await act(async () => { geolocation.resolve(32.82, 39.93); });
     expect(GisGraphicsHelper.CreatePoint).not.toHaveBeenCalled();
     expect(map.goTo).toHaveBeenCalledTimes(1);
