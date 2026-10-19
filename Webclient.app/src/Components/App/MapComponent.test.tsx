@@ -6,7 +6,7 @@ import { MapReducer_ActionTypes } from '../../Store/Reducers/MapReducer';
 import { createWindowManager } from '../../Store/Managers/WindowManager';
 import { MapComponent } from './MapComponent';
 
-const runtime = vi.hoisted(() => ({ load: vi.fn(), destroy: vi.fn(), remove: vi.fn(), views: [] as Array<Record<string, unknown>>, create: vi.fn() }));
+const runtime = vi.hoisted(() => ({ load: vi.fn(), destroy: vi.fn(), remove: vi.fn(), views: [] as Array<Record<string, unknown>>, mapOptions: [] as unknown[], create: vi.fn() }));
 vi.mock('../../gis-engine/arcgisModuleRuntime', () => ({ loadArcgisModules: runtime.load }));
 vi.mock('../../Store/Managers/MapManager', () => ({ default: {
   GetMapConfiguration: () => ({}), SetViewStateBridge: vi.fn(), SetViewPerformanceMonitor: vi.fn(),
@@ -38,11 +38,11 @@ const setup = (strict = false) => {
   return { ...result, manager };
 };
 beforeEach(() => {
-  vi.clearAllMocks(); runtime.views.length = 0;
+  vi.clearAllMocks(); runtime.views.length = 0; runtime.mapOptions.length = 0;
   Store.dispatch({ type: MapReducer_ActionTypes.SetMapView, payload: null });
   runtime.create.mockImplementation(() => ({ ready: true, readyState: 'ready' }));
   runtime.load.mockImplementation(async () => [
-    class Map { add = vi.fn(); },
+    class Map { add = vi.fn(); constructor(options: unknown) { runtime.mapOptions.push(options); } },
     class MapView {
       constructor(options: { map: unknown; container: HTMLElement }) {
         const view = { map: options.map, container: options.container, popup: {}, destroy: runtime.destroy, ...runtime.create() };
@@ -53,6 +53,14 @@ beforeEach(() => {
   ]);
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
+describe('3D terrain readiness', () => {
+  it('keeps the existing 2D OpenStreetMap basemap and configures world elevation for SceneView', async () => {
+    setup();
+    await screen.findByText('Araçlar hazır');
+    expect(runtime.mapOptions[0]).toMatchObject({ basemap: 'osm', ground: 'world-elevation' });
+  });
+});
+
 describe('SVG overview markers', () => {
   it('loads the all-city point layer on initial map startup, even when the old opt-in flag is false', async () => {
     vi.stubEnv('VITE_KENT_REHBERI_OVERVIEW_ON_STARTUP', 'false');
