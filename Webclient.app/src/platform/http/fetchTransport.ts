@@ -189,7 +189,7 @@ export const executeFetch = async <T = unknown>(
   const clock = dependencies.clock || (() => Date.now());
   const startedAt = now(clock);
   const url = joinApplicationUrl(
-    dependencies.baseUrl || defaults.baseUrl || '/',,
+    dependencies.baseUrl || defaults.baseUrl || '/',
     config.url,
     config.params as Record<string, unknown> | URLSearchParams | undefined
   );
