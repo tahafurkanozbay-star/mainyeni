@@ -234,11 +234,25 @@
  * Sidebars stay in the normal workspace stack so they do not obscure the header. */
 .esri-map > .mainbar-container {
   position: fixed;
+  top: 0;
   inset-block-start: 0;
   inset-inline: 0;
+  margin-block-start: 0;
   z-index: 2000;
   box-sizing: border-box;
   background: var(--exp-surface, #fff);
+}
+
+/* Pin the real application header to the viewport, clear of legacy offsets. */
+@media screen {
+  #app-shell .esri-map > #mainbar.mainbar-container {
+    position: fixed;
+    top: 0;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    inset-inline-end: 0;
+    margin-block-start: 0;
+  }
 }
 
 .esri-map > .sidebar-container,

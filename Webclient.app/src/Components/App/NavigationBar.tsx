@@ -87,7 +87,7 @@ export function NavigationBar({ id, onAddressSearch }: NavigationBarProps) {
   const themeLabel = theme === 'dark' ? 'Aydınlık temaya geç' : 'Karanlık temaya geç';
 
   return (
-    <header id={id} className="mainbar-container" role="banner" aria-label="Kent Rehberi üst gezinme">
+    <header id={id} className="mainbar-container" style={{ top: 0, insetBlockStart: 0 }} role="banner" aria-label="Kent Rehberi üst gezinme">
       <div className="mainbar">
         <div className="mainbar-brand">
           <div className="mainbar-logo">
