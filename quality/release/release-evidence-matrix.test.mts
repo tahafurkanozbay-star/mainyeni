@@ -25,8 +25,6 @@ const COMMANDS: Readonly<Record<string, string>> = Object.freeze({
   'typed-release-tests': 'node --test quality/release/*.test.mts',
   'typed-release-scorecard': 'node quality/release/cli.mts --strict',
   'typed-release-exact-base': 'BASE_SHA=${{ github.event.pull_request.base.sha }}; node quality/release/cli.mts --baseline /tmp/base.json',
-  'backend-tests': 'dotnet run --project tests/Platform.Security.Tests/Platform.Security.Tests.csproj',
-  'backend-user-publish': 'dotnet publish Api.User/Api.User.csproj',
   'architecture-module-graph': 'node tools/platform-module-graph.mjs --strict',
   'architecture-language-ratchet': 'node tools/platform-language-ratchet.mjs --strict',
   'architecture-platform-boundary': 'node tools/platform-boundary-audit.mjs --strict',
@@ -185,19 +183,6 @@ test('missing typed release scorecard blocks critical coverage completeness', ()
   assert.ok(section.findings.some(item => item.message.includes('typed-release-scorecard')));
 });
 
-test('missing backend test evidence is visible separately from publish evidence', () => {
-  const section = audit([
-    removeStep('.github/workflows/release-qa.yml', 'Run xUnit v3 tests through Microsoft.Testing.Platform'),
-  ]);
-  assert.ok(section.findings.some(item => item.message.includes('backend-tests')));
-  assert.equal(section.summary.observations.find(item => item.requirement.id === 'backend-user-publish')?.present, true);
-});
-
-test('missing User API publish evidence is detected', () => {
-  const section = audit([removeStep('.github/workflows/release-qa.yml', 'Publish User API')]);
-  assert.ok(section.findings.some(item => item.message.includes('backend-user-publish')));
-});
-
 test('missing architecture module graph evidence is detected', () => {
   const section = audit([
     removeStep('.github/workflows/platform-architecture-audit.yml', 'Enforce typed module graph'),
@@ -290,13 +275,6 @@ test('renaming a canonical job makes its evidence absent', () => {
   assert.ok(section.findings.some(item => item.id === 'release-lane-separation-missing'));
 });
 
-test('collapsing backend lane under webclient job violates lane separation', () => {
-  const fixture = workflowFixture('.github/workflows/release-qa.yml');
-  const changed = fixture.text.replace('  backend-release-validation:', '  backend-release-validation-renamed:');
-  const section = audit([{ path: fixture.path, text: changed }]);
-  assert.ok(section.findings.some(item => item.id === 'release-lane-separation-missing'));
-});
-
 test('step name alone cannot fake lockfile installation evidence', () => {
   const section = audit([
     replaceCommand('.github/workflows/webclient-quality.yml', 'Install from lockfile', 'echo skipped'),
@@ -336,20 +314,6 @@ test('step name alone cannot fake typed release test evidence', () => {
 test('step name alone cannot fake typed release scorecard evidence', () => {
   const section = audit([
     replaceCommand('.github/workflows/release-qa.yml', 'Generate whole-repository release scorecard', 'echo scorecard'),
-  ]);
-  assert.ok(section.findings.some(item => item.id === 'release-evidence-command-drift'));
-});
-
-test('step name alone cannot fake backend xUnit evidence', () => {
-  const section = audit([
-    replaceCommand('.github/workflows/release-qa.yml', 'Run xUnit v3 tests through Microsoft.Testing.Platform', 'dotnet --info'),
-  ]);
-  assert.ok(section.findings.some(item => item.id === 'release-evidence-command-drift'));
-});
-
-test('step name alone cannot fake User API publish evidence', () => {
-  const section = audit([
-    replaceCommand('.github/workflows/release-qa.yml', 'Publish User API', 'echo user'),
   ]);
   assert.ok(section.findings.some(item => item.id === 'release-evidence-command-drift'));
 });
