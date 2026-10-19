@@ -121,8 +121,8 @@ describe('ToolbarWidgetModern', () => {
     expect(toolbar.id).toBe('map-toolbar');
     expect(toolbar.getAttribute('aria-orientation')).toBe('vertical');
     expect(toolbar.getAttribute('aria-describedby')).toBe('map-toolbar-instructions');
-    expect(within(toolbar).getAllByRole('button')).toHaveLength(4);
-    expect(screen.getAllByRole('separator')).toHaveLength(2);
+    expect(within(toolbar).getAllByRole('button')).toHaveLength(5);
+    expect(screen.getAllByRole('separator')).toHaveLength(3);
     expect(screen.getByRole('button', { name: 'Altlık Haritalar' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Başlangıç görünümüne dön' })).toBeTruthy();
   });
@@ -138,7 +138,7 @@ describe('ToolbarWidgetModern', () => {
     fireEvent.keyDown(toolbar, { key: 'ArrowDown' });
     expect(document.activeElement).toBe(second);
     fireEvent.keyDown(toolbar, { key: 'End' });
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Başlangıç görünümüne dön' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Trafik' }));
     fireEvent.keyDown(toolbar, { key: 'Home' });
     expect(document.activeElement).toBe(first);
   });
