@@ -104,6 +104,7 @@ describe("QuerySearchRuntime", () => {
 
         test("keeps descriptive types but does not expose category codes as labels", () => {
             expect(getRecordCategory({ type: "Kategori 34" })).toBe("Diğer");
+            expect(getRecordCategory({ attr: { kategori: "Kategori 34" } })).toBe("Diğer");
             expect(getRecordCategory({ type: "Kültür tesisi" })).toBe("Kültür tesisi");
         });
     });
