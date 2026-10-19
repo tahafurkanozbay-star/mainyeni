@@ -10,8 +10,8 @@
 - Altlık galerisi artık SDK'nın güvenli HTTPS küçük resim adresi bulunduğunda onu gösteriyor; bulunmadığında her altlık kimliği için ayrı yerel SVG önizlemesi kullanıyor.
 - TomTom için `VITE_TOMTOM_TRAFFIC_API_KEY` standart değişkeni kullanılıyor; önceki `VITE_TOMTOM_TRAFFIC_CREDENTIAL` adı geriye dönük uyumluluk amacıyla destekleniyor. Anahtar uygulama deposuna eklenmedi. Canlı trafik, dağıtımda bir TomTom tarayıcı anahtarı yapılandırılmış olmasını ve yeniden derlemeyi gerektirir.
 - Regresyon testleri eklendi: aktif 3B görünümde noktaya yakınlaşma, altlık thumbnail/fallback gösterimi ve TomTom anahtar önceliği/geriye dönük uyumluluğu.
-- Doğrulama: PR exact-head CI ve üretim derlemesi henüz bekliyor; merge veya canlı IIS dağıtımı yapılmadı.
-- Etkilenen alanlar: `Webclient.app/src/Components/App/SidebarModern*`, `MapComponent*`, `ExperienceMapModeBridge.tsx`, `MapManager.ts`, `Webclient.app/src/Components/Widget/Basemap/BasemapWidget*`, `Webclient.app/src/data-services/tomTomTrafficFlow*`, `.env.example`.
+- PR: [#561](https://github.com/tahafurkanozbay-star/mainyeni/pull/561). İlk CI turunda Vite ortam-kontratı yeni public-key istisnasının eksik olduğunu yakaladı; izin listesi ve izin verilen/yasaklanan değişken öz testleri eklendi. Son exact-head kalite/derleme kontrolleri PR'da takip ediliyor; kontroller başarıyla sonuçlanmadan merge edilmemeli. Canlı IIS dağıtımı yapılmadı.
+- Etkilenen alanlar: `Webclient.app/src/Components/App/SidebarModern*`, `MapComponent*`, `ExperienceMapModeBridge.tsx`, `MapManager.ts`, `Webclient.app/src/Components/Widget/Basemap/BasemapWidget*`, `Webclient.app/src/data-services/tomTomTrafficFlow*`, `Webclient.app/scripts/vite-migration-audit.mjs`, `.env.example`.
 
 ## Etkin mimari
 
