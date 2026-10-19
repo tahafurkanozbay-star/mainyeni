@@ -73,6 +73,12 @@ describe('PlanASKI-only Kent Rehberi GeoJSON layer', () => {
     expect(renderer.uniqueValueInfos?.find((entry) => entry.value === 'segmen')?.symbol.url).toContain('segmensu.svg');
     expect(renderer.defaultSymbol).toMatchObject({ type: 'simple-marker', size: 1, color: [0, 0, 0, 0] });
     expect(map.add).toHaveBeenCalledWith(layer);
+
+    const startupRequestCount = fetchImpl.mock.calls.length;
+    const catalog = await fetchKentRehberiTypeCatalog({ fetchImpl });
+    expect(catalog.types).toHaveLength(43);
+    expect(fetchImpl).toHaveBeenCalledTimes(startupRequestCount);
+
     handle.dispose();
   });
 
