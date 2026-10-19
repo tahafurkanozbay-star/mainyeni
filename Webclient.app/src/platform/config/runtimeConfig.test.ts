@@ -94,7 +94,7 @@ describe('static-client runtime configuration', () => {
 
     const config = createRuntimeConfig({});
     expect(() => assertSafeRuntimeConfig({ ...config, esriApiVersion: 'next' }))
-      .toThrow(/must match bundled @arcgis\\/core 5\\.1\\.24/i);
+      .toThrow(/must match bundled @arcgis\/core 5\.1\.24/i);
   });
 
   test('uses the bundled SDK version when nothing is configured', () => {
