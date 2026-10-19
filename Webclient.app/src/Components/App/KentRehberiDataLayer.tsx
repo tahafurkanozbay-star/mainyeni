@@ -5,6 +5,11 @@ import {
   type KentRehberiMapLike,
 } from '../../data-services/kentRehberiGeoJsonLayer';
 import { createSidebarLayerLoadController } from '../../shell/sidebarLayerLoadController';
+import {
+  buildKentRehberiDefinitionExpression,
+  getKentRehberiMapFilterSnapshot,
+  subscribeKentRehberiMapFilter,
+} from '../../shell/kentRehberiMapFilter';
 import './KentRehberiDataLayer.css';
 const DATA_LAYER_RETRY_POLICY = Object.freeze({ maxAttempts: 3 });
 
@@ -18,11 +23,22 @@ export const KentRehberiDataLayer = ({ map }: { readonly map: KentRehberiMapLike
     disposeLayer: (handle) => handle.dispose(),
   }), [map]);
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
+  const mapFilter = useSyncExternalStore(
+    subscribeKentRehberiMapFilter,
+    getKentRehberiMapFilterSnapshot,
+    getKentRehberiMapFilterSnapshot,
+  );
+  const loadedLayer = state.loadedLayers[0]?.layer;
 
   useEffect(() => {
     void controller.start();
     return () => controller.reset();
   }, [controller]);
+
+  useEffect(() => {
+    if (!loadedLayer) return;
+    loadedLayer.definitionExpression = buildKentRehberiDefinitionExpression(mapFilter);
+  }, [loadedLayer, mapFilter]);
 
   const failed = state.phase === 'degraded';
   const canRetry = state.canRetry && state.attempt < DATA_LAYER_RETRY_POLICY.maxAttempts;
