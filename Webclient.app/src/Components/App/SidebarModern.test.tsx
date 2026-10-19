@@ -182,7 +182,7 @@ describe('SidebarModern governed interaction integration', () => {
     const popupOptions = popupOpen.mock.calls[0]?.[0] as { readonly content: HTMLElement };
     expect(popupOptions.content).toBeInstanceOf(HTMLElement);
     expect(popupOptions.content.textContent).toContain('Test <em>Place</em>');
-    expect(popupOptions.content.textContent).toContain('\\u003cimg src=x onerror=alert(1)\\u003e');
+    expect(popupOptions.content.textContent).toContain('\u003cimg src=x onerror=alert(1)\u003e');
     expect(popupOptions.content.querySelector('em, img')).toBeNull();
   });
 
