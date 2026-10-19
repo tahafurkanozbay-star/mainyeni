@@ -5,6 +5,9 @@ import type {
   KentRehberiTypeCatalog,
   KentRehberiTypeDescriptor,
 } from './kentRehberiGeoJsonLayer';
+import {
+  type KentRehberiPoiSearchInput,
+} from './kentRehberiPoiSearchIndex';
 
 // Do not accept arbitrary origins or URL overrides: this mode deliberately
 // speaks only to the official, browser-CORS-enabled municipal endpoint.
@@ -16,6 +19,20 @@ const MAX_BYTES_PER_TYPE = 8 * 1024 * 1024;
 const MAX_TEXT = 4096;
 const MAX_LIMIT = 2000;
 const MAX_OVERVIEW_FEATURES = 20_000;
+
+const pendingOverviewSearchIndexes = new WeakMap<
+  KentRehberiGeoJsonFeatureCollection,
+  readonly KentRehberiPoiSearchInput[]
+>();
+
+/** Consume the compact all-point index staged by an unfiltered overview sweep. */
+export const takePlanAskiPoiSearchIndex = (
+  collection: KentRehberiGeoJsonFeatureCollection,
+): readonly KentRehberiPoiSearchInput[] | null => {
+  const index = pendingOverviewSearchIndexes.get(collection) ?? null;
+  pendingOverviewSearchIndexes.delete(collection);
+  return index;
+};
 const TYPE_CATALOG_CACHE_TTL_MS = 5 * 60 * 1000;
 const MAX_IN_FLIGHT = 4;
 
@@ -393,7 +410,7 @@ export const fetchPlanAskiSvgOverviewDirect = async (
     (left.properties.objectid as number) - (right.properties.objectid as number));
 
   const features = svgFeatures.slice(0, MAX_OVERVIEW_FEATURES);
-  return {
+  const collection: KentRehberiGeoJsonFeatureCollection = {
     type: 'FeatureCollection',
     features,
     meta: {
@@ -402,6 +419,31 @@ export const fetchPlanAskiSvgOverviewDirect = async (
       hasMore: svgFeatures.length > features.length,
     },
   };
+
+  // Keep only the small searchable fields from every upstream point, rather
+  // than retaining each full API record. This index is consumed when the map
+  // layer finishes attaching, so typing into the sidebar never re-fetches all
+  // 43 categories.
+  const isUnfilteredOverview = options.tur === undefined
+    && !options.q
+    && !options.ilce
+    && !options.mahalle;
+  if (isUnfilteredOverview) {
+    pendingOverviewSearchIndexes.set(collection, all.map((feature) => {
+      const properties = feature.properties;
+      return {
+        id: properties.objectid,
+        name: properties.adi ?? properties.adres,
+        address: properties.adres,
+        district: properties.ilce,
+        neighborhood: properties.mahalle,
+        longitude: properties.x,
+        latitude: properties.y,
+      };
+    }));
+  }
+
+  return collection;
 };
 
 export const fetchPlanAskiFeatureDirect = async (
