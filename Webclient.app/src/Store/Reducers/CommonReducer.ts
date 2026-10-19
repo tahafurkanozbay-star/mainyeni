@@ -82,7 +82,9 @@ export const CommonReducer = (
         ...state,
         WindowList: Object.freeze(state.WindowList.map((item) => Object.freeze({
           ...item,
-          visible: item.id === windowid,
+          // City services are a persistent part of the map workspace, not an
+          // exclusive tool. Activating another window must never hide them.
+          visible: item.id === windowid || item.id === 'sidebar',
           minimized: item.id === windowid ? false : Boolean(item.minimized),
           query: item.id === windowid ? (payload.query ?? {}) : (item.query ?? null),
         }))),
