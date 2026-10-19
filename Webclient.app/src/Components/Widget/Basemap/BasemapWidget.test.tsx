@@ -50,6 +50,15 @@ describe('native on-demand basemap selection', () => {
     expect(runtime.load).not.toHaveBeenCalled();
     expect(runtime.destroyed).toHaveBeenCalledTimes(17);
   });
+  it('uses a provided HTTPS thumbnail for a basemap preview', async () => {
+    runtime.fromId.mockImplementation((id: string) => ({ ...candidate(id), thumbnailUrl: id === 'satellite' ? 'https://static.arcgis.com/basemaps/satellite/thumb.jpg' : undefined }));
+    renderWidget();
+    await optionsReady();
+    const satellite = screen.getByRole('button', { name: /^Uydu$/ });
+    expect(satellite.querySelector('img.basemap-picker__image')).toHaveAttribute('src', 'https://static.arcgis.com/basemaps/satellite/thumb.jpg');
+    expect(screen.getByRole('button', { name: /^Topoğrafya$/ }).querySelector('svg[data-preview-id="topo"]')).toBeInTheDocument();
+  });
+
   it('filters unsupported SDK options and labels the current basemap', async () => {
     runtime.fromId.mockImplementation((id: string) => id === 'oceans' ? null : candidate(id));
     renderWidget(); await optionsReady();
