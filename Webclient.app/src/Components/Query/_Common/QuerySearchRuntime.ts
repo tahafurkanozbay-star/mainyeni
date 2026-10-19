@@ -241,7 +241,7 @@ export const getRecordTitle = (
 
   // Some services expose only a numeric category label for unnamed records.
   // Prefer the address so a result remains useful to someone searching by place.
-  if (!sourceTitle || (TECHNICAL_CATEGORY_LABEL.test(sourceTitle) && address)) {
+  if (!sourceTitle || TECHNICAL_CATEGORY_LABEL.test(sourceTitle)) {
     return address || 'İsimsiz kayıt';
   }
   return sourceTitle;
