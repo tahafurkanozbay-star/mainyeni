@@ -3,7 +3,7 @@ import { isAbortLike } from '../../../platform/runtime/contracts';
 export type MapToolbarActionId = 'basemap' | 'location' | 'measure' | 'home';
 
 export type MapToolbarGroupId = 'municipal' | 'analysis' | 'navigation';
-export type MapToolbarLocationPhase = 'idle' | 'locating' | 'success' | 'fallback' | 'error' | 'cancelled';
+export type MapToolbarLocationPhase = 'idle' | 'locating' | 'success' | 'error' | 'cancelled';
 export type MapToolbarActionKind = 'window' | 'location' | 'home';
 
 export interface MapToolbarPoint {
@@ -47,7 +47,6 @@ export interface MapToolbarCatalogFinding {
 export interface MapToolbarLocateDependencies {
   readonly requestPosition: () => Promise<MapToolbarPoint>;
   readonly showLocation: (point: MapToolbarPoint) => Promise<void> | void;
-  readonly showSidebar: () => void;
   readonly onError?: (error: unknown) => void;
 }
 
@@ -55,11 +54,6 @@ export interface MapToolbarModelOptions {
   readonly onListenerError?: (error: unknown) => void;
   readonly maxListeners?: number;
 }
-
-export const MAP_TOOLBAR_FALLBACK_LOCATION: Readonly<MapToolbarPoint> = Object.freeze({
-  x: 32.80409955978453,
-  y: 39.94494728389463,
-});
 
 export const MAP_TOOLBAR_GROUP_LABELS: Readonly<Record<MapToolbarGroupId, string>> = Object.freeze({
   municipal: 'Belediye ve harita görünümü',
@@ -78,8 +72,7 @@ const LOCATION_ANNOUNCEMENTS: Readonly<Record<MapToolbarLocationPhase, string>> 
   idle: '',
   locating: 'Konumunuz bulunuyor.',
   success: 'Konumunuz haritada gösterildi.',
-  fallback: 'Konum alınamadı. Ankara merkez konumu gösterildi.',
-  error: 'Konum gösterilemedi. Harita araçlarını kullanmaya devam edebilirsiniz.',
+  error: 'Kesin konum alınamadı. Konum iznini ve cihaz ayarlarını kontrol edip yeniden deneyin.',
   cancelled: 'Konum gösterimi durduruldu. Haritayı kullanmaya devam edebilirsiniz.',
 });
 
@@ -276,27 +269,8 @@ export class MapToolbarModel {
         return 'cancelled';
       }
       void invokeErrorReporter(dependencies.onError, primaryError);
-
-      try {
-        await dependencies.showLocation(MAP_TOOLBAR_FALLBACK_LOCATION);
-        if (this.#disposed || generation !== this.#generation) return this.#snapshot.locationPhase;
-        try {
-          dependencies.showSidebar();
-        } catch (sidebarError) {
-          void invokeErrorReporter(dependencies.onError, sidebarError);
-        }
-        this.#publish('fallback');
-        return 'fallback';
-      } catch (fallbackError) {
-        if (this.#disposed || generation !== this.#generation) return this.#snapshot.locationPhase;
-        if (isAbortLike(fallbackError)) {
-          this.#publish('cancelled');
-          return 'cancelled';
-        }
-        void invokeErrorReporter(dependencies.onError, fallbackError);
-        this.#publish('error');
-        return 'error';
-      }
+      this.#publish('error');
+      return 'error';
     }
   }
 

@@ -35,6 +35,7 @@ interface WindowManagerStub {
 
 interface GeolocationHarness {
   readonly getCurrentPosition: ReturnType<typeof vi.fn>;
+  options: () => PositionOptions | undefined;
   resolve: (longitude: number, latitude: number) => void;
   reject: (error?: unknown) => void;
 }
@@ -46,12 +47,15 @@ const createWindowManager = (): WindowManagerStub => ({
 const installGeolocationHarness = (): GeolocationHarness => {
   let successCallback: PositionCallback | undefined;
   let errorCallback: PositionErrorCallback | undefined;
+  let requestedOptions: PositionOptions | undefined;
   const getCurrentPosition = vi.fn((
     success: PositionCallback,
     error?: PositionErrorCallback | null,
+    options?: PositionOptions,
   ) => {
     successCallback = success;
     errorCallback = error ?? undefined;
+    requestedOptions = options;
   });
   Object.defineProperty(navigator, 'geolocation', {
     configurable: true,
@@ -59,6 +63,7 @@ const installGeolocationHarness = (): GeolocationHarness => {
   });
   return {
     getCurrentPosition,
+    options: () => requestedOptions,
     resolve(longitude, latitude) {
       successCallback?.({
         coords: {
@@ -167,7 +172,7 @@ describe('ToolbarWidgetModern', () => {
       expect(GisGraphicsHelper.ZoomToGeometry).toHaveBeenCalledWith(
         expect.anything(),
         expect.anything(),
-        15,
+        18,
       );
       expect(screen.getByRole('status').textContent).toBe('Konumunuz haritada gösterildi.');
     });
@@ -183,39 +188,28 @@ describe('ToolbarWidgetModern', () => {
     expect((busy as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('falls back to Ankara center and restores the sidebar when browser location fails', async () => {
+  it('reports denied device location without moving to a fabricated Ankara coordinate', async () => {
     const geolocation = installGeolocationHarness();
     const manager = createWindowManager();
     render(<ToolbarWidgetModern windowManager={manager} />);
     fireEvent.click(screen.getByRole('button', { name: 'Konum Bul' }));
     await waitFor(() => expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1));
+    expect(geolocation.options()).toMatchObject({
+      enableHighAccuracy: true,
+      timeout: 25_000,
+      maximumAge: 0,
+    });
     geolocation.reject();
 
     await waitFor(() => {
-      expect(GisGraphicsHelper.CreatePoint).toHaveBeenCalledWith({
-        x: 32.80409955978453,
-        y: 39.94494728389463,
-        spatialReference: { wkid: 4326 },
-      });
-      expect(manager.ShowWindow).toHaveBeenCalledWith('sidebar');
       expect(screen.getByRole('status').textContent).toBe(
-        'Konum alınamadı. Ankara merkez konumu gösterildi.',
+        'Kesin konum alınamadı. Konum iznini ve cihaz ayarlarını kontrol edip yeniden deneyin.',
       );
     });
-  });
-
-  it('announces a stable error if neither requested nor fallback location can render', async () => {
-    const geolocation = installGeolocationHarness();
-    vi.mocked(GisGraphicsHelper.CreatePoint).mockRejectedValue(new Error('map unavailable'));
-    render(<ToolbarWidgetModern windowManager={createWindowManager()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Konum Bul' }));
-    await waitFor(() => expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1));
-    geolocation.reject();
-    await waitFor(() => {
-      expect(screen.getByRole('status').textContent).toBe(
-        'Konum gösterilemedi. Harita araçlarını kullanmaya devam edebilirsiniz.',
-      );
-    });
+    expect(GisGraphicsHelper.CreatePoint).not.toHaveBeenCalled();
+    expect(GisGraphicsHelper.ZoomToGeometry).not.toHaveBeenCalled();
+    expect(manager.ShowWindow).not.toHaveBeenCalledWith('sidebar');
+    expect(screen.getByRole('button', { name: 'Yeniden dene' })).toBeEnabled();
   });
 
   it('returns to the captured initial extent and restores the sidebar', async () => {
@@ -297,7 +291,8 @@ describe('ToolbarWidgetModern', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Konum Bul' }));
     await waitFor(() => expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole('button', { name: 'Başlangıç görünümüne dön' }));
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Başlangıç görünümü gösterildi.'));
+    await waitFor(() => expect(map.goTo).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
     await act(async () => { geolocation.resolve(32.82, 39.93); });
     expect(GisGraphicsHelper.CreatePoint).not.toHaveBeenCalled();
     expect(map.goTo).toHaveBeenCalledTimes(1);
@@ -389,14 +384,15 @@ describe('ToolbarWidgetModern', () => {
     expect(GisGraphicsHelper.RemoveGraphics).toHaveBeenCalledWith(map.view, [{ id: 'location-graphic' }]);
   });
 
-  it('bounds a browser callback that never arrives and explicitly labels the fallback', async () => {
+  it('bounds an unavailable browser position without rendering a false location', async () => {
     const geolocation = installGeolocationHarness();
     render(<ToolbarWidgetModern windowManager={createWindowManager()} />);
     vi.useFakeTimers(); fireEvent.click(screen.getByRole('button', { name: 'Konum Bul' }));
-    await act(async () => { await vi.advanceTimersByTimeAsync(10_001); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(25_001); });
     expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('status')).toHaveTextContent('Konum alınamadı. Ankara merkez konumu gösterildi.');
-    expect(screen.getByText(/Bu nokta cihazınızın konumu değildir/)).toBeVisible();
+    expect(screen.getByRole('status')).toHaveTextContent('Kesin konum alınamadı.');
+    expect(GisGraphicsHelper.CreatePoint).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Bu nokta cihazınızın konumu değildir/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Yeniden dene' })).toBeEnabled();
   });
 
@@ -431,13 +427,16 @@ describe('ToolbarWidgetModern', () => {
     await act(async () => { await Promise.resolve(); });
     expect(geolocation.getCurrentPosition).not.toHaveBeenCalled();
   });
-  it('returns keyboard focus to Home after its outcome is dismissed', async () => {
+  it('returns keyboard focus to Home without announcing successful reset', async () => {
+    const map = createMapView();
+    vi.mocked(MapManager.GetMapView).mockReturnValue(map.view as never);
     render(<ToolbarWidgetModern windowManager={createWindowManager()} />);
     const home = screen.getByRole('button', { name: 'Başlangıç görünümüne dön' });
     fireEvent.click(home);
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Başlangıç görünümü gösterildi.'));
-    fireEvent.click(screen.getByRole('button', { name: 'Mesajı kapat' }));
-    expect(home).toHaveFocus();
+    await waitFor(() => expect(map.goTo).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(screen.getByRole('status').closest('.toolbarwidget-notice')).toHaveAttribute('data-visible', 'false');
+    expect(home).toBeEnabled();
   });
 
   it('does not force a fallback after the user interrupts location camera movement', async () => {
@@ -459,13 +458,13 @@ describe('ToolbarWidgetModern', () => {
     expect(screen.queryByRole('button', { name: 'Yeniden dene' })).toBeNull();
   });
 
-  it.each(['success', 'fallback'] as const)('keeps keyboard focus in the notice when a pending operation becomes %s', async outcome => {
+  it.each(['success', 'error'] as const)('keeps keyboard focus in the notice when a pending operation becomes %s', async outcome => {
     const geolocation = installGeolocationHarness(); render(<ToolbarWidgetModern windowManager={createWindowManager()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Konum Bul' }));
     await waitFor(() => expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1));
     expect(screen.getByRole('button', { name: 'İptal et' })).toHaveFocus();
     if (outcome === 'success') geolocation.resolve(32.82, 39.93); else geolocation.reject();
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(outcome === 'success' ? 'Konumunuz haritada gösterildi.' : 'Ankara merkez konumu gösterildi.'));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(outcome === 'success' ? 'Konumunuz haritada gösterildi.' : 'Kesin konum alınamadı.'));
     expect(screen.getByRole('button', { name: outcome === 'success' ? 'Mesajı kapat' : 'Yeniden dene' })).toHaveFocus();
   });
   it('preserves focus deliberately moved outside the notice before completion', async () => {

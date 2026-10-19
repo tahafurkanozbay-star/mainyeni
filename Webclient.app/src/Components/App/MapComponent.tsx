@@ -27,6 +27,7 @@ import {
 import type { ExperienceMapMode } from '../../experience/experienceRuntime';
 import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
 import type { KentRehberiMapLike } from '../../data-services/kentRehberiGeoJsonLayer';
+import { geocodeAddress } from '../../data-services/addressGeocoding';
 import { KentRehberiDataLayer } from './KentRehberiDataLayer';
 import './MapComponent.css';
 import '../Widget/_shared/ExperienceWidgetModernization.css';
@@ -47,6 +48,7 @@ interface MapViewLike {
   map?: unknown;
   popup: PopupLike;
   padding?: unknown;
+  goTo?: (target: unknown, options?: unknown) => PromiseLike<unknown> | unknown;
   updating?: boolean;
   on?: (eventName: string, callback: (event: MapClickEvent) => void) => RemovableHandle;
   destroy?: () => void;
@@ -167,6 +169,25 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
     setMapGeneration((generation) => generation + 1);
   }, [recoveryModel]);
 
+  const searchAddress = useCallback(async (query: string, signal: AbortSignal): Promise<string> => {
+    if (signal.aborted) throw signal.reason ?? new DOMException('Adres araması iptal edildi.', 'AbortError');
+    const view = MapManager.GetMapView() as MapViewLike | null;
+    if (!view || view.destroyed || typeof view.goTo !== 'function') {
+      throw new Error('Harita henüz hazır değil. Birkaç saniye sonra yeniden deneyin.');
+    }
+    const result = await geocodeAddress(query, { signal });
+    if (signal.aborted) throw signal.reason ?? new DOMException('Adres araması iptal edildi.', 'AbortError');
+    if (view !== MapManager.GetMapView() || view.destroyed) {
+      throw new DOMException('Harita görünümü değişti.', 'AbortError');
+    }
+    await view.goTo({ center: [result.longitude, result.latitude], zoom: result.zoom }, { duration: 650 });
+    if (signal.aborted) throw signal.reason ?? new DOMException('Adres araması iptal edildi.', 'AbortError');
+    if (view !== MapManager.GetMapView() || view.destroyed) {
+      throw new DOMException('Harita görünümü değişti.', 'AbortError');
+    }
+    return result.displayName;
+  }, []);
+
   const modelsMountedRef = useRef(false);
   useEffect(() => {
     modelsMountedRef.current = true;
@@ -187,7 +208,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       {mapView && <>
         <KentRehberiDataLayer map={mapView.map as KentRehberiMapLike} />
         <ExperienceMapModeBridge mapView={mapView as never} modeRef={activeViewModeRef} accessorWatch={accessorWatchRef.current ?? undefined} />
-        <NavigationBar id="mainbar" windowManager={windowManager} />
+        <NavigationBar id="mainbar" onAddressSearch={searchAddress} />
         <LegacySidebar id="sidebar" windowManager={windowManager} ref={sidebarRef} />
         <ModernToolbarWidget id="toolbar-widget" windowManager={windowManager} accessorWatch={accessorWatchRef.current ?? undefined} />
         {WIDGET_WINDOW_DEFINITIONS.map((definition) => <LazyManagedWindow key={definition.id} {...definition} keepMounted windowManager={windowManager} />)}

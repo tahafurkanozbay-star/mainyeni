@@ -878,3 +878,128 @@ body {
     outline: 2px solid Highlight !important;
   }
 }
+
+
+/* Keep the navigation bar visually separate from the map canvas. The previous
+   glass treatment let map tiles show through the header and made it look layered. */
+#app-shell .mainbar-container {
+  z-index: 1400 !important;
+  color: var(--exp-text, #172033) !important;
+  background: var(--exp-surface, #ffffff) !important;
+  border: 1px solid var(--exp-border, #d7dde6) !important;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 10%), 0 1px 3px rgb(15 23 42 / 7%) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  isolation: isolate;
+}
+#app-shell .mainbar-container::after { display: none !important; }
+
+@media (min-width: 821px) {
+  #app-shell .mainbar-container {
+    top: 10px !important;
+    right: 14px !important;
+    left: 14px !important;
+    width: auto !important;
+    height: 66px !important;
+    min-height: 66px !important;
+    padding: 7px 13px !important;
+    border-radius: 14px !important;
+  }
+  #app-shell .mainbar-container .mainbar {
+    grid-template-columns: minmax(205px, 1fr) minmax(260px, min(560px, 43vw)) max-content !important;
+    gap: clamp(12px, 1.35vw, 22px) !important;
+    align-items: center !important;
+    height: 100% !important;
+  }
+}
+
+#app-shell .map-widget-surface.basemap-gallery-surface,
+#app-shell .measurement-widget {
+  top: var(--kr-panel-top, 98px) !important;
+  right: calc(var(--kr-edge, 14px) + 62px) !important;
+  left: auto !important;
+  width: min(440px, calc(100dvw - 100px)) !important;
+  max-width: calc(100dvw - 100px) !important;
+  min-width: 0 !important;
+  max-height: calc(100dvh - var(--kr-panel-top, 98px) - 18px) !important;
+  overflow: hidden;
+}
+#app-shell .map-widget-surface.basemap-gallery-surface .common-query-window-body,
+#app-shell .measurement-widget .measurement-widget__body {
+  min-height: 0;
+  max-height: calc(100dvh - var(--kr-panel-top, 98px) - 112px) !important;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+@media (max-width: 820px) {
+  #app-shell .map-widget-surface.basemap-gallery-surface,
+  #app-shell .measurement-widget {
+    top: calc(var(--mainbar-height, 114px) + 12px) !important;
+    right: max(54px, calc(env(safe-area-inset-right) + 50px)) !important;
+    left: auto !important;
+    width: min(420px, calc(100dvw - 72px)) !important;
+    max-width: calc(100dvw - 72px) !important;
+    max-height: calc(100dvh - var(--mainbar-height, 114px) - 18px) !important;
+  }
+  #app-shell .map-widget-surface.basemap-gallery-surface .common-query-window-body,
+  #app-shell .measurement-widget .measurement-widget__body {
+    max-height: calc(100dvh - var(--mainbar-height, 114px) - 124px) !important;
+  }
+}
+@media (max-width: 480px) {
+  #app-shell .map-widget-surface.basemap-gallery-surface,
+  #app-shell .measurement-widget {
+    right: max(50px, calc(env(safe-area-inset-right) + 46px)) !important;
+    width: calc(100dvw - max(62px, env(safe-area-inset-right) + 58px)) !important;
+    max-width: calc(100dvw - max(62px, env(safe-area-inset-right) + 58px)) !important;
+  }
+}
+
+/* Map-mode announcements remain available to assistive technology but should
+   not add telemetry-like copy below the visible 2B/3B selector. */
+#app-shell .map-mode-experience__status {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+@media (max-width: 560px) {
+  /* Keep the theme button available on mobile without bringing back the lower dock. */
+  #app-shell .mainbar-container .mainbar-right {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    min-width: 40px;
+  }
+  #app-shell .mainbar-container .kr-theme-toggle {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0;
+  }
+  #app-shell .mainbar-container .kr-theme-toggle span { display: none !important; }
+}
+
+/* The map uses a true grid, so the brand, address search and portal/theme controls
+   have separate tracks instead of visually sitting over the basemap. */
+@media (min-width: 821px) {
+  #app-shell .mainbar-container .mainbar {
+    display: grid !important;
+    grid-template-columns: minmax(210px, 1fr) minmax(280px, min(560px, 44vw)) max-content !important;
+  }
+  #app-shell .mainbar-container .ns-input { width: 100% !important; }
+}
