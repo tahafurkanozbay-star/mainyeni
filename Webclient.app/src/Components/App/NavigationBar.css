@@ -27,3 +27,104 @@
 @media(prefers-reduced-motion:reduce){.ns-input-group input{transition:none}}
 @media(forced-colors:active){.mainbar-container,.ns-input-group input,.kr-search-submit,.kr-header-shortcut{forced-color-adjust:auto}.ns-input-group input:focus,.kr-search-submit:focus-visible,.kr-header-shortcut:focus-visible{outline:2px solid Highlight;outline-offset:2px;box-shadow:none}}
 @media(pointer:coarse){.kr-search-submit{min-width:44px;min-height:44px;right:0;top:-1px}.ns-input-group input{padding-right:50px}.kr-header-shortcut{min-height:44px}}
+
+
+/* Solid, elevated header: the map remains behind the navigation bar. */
+.mainbar-container {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline: 0;
+  isolation: isolate;
+  background: var(--exp-surface, #fff);
+  border-bottom-color: var(--exp-border, #d7dde6);
+  box-shadow: 0 3px 12px rgb(15 23 42 / 9%);
+  z-index: 2000;
+}
+
+.mainbar {
+  gap: 12px;
+}
+
+.mainbar-brand {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-inline-size: max-content;
+  gap: 2px;
+  position: relative;
+  z-index: 1;
+}
+
+.mainbar-logo img {
+  display: block;
+  object-fit: contain;
+}
+
+.ns-input {
+  z-index: 2;
+}
+
+.ns-input-group input {
+  border-radius: 10px;
+  background: var(--exp-surface-2, #f7f8fa);
+}
+
+.kr-header-theme {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 42px;
+  min-width: 42px;
+  padding-inline: 0;
+}
+
+.kr-header-theme svg {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.kr-header-theme:active {
+  transform: translateY(1px);
+}
+
+@media (max-width: 960px) {
+  .mainbar {
+    gap: 8px;
+  }
+
+  .kr-header-theme {
+    width: 40px;
+    min-width: 40px;
+  }
+}
+
+@media (max-width: 680px) {
+  .mainbar-container {
+    position: fixed;
+    height: 58px;
+    min-height: 58px;
+    box-shadow: 0 2px 10px rgb(15 23 42 / 8%);
+  }
+
+  .mainbar-brand {
+    min-inline-size: 0;
+    gap: 0;
+  }
+
+  .mainbar-right .kr-header-theme {
+    display: inline-flex;
+    width: 36px;
+    min-width: 36px;
+    min-height: 36px;
+  }
+}
+
+@media (max-width: 390px) {
+  .mainbar {
+    gap: 5px;
+  }
+
+  .mainbar-right .kr-header-theme {
+    width: 34px;
+    min-width: 34px;
+  }
+}
