@@ -10,6 +10,9 @@ const recoveryCss = read('MapWorkspaceRecoverySurface.css');
 const mapCss = read('MapComponent.css');
 const mapComponent = read('MapComponent.tsx');
 const application = readFileSync(resolve(webclientRoot, 'src', 'App.tsx'), 'utf8');
+const toolbarComponent = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Widget', 'Toolbar', 'ToolbarWidgetModern.tsx'), 'utf8');
+const toolbarCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Widget', 'Toolbar', 'ToolbarWidget.css'), 'utf8');
+const navigationCss = read('NavigationBar.css');
 
 const mobileModeBlock = (): string => {
   const mediaStart = modeCss.indexOf('@media (max-width: 45rem)');
@@ -77,16 +80,26 @@ describe('map experience layout collision contract', () => {
     expect(dependentIndex).toBeGreaterThan(recoveryIndex);
   });
 
-  it('mounts the 2B/3B mode switcher only after a map view exists', () => {
-    expect(application).toContain('mapModeControl={mapViewAvailable ? <MapModeExperienceControl />');
-    expect(application).toContain('Boolean(Store.getState().Map.MapView)');
+  it('hosts the 2B/3B switcher inside the right toolbar instead of a separate floating panel', () => {
+    expect(application).toContain('<ExperienceWorkspace externalMapModeControl />');
+    expect(toolbarComponent).toContain('leadingContent={<MapModeExperienceControl embedded />}');
+    expect(toolbarComponent).toContain('toolbarwidget--with-map-mode');
+    expect(toolbarCss).toContain('--toolbar-width: 100px;');
+    expect(modeCss).toContain('.map-mode-experience--embedded');
   });
 
-  it('keeps the actual ArcGIS bridge in the map and the control in its workspace row', () => {
+  it('keeps the actual ArcGIS bridge in the map and the mode control in the right toolbar', () => {
     const bridgeIndex = mapComponent.indexOf('<ExperienceMapModeBridge');
     expect(bridgeIndex).toBeGreaterThan(mapComponent.indexOf('{mapView && <>'));
     expect(mapComponent).not.toContain('<MapModeExperienceControl />');
-    expect(application).toContain('<ExperienceWorkspace mapModeControl=');
+    expect(toolbarComponent).toContain('leadingContent={<MapModeExperienceControl embedded />}');
+  });
+
+  it('pins the mainbar flush to the viewport top without inherited spacing or offsets', () => {
+    expect(navigationCss).toContain('html,body,#root,#app-shell{margin:0!important;padding:0!important;}');
+    expect(navigationCss).toContain('.mainbar-container{position:fixed!important;top:0!important;inset-block-start:0!important;');
+    expect(mapCss).toMatch(/\.esri-map > \.mainbar-container\s*\{\s*position: fixed !important;\s*top: 0 !important;/u);
+    expect(mapCss).toMatch(/#app-shell \.esri-map > #mainbar\.mainbar-container\s*\{[\s\S]*?inset-block-start: 0 !important;[\s\S]*?margin: 0 !important;/u);
   });
 
   it('does not move recovery into the scene-only control layer', () => {
