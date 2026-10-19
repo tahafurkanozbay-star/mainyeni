@@ -83,6 +83,13 @@ const normalizeName = (raw: unknown): string =>
     .replace(/ı/gu, 'i')
     .replace(/\s+/gu, ' ');
 
+const matchesAllQueryTerms = (values: readonly unknown[], query: string): boolean => {
+  const terms = normalizeName(query).split(/\s+/u).filter(Boolean);
+  if (terms.length === 0) return true;
+  const searchableText = normalizeName(values.filter((value) => value !== null && value !== undefined).join(' '));
+  return terms.every((term) => searchableText.includes(term));
+};
+
 // Direct mode must honor the same input contract as the same-origin API.
 // Validate *before* dispatching any of the 43 category requests so hostile,
 // oversized, or malformed search terms do not trigger a costly upstream sweep.
@@ -294,7 +301,7 @@ export const fetchPlanAskiGeoJsonDirect = async (
     const p = item.properties;
     return (!ilce || normalizeName(p.ilce) === ilce)
       && (!mahalle || normalizeName(p.mahalle) === mahalle)
-      && (!q || [p.adi, p.adres, p.ilce, p.mahalle].some((field) => normalizeName(field).includes(q)));
+      && (!q || matchesAllQueryTerms([p.adi, p.adres, p.ilce, p.mahalle], q));
   }).sort((left, right) =>
     (left.properties.objectid as number) - (right.properties.objectid as number));
 
