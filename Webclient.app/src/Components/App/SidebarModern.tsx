@@ -424,7 +424,7 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
               aria-describedby="kr-sidebar-live-status kr-sidebar-keyboard-help"
             />
             {navigation.query ? (
-              <button type="button" onClick={() => navigationModel.clearQuery()} aria-label="Hizmet aramasını temizle">×</button>
+              <button type="button" onClick={() => navigationModel.clearQuery()} aria-label="Aramayı temizle">×</button>
             ) : null}
           </label>
           {!pointSearchActive ? (
@@ -454,7 +454,9 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
         </header>
 
         <span id="kr-sidebar-keyboard-help" className="experience-sr-only">
-          Hizmetler arasında yukarı ve aşağı okları, ilk ve son öğe için Home ve End tuşlarını kullanın. Enter hizmeti açar.
+          {pointSearchActive
+            ? 'Noktalar arasında yukarı ve aşağı okları, ilk ve son öğe için Home ve End tuşlarını kullanın. Enter seçili noktaya gider.'
+            : 'Hizmetler arasında yukarı ve aşağı okları, ilk ve son öğe için Home ve End tuşlarını kullanın. Enter hizmeti açar.'}
         </span>
         <span id="kr-sidebar-live-status" className="experience-sr-only" role="status" aria-live="polite" aria-atomic="true">
           {liveAnnouncement}
