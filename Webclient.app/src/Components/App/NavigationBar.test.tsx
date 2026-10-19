@@ -9,7 +9,7 @@ describe('NavigationBar', () => {
     const showWindow = vi.fn();
     render(<NavigationBar windowManager={{ ShowWindow: showWindow }} />);
 
-    const search = screen.getByLabelText('Adres, yer veya katman ara');
+    const search = screen.getByLabelText('Adres veya kent rehberi noktası ara');
     await user.type(search, '  Kızılay  ');
     await user.click(screen.getByRole('button', { name: 'Aramayı başlat' }));
 
@@ -21,7 +21,7 @@ describe('NavigationBar', () => {
     const showWindow = vi.fn();
     render(<NavigationBar windowManager={{ ShowWindow: showWindow }} />);
 
-    const search = screen.getByLabelText('Adres, yer veya katman ara');
+    const search = screen.getByLabelText('Adres veya kent rehberi noktası ara');
     await user.type(search, '   ');
     expect(screen.getByRole('button', { name: 'Aramayı başlat' })).toBeDisabled();
     expect(showWindow).not.toHaveBeenCalled();
@@ -30,7 +30,7 @@ describe('NavigationBar', () => {
   it('clears search and releases focus with Escape', async () => {
     const user = userEvent.setup();
     render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
-    const search = screen.getByLabelText<HTMLInputElement>('Adres, yer veya katman ara');
+    const search = screen.getByLabelText<HTMLInputElement>('Adres veya kent rehberi noktası ara');
     await user.type(search, 'Ankara');
     expect(search).toHaveFocus();
     await user.keyboard('{Escape}');
@@ -40,7 +40,7 @@ describe('NavigationBar', () => {
 
   it('preserves search text and focus when Escape belongs to an active IME composition', () => {
     render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
-    const search = screen.getByLabelText<HTMLInputElement>('Adres, yer veya katman ara');
+    const search = screen.getByLabelText<HTMLInputElement>('Adres veya kent rehberi noktası ara');
     search.focus();
     fireEvent.change(search, { target: { value: 'Ankara' } });
     fireEvent.compositionStart(search);
@@ -53,7 +53,7 @@ describe('NavigationBar', () => {
   it('does not wire / as a global search shortcut', async () => {
     const user = userEvent.setup();
     render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
-    const search = screen.getByLabelText<HTMLInputElement>('Adres, yer veya katman ara');
+    const search = screen.getByLabelText<HTMLInputElement>('Adres veya kent rehberi noktası ara');
     const otherButton = document.createElement('button');
     otherButton.textContent = 'Other';
     document.body.appendChild(otherButton);
@@ -76,7 +76,7 @@ describe('NavigationBar', () => {
     document.body.append(auxiliary);
     try {
       render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
-      const search = screen.getByLabelText<HTMLInputElement>('Adres, yer veya katman ara');
+      const search = screen.getByLabelText<HTMLInputElement>('Adres veya kent rehberi noktası ara');
       auxiliary.focus();
       await user.keyboard('/');
       expect(auxiliary).toHaveFocus();
