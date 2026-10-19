@@ -6,11 +6,16 @@ import { MapReducer_ActionTypes } from '../../Store/Reducers/MapReducer';
 import { createWindowManager } from '../../Store/Managers/WindowManager';
 import { MapComponent } from './MapComponent';
 
-const runtime = vi.hoisted(() => ({ load: vi.fn(), destroy: vi.fn(), remove: vi.fn(), views: [] as Array<Record<string, unknown>>, create: vi.fn() }));
+const runtime = vi.hoisted(() => ({ load: vi.fn(), destroy: vi.fn(), remove: vi.fn(), views: [] as Array<Record<string, unknown>>, clickEvents: [] as Array<Record<string, unknown>>, create: vi.fn() }));
 vi.mock('../../gis-engine/arcgisModuleRuntime', () => ({ loadArcgisModules: runtime.load }));
 vi.mock('../../Store/Managers/MapManager', () => ({ default: {
   GetMapConfiguration: () => ({}), SetViewStateBridge: vi.fn(), SetViewPerformanceMonitor: vi.fn(),
   ClearViewPerformanceMonitor: vi.fn(), ClearViewStateBridge: vi.fn(),
+  GetActiveMapView: () => runtime.views[0] ?? null,
+  GetMapView: () => runtime.views[0] ?? null,
+  SetActiveMapView: vi.fn(), ClearActiveMapView: vi.fn(),
+  SetMapClickEvent: (event: Record<string, unknown>) => runtime.clickEvents.push(event),
+  GetMobileRightClick: () => false,
 } }));
 vi.mock('../../gis-engine/viewRuntime', () => ({
   bindMapViewState: () => vi.fn(), createMapViewOptions: (options: unknown) => options,
@@ -38,14 +43,14 @@ const setup = (strict = false) => {
   return { ...result, manager };
 };
 beforeEach(() => {
-  vi.clearAllMocks(); runtime.views.length = 0;
+  vi.clearAllMocks(); runtime.views.length = 0; runtime.clickEvents.length = 0;
   Store.dispatch({ type: MapReducer_ActionTypes.SetMapView, payload: null });
   runtime.create.mockImplementation(() => ({ ready: true, readyState: 'ready' }));
   runtime.load.mockImplementation(async () => [
     class Map { add = vi.fn(); },
     class MapView {
       constructor(options: { map: unknown; container: HTMLElement }) {
-        const view = { map: options.map, container: options.container, popup: {}, destroy: runtime.destroy, ...runtime.create() };
+        const view = { map: options.map, container: options.container, popup: {}, destroy: runtime.destroy, ...runtime.create(), toMap: vi.fn(({ x, y }: { x: number; y: number }) => ({ x, y, longitude: -77, latitude: 38 })) };
         runtime.views.push(view); return view;
       }
     },
@@ -102,6 +107,29 @@ describe('real map workspace admission and recovery', () => {
     expect(runtime.destroy).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: 'Haritayı yeniden başlat' })).toBeNull();
   });
+  it('opens the point information window from a native right-click on the visible map', async () => {
+    const { manager } = setup();
+    const showWindow = vi.spyOn(manager, 'ShowWindow');
+    await screen.findByText('Araçlar hazır');
+
+    const mapHost = document.querySelector('.experience-mapview-host');
+    expect(mapHost).not.toBeNull();
+    fireEvent.contextMenu(mapHost as HTMLElement, {
+      button: 2,
+      clientX: 110,
+      clientY: 130,
+    });
+
+    expect(showWindow).toHaveBeenCalledWith('global-identify-widget');
+    expect(runtime.clickEvents).toHaveLength(1);
+    expect(runtime.clickEvents[0]).toMatchObject({
+      x: 110,
+      y: 130,
+      mapPoint: { x: 110, y: 130, longitude: -77, latitude: 38 },
+    });
+    expect(showWindow).not.toHaveBeenCalledWith('context-menu-widget');
+  });
+
   it('cancels waiting on unmount and never publishes a late view', async () => {
     const ready = deferred(); runtime.create.mockReturnValue({ when: () => ready.promise });
     const { unmount } = setup(); await waitFor(() => expect(runtime.views).toHaveLength(1));
