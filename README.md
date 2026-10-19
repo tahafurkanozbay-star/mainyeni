@@ -1,14 +1,28 @@
 # 3D Altyapı / Üstyapı Koordinasyon Web Uygulaması
 
-Bu deponun etkin ürünü `Webclient.app/` altındaki React, TypeScript, Vite ve ArcGIS tabanlı web istemcisidir. Uygulama, Kent Rehberi verilerini tarayıcıdan doğrudan resmi PlanASKI servisine alır. Üretim dağıtımı statik web dosyalarından oluşur; bu mimaride ABB'ye ait ayrı bir uygulama API'si, yönetim API'si veya backend sunucusu bulunmaz.
+Bu deponun yayımlanan ürünü, **`Webclient.app/`** altındaki React, TypeScript, Vite ve ArcGIS tabanlı istemcidir. Üretim paketi statik web dosyalarından oluşur; uygulamanın çalışması için ayrı ABB User API, Admin API, uygulama veritabanı veya Kent Rehberi proxy'si gerekmez.
 
-## Veri kaynağı
+## Veri kaynağı ve çalışma ilkeleri
 
-Kent Rehberi kayıtları resmi PlanASKI servisine doğrudan yüklenir:
+Kent Rehberi kayıtları tarayıcıdan doğrudan ABB PlanASKI'nin sabit HTTPS uç noktasından alınır:
 
 `https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur=`
 
-Tarayıcı tarafında aynı-köken `/api` çağrısı, API kimlik bilgisi veya belediyeye ait proxy kullanılmaz. PlanASKI servisi, yayımlanan CBS istemcisinin origin'i için CORS izni vermelidir. İlk harita görünümü yerel ve sabit bir Ankara görünümüdür; eski GIS servis kataloğu ve API üzerinden çalışan eski sorgu işlevleri başlatılmaz. PlanASKI üzerinden desteklenmeyen eski işlevler uygulamadan çıkarılmıştır.
+Tarayıcı tarafında özel `/api` proxy'si veya kimlik bilgisi iletimi yoktur. İstekler yalnızca doğrulanmış `tur=0..42` kategorilerine yönelir; JSON yanıtları GeoJSON'a dönüştürülmeden önce boyut, şema, kimlik ve koordinat kontrollerinden geçer. Başlangıç haritası yerel bir Ankara görünümüyle açılır.
+
+**Dağıtım ön koşulu:** PlanASKI, istemcinin yayımlandığı origin için CORS izni vermelidir. Üretim origin'inden tarayıcı erişimi ayrıca doğrulanmadan bu izin var kabul edilmemelidir. CORS engelini aşmak için özel bir proxy veya ikinci veri kaynağı kendiliğinden eklenmemelidir.
+
+## Depo yapısı
+
+- `Webclient.app/` — yayımlanan web uygulaması, UI, ArcGIS motoru, PlanASKI taşıması, testler ve Vite/TypeScript yapılandırmaları.
+- `Operations/` — statik IIS paketini üreten ve yayımlayan PowerShell betikleri.
+- `docs/` — mimari, veri kaynağı ve dağıtım belgeleri.
+- `progress/` — kısa güncel görev/devam kaydı; ayrıntılı eski kayıtlar `progress/archive/` altındadır.
+- `quality/` ve `tools/` — sürüm kalite denetimleri, mimari sözleşmeler ve CI araçları.
+- `KentRehberi/webclient/` — ayrı GIS çekirdek modülünün test ve kalite iş akışı; ana statik SPA ile aynı dağıtım paketi değildir.
+- `WebClient/` — ayrı tutulan GIS deneyim/politika kaynakları; üretim SPA'sının giriş noktası olarak kullanılmaz ve bağımsız kalite/bağımlılık kanıtı olmadan aktif uygulamaya taşınmamalıdır.
+
+Kaldırılmış API dağıtım zinciri için gereken .NET projeleri artık statik web istemcisinin yayımlanma adımında kullanılmaz. Eski IIS sunucusunda kalmış `/api` eşlemesi veya fiziksel `user` klasörü kaynak kod değişikliğiyle otomatik kaldırılmaz; canlı sunucu üzerindeki ayrı bakım çalışmasında doğrulanmalıdır.
 
 ## Geliştirme
 
@@ -20,18 +34,26 @@ npm ci
 npm run dev
 ```
 
+Üretim paketinin kalite ve bütünlük doğrulaması:
+
+```powershell
+npm run verify
+```
+
 ## IIS dağıtımı
 
-Üretim paketi ve statik IIS yayını için depo kökünde:
+Depo kökünde, sırasıyla:
 
 ```powershell
 .\Operations\build-webclient-iis.ps1
 .\Operations\deploy-webclient-iis.ps1
 ```
 
-İki betik statik web istemcisini oluşturur/yayımlar; API uygulaması kurmaz veya API derlemez. Eski IIS sunucusunda daha önce oluşturulmuş bir `/api` eşlemesi ya da fiziksel `user` klasörü varsa, bu kaynak kod değişikliği sunucu üzerindeki eşlemeyi kendiliğinden kapatmaz veya silmez. Bu eski eşlemenin kaldırılması, canlı sunucuda ayrı bir bakım işlemidir.
+Derleme/dağıtım betikleri statik istemciyi hazırlar ve IIS'e kopyalar; DNS, TLS, PlanASKI CORS ayarlarını veya eski API eşlemelerini sessizce değiştirmez.
 
-## Geliştirme notları
+## Güncel durum
 
-- Güncel durum ve kararlar: [`KENT_REHBERI_PROGRESS.md`](./KENT_REHBERI_PROGRESS.md)
-- `KENT_REHBERI_PROGRESS_ARCHIVE_*.md` dosyaları tarihsel bağlam için korunur.
+- Aktif mimari ve bir sonraki tur başlangıcı: [`KENT_REHBERI_PROGRESS.md`](./KENT_REHBERI_PROGRESS.md)
+- Önceki ayrıntılı ilerleme kayıtları: [`progress/archive/`](./progress/archive/)
+- IIS statik dağıtım rehberi: [`docs/webclient-iis-cbs-path.md`](./docs/webclient-iis-cbs-path.md)
+- Doğrudan PlanASKI veri kaynağı: [`docs/planaski-direct-browser.md`](./docs/planaski-direct-browser.md)
