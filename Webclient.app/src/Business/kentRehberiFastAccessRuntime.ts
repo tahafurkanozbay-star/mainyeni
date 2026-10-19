@@ -20,11 +20,13 @@ import {
   type KentRehberiFastAccessProfile,
 } from './kentRehberiFastAccessProfiles';
 
-const PROBE_LIMIT = 250;
 const CATEGORY_LIMIT = 2000;
 const MAX_COMBINED_FEATURES = 4000;
 const DEFAULT_MAX_CACHE_ENTRIES = 64;
 const MAX_CACHE_TTL_MS = 5 * 60 * 1000;
+// Category metadata is shared by all POI businesses and is cached independently
+// from result-cache settings, so cache:false never triggers another 43-type sweep.
+const TYPE_CATALOG_CACHE_TTL_MS = MAX_CACHE_TTL_MS;
 
 export const KENT_REHBERI_FAST_ACCESS_SOURCE = 'kent-rehberi' as const;
 
@@ -95,10 +97,29 @@ interface TypeScore {
   readonly preferredHits: number;
 }
 
-interface ProbeResolution {
-  readonly tur: number | null;
-  readonly features: readonly KentRehberiGeoJsonFeature[];
-}
+const awaitWithAbortSignal = <T,>(
+  promise: Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> => {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(signal.reason ?? new Error('Request was aborted.'));
+
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const finish = (callback: () => void): void => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener('abort', onAbort);
+      callback();
+    };
+    const onAbort = (): void => finish(() => reject(signal.reason ?? new Error('Request was aborted.')));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => finish(() => resolve(value)),
+      (error: unknown) => finish(() => reject(error)),
+    );
+  });
+};
 
 const normalizeSearchText = (value: unknown): string => String(value ?? '')
   .trim()
@@ -460,6 +481,7 @@ export const createKentRehberiFastAccessRuntime = (
   const cache = new Map<string, CacheEntry>();
   let typeCatalogCache: TypeCatalogCacheEntry | null = null;
   let typeCatalogInFlight: Promise<KentRehberiTypeCatalog> | null = null;
+  let typeCatalogGeneration = 0;
 
   const pruneCache = (timestamp: number): void => {
     for (const [key, entry] of cache) {
@@ -507,38 +529,44 @@ export const createKentRehberiFastAccessRuntime = (
 
   const loadTypeCatalog = async (
     control: QueryExecutionControl,
-  ): Promise<KentRehberiTypeCatalog | null> => {
+  ): Promise<KentRehberiTypeCatalog> => {
     const timestamp = Number(now());
     if (
-      control.cache !== false
-      && Number.isFinite(timestamp)
+      Number.isFinite(timestamp)
       && typeCatalogCache
       && typeCatalogCache.expiresAt > timestamp
     ) {
-      return typeCatalogCache.catalog;
+      return awaitWithAbortSignal(Promise.resolve(typeCatalogCache.catalog), control.signal);
     }
 
-    const fetchNow = async (): Promise<KentRehberiTypeCatalog> =>
-      fetchTypeCatalog(buildFetchOptions(control, {}));
-
-    try {
-      const catalog = control.signal
-        ? await fetchNow()
-        : await (typeCatalogInFlight ??= fetchNow().finally(() => {
-          typeCatalogInFlight = null;
-        }));
-
-      if (control.cache !== false && Number.isFinite(timestamp)) {
-        typeCatalogCache = Object.freeze({
-          catalog,
-          expiresAt: timestamp + defaultCacheTtlMs,
+    if (!typeCatalogInFlight) {
+      // The catalog request enumerates the upstream tur values. It is a shared,
+      // bounded discovery job, not a POI result query: do not bind it to one
+      // caller's AbortSignal or cache:false flag, otherwise each selected POI
+      // can restart all 43 upstream requests.
+      const generation = typeCatalogGeneration;
+      let catalogRequest: Promise<KentRehberiTypeCatalog>;
+      catalogRequest = Promise.resolve()
+        .then(() => fetchTypeCatalog({}))
+        .then((catalog) => {
+          const completedAt = Number(now());
+          if (typeCatalogGeneration === generation && Number.isFinite(completedAt)) {
+            typeCatalogCache = Object.freeze({
+              catalog,
+              expiresAt: completedAt + TYPE_CATALOG_CACHE_TTL_MS,
+            });
+          }
+          return catalog;
+        })
+        .finally(() => {
+          if (typeCatalogInFlight === catalogRequest) typeCatalogInFlight = null;
         });
-      }
-      return catalog;
-    } catch (error) {
-      if (control.signal?.aborted) throw error;
-      return null;
+      typeCatalogInFlight = catalogRequest;
     }
+
+    const sharedCatalogRequest = typeCatalogInFlight;
+    if (!sharedCatalogRequest) throw new Error('PlanASKI type catalog request is unavailable.');
+    return awaitWithAbortSignal(sharedCatalogRequest, control.signal);
   };
 
   const resolveCatalogTypes = async (
@@ -546,26 +574,7 @@ export const createKentRehberiFastAccessRuntime = (
     control: QueryExecutionControl,
   ): Promise<readonly number[]> => {
     const catalog = await loadTypeCatalog(control);
-    if (!catalog) return Object.freeze([]);
     return resolveKentRehberiTypesFromCatalog(catalog, profile);
-  };
-
-  const resolveProbe = async (
-    profile: KentRehberiFastAccessProfile,
-    probe: string,
-    control: QueryExecutionControl,
-  ): Promise<ProbeResolution> => {
-    const collection = await fetchCollection(buildFetchOptions(control, {
-      limit: PROBE_LIMIT,
-      q: probe,
-    }));
-    const features = Object.freeze(
-      collection.features.filter((feature) => isEligibleFeature(feature, profile)),
-    );
-    return Object.freeze({
-      tur: selectDominantKentRehberiTur(features, profile),
-      features,
-    });
   };
 
   const resolveCollection = async (
@@ -578,19 +587,11 @@ export const createKentRehberiFastAccessRuntime = (
     const resolvedTur = new Set<number>(
       await resolveCatalogTypes(profile, control),
     );
-    const directMatches: KentRehberiGeoJsonFeature[] = [];
 
-    if (resolvedTur.size === 0) {
-      for (const probe of profile.probes) {
-        const resolution = await resolveProbe(profile, probe, control);
-        for (const feature of resolution.features) directMatches.push(feature);
-        if (resolution.tur !== null) {
-          resolvedTur.add(resolution.tur);
-          if (profile.mode === 'first') break;
-        }
-      }
-    }
-
+    // A category-specific query must never degrade into a broad q request:
+    // q without tur enumerates all 43 categories. If catalog samples cannot
+    // identify this POI safely, return an empty collection rather than flood
+    // the upstream service with another sweep.
     let collection: KentRehberiGeoJsonFeatureCollection;
     if (resolvedTur.size > 0) {
       const categoryCollections = await Promise.all(
@@ -605,7 +606,7 @@ export const createKentRehberiFastAccessRuntime = (
         [...resolvedTur],
       );
     } else {
-      collection = makeFeatureCollection(directMatches, profile.serviceKey);
+      collection = makeFeatureCollection([], profile.serviceKey);
     }
 
     writeCache(profile.serviceKey, collection, control);
@@ -642,13 +643,32 @@ export const createKentRehberiFastAccessRuntime = (
 
         if (objectId !== null) {
           const cachedFeature = findCachedFeature(serviceKey, objectId, control);
-          const feature = cachedFeature ?? await fetchFeature(
-            objectId,
-            buildFetchOptions(control, { limit: 1 }),
-          );
+          let feature = cachedFeature;
+          let resolvedTypes: readonly number[] = [];
+          if (!feature && profile) {
+            // A profile identifies the relevant POI categories. Resolve the
+            // object ID only inside those tur values instead of calling the
+            // unscoped feature lookup, which scans all 43 categories.
+            resolvedTypes = await resolveCatalogTypes(profile, control);
+            for (const tur of resolvedTypes) {
+              feature = await fetchFeature(
+                objectId,
+                buildFetchOptions(control, { limit: 1, tur }),
+              );
+              if (feature) break;
+            }
+          } else if (!feature) {
+            // Only general/unscoped lookups lack enough category context to
+            // safely narrow an object-ID lookup.
+            feature = await fetchFeature(
+              objectId,
+              buildFetchOptions(control, { limit: 1 }),
+            );
+          }
           collection = makeFeatureCollection(
             feature ? [feature] : [],
             serviceKey,
+            resolvedTypes,
           );
         } else if (profile) {
           collection = filterByQueryName(
@@ -699,6 +719,7 @@ export const createKentRehberiFastAccessRuntime = (
     createBusiness,
     clearCache: () => {
       cache.clear();
+      typeCatalogGeneration += 1;
       typeCatalogCache = null;
       typeCatalogInFlight = null;
     },

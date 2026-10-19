@@ -175,24 +175,10 @@ describe('kentRehberiFastAccessRuntime', () => {
     expect(fetchCollection).toHaveBeenCalledTimes(1);
   });
 
-  it('discovers a type with a bounded probe and then loads the whole category', async () => {
-    const fetchCollection = vi.fn(async (options?: { q?: string; tur?: number; limit?: number }) => {
-      if (options?.q) {
-        expect(options.limit).toBe(250);
-        return collection([
-          feature(101, 12, 'Kadın Danışma Merkezi Çankaya'),
-          feature(102, 12, 'Kadın Dayanışma Merkezi Sincan'),
-        ]);
-      }
-      expect(options?.tur).toBe(12);
-      expect(options?.limit).toBe(2000);
-      return collection([
-        feature(101, 12, 'Kadın Danışma Merkezi Çankaya'),
-        feature(102, 12, 'Kadın Dayanışma Merkezi Sincan'),
-        feature(103, 12, 'Kadın Danışma Merkezi Yenimahalle'),
-      ]);
-    });
-
+  it('does not start a broad category probe when catalog evidence is insufficient', async () => {
+    const fetchCollection = vi.fn(async () => collection([
+      feature(101, 12, 'Kadın Danışma Merkezi Çankaya'),
+    ]));
     const runtime = createKentRehberiFastAccessRuntime({
       fetchCollection: fetchCollection as never,
       fetchTypeCatalog: emptyTypeCatalogFetch as never,
@@ -203,20 +189,12 @@ describe('kentRehberiFastAccessRuntime', () => {
     const result = await business?.Query({}, true);
 
     expect(result?.source).toBe('kent-rehberi');
-    expect(result?.data).toHaveLength(3);
-    expect(result?.data[0]?.geometry).toMatchObject({
-      longitude: 32.85,
-      latitude: 39.92,
-      spatialReference: { wkid: 4326 },
-    });
-    expect(fetchCollection).toHaveBeenCalledTimes(2);
-
-    await business?.Query({}, false);
-    expect(fetchCollection).toHaveBeenCalledTimes(2);
+    expect(result?.data).toHaveLength(0);
+    expect(fetchCollection).not.toHaveBeenCalled();
     expect(runtime.cacheSize()).toBe(2);
   });
 
-  it('uses direct probe matches when a safe type cannot be inferred', async () => {
+  it('does not sweep every type for a POI whose category cannot be resolved', async () => {
     const fetchCollection = vi.fn(async () => collection([
       feature(1, 2, 'BELMEK Çankaya'),
       feature(2, 9, 'BELTEK Sincan'),
@@ -229,41 +207,179 @@ describe('kentRehberiFastAccessRuntime', () => {
     const business = runtime.createBusiness('YeniBelmekBeltekQeryUrl');
     const result = await business?.Query({}, false);
 
-    expect(result?.data.map((item) => item.attr.objectid)).toEqual([1, 2]);
+    expect(result?.data).toHaveLength(0);
     expect(result?.featureCollection.meta).toMatchObject({
       source: 'kent-rehberi',
       serviceKey: 'YeniBelmekBeltekQeryUrl',
     });
+    expect(fetchCollection).not.toHaveBeenCalled();
   });
 
-  it('loads an object detail from the backend when it is not in the category cache', async () => {
-    const fetchFeature = vi.fn(async (objectId: number) =>
-      objectId === 77 ? feature(77, 4, 'Park Detayı') : null);
+  it('reuses one in-flight catalog across different POIs when result caching is disabled', async () => {
+    let resolveCatalog!: (value: {
+      types: readonly {
+        tur: number;
+        count: number;
+        samples: readonly { objectid: number; adi: string; adres: string; durakNo: null }[];
+      }[];
+    }) => void;
+    const catalogResult = new Promise<{
+      types: readonly {
+        tur: number;
+        count: number;
+        samples: readonly { objectid: number; adi: string; adres: string; durakNo: null }[];
+      }[];
+    }>((resolve) => { resolveCatalog = resolve; });
+    const fetchTypeCatalog = vi.fn(() => catalogResult);
+    const fetchCollection = vi.fn(async (options?: { q?: string; tur?: number; limit?: number }) => {
+      expect(options?.q).toBeUndefined();
+      expect(options?.limit).toBe(2000);
+      if (options?.tur === 13) return collection([feature(130, 13, 'Seğmen Su Fabrikası')]);
+      if (options?.tur === 5) return collection([feature(50, 5, 'Kuğulu Park')]);
+      throw new Error('A POI query requested an unrelated category.');
+    });
+    const runtime = createKentRehberiFastAccessRuntime({
+      fetchCollection: fetchCollection as never,
+      fetchTypeCatalog: fetchTypeCatalog as never,
+      now: () => 100,
+      cacheTtlMs: 10_000,
+    });
+    const segmen = runtime.createBusiness('YeniSegmenSuFabrikalarıQeryUrl');
+    const parklar = runtime.createBusiness('YeniParklarQeryUrl');
+    const firstSignal = new AbortController();
+    const secondSignal = new AbortController();
+
+    const first = segmen!.Query({}, false, { cache: false, signal: firstSignal.signal });
+    const second = parklar!.Query({}, false, { cache: false, signal: secondSignal.signal });
+    await Promise.resolve();
+    expect(fetchTypeCatalog).toHaveBeenCalledTimes(1);
+
+    resolveCatalog({
+      types: [
+        {
+          tur: 13,
+          count: 1,
+          samples: [
+            { objectid: 130, adi: 'Seğmen Su Fabrikası', adres: 'Ankara', durakNo: null },
+          ],
+        },
+        {
+          tur: 5,
+          count: 1,
+          samples: [
+            { objectid: 50, adi: 'Kuğulu Park', adres: 'Çankaya', durakNo: null },
+          ],
+        },
+      ],
+    });
+    const [segmenResult, parkResult] = await Promise.all([first, second]);
+
+    expect(segmenResult.data.map((item) => item.attr.tur)).toEqual([13]);
+    expect(parkResult.data.map((item) => item.attr.tur)).toEqual([5]);
+    expect(fetchTypeCatalog).toHaveBeenCalledTimes(1);
+    expect(fetchCollection.mock.calls.map(([options]) => options?.tur).sort((left, right) => (left ?? 0) - (right ?? 0))).toEqual([5, 13]);
+    expect(fetchCollection).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the shared category catalog even when one waiting query is cancelled', async () => {
+    let resolveCatalog!: (value: {
+      types: readonly {
+        tur: number;
+        count: number;
+        samples: readonly { objectid: number; adi: string; adres: string; durakNo: null }[];
+      }[];
+    }) => void;
+    const catalogResult = new Promise<{
+      types: readonly {
+        tur: number;
+        count: number;
+        samples: readonly { objectid: number; adi: string; adres: string; durakNo: null }[];
+      }[];
+    }>((resolve) => { resolveCatalog = resolve; });
+    const fetchTypeCatalog = vi.fn(() => catalogResult);
+    const fetchCollection = vi.fn(async (options?: { tur?: number; limit?: number }) => {
+      expect(options?.tur).toBe(5);
+      return collection([feature(50, 5, 'Kuğulu Park')]);
+    });
+    const runtime = createKentRehberiFastAccessRuntime({
+      fetchCollection: fetchCollection as never,
+      fetchTypeCatalog: fetchTypeCatalog as never,
+      now: () => 100,
+      cacheTtlMs: 10_000,
+    });
+    const business = runtime.createBusiness('YeniParklarQeryUrl');
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    const first = business!.Query({}, false, { cache: false, signal: firstController.signal });
+    const second = business!.Query({}, false, { cache: false, signal: secondController.signal });
+    firstController.abort(new Error('cancel first request'));
+
+    await expect(first).rejects.toThrow('cancel first request');
+    resolveCatalog({
+      types: [{
+        tur: 5,
+        count: 1,
+        samples: [
+          { objectid: 50, adi: 'Kuğulu Park', adres: 'Çankaya', durakNo: null },
+        ],
+      }],
+    });
+    const result = await second;
+
+    expect(result.data).toHaveLength(1);
+    expect(fetchTypeCatalog).toHaveBeenCalledTimes(1);
+    expect(fetchCollection).toHaveBeenCalledTimes(1);
+  });
+
+  it('loads an object detail only from the resolved POI category', async () => {
+    const fetchFeature = vi.fn(async (objectId: number, options?: { tur?: number }) =>
+      objectId === 77 && options?.tur === 5 ? feature(77, 5, 'Park Detayı') : null);
+    const fetchTypeCatalog = vi.fn(async () => ({
+      types: [{
+        tur: 5,
+        count: 1,
+        samples: [
+          { objectid: 50, adi: 'Kuğulu Park', adres: 'Çankaya', durakNo: null },
+        ],
+      }],
+    }));
     const runtime = createKentRehberiFastAccessRuntime({
       fetchCollection: vi.fn(async () => collection([])) as never,
       fetchFeature: fetchFeature as never,
-      fetchTypeCatalog: emptyTypeCatalogFetch as never,
+      fetchTypeCatalog: fetchTypeCatalog as never,
     });
     const business = runtime.createBusiness('YeniParklarQeryUrl');
 
-    const result = await business?.Query({ ObjectId: 77 }, true);
+    const result = await business?.Query({ ObjectId: 77 }, true, { cache: false });
 
-    expect(fetchFeature).toHaveBeenCalledWith(77, expect.objectContaining({ limit: 1 }));
+    expect(fetchFeature).toHaveBeenCalledWith(77, expect.objectContaining({ limit: 1, tur: 5 }));
+    expect(fetchFeature).toHaveBeenCalledTimes(1);
     expect(result?.data[0]?.attr.objectid).toBe(77);
     expect(result?.data[0]?.geometry).toMatchObject({ x: 32.85, y: 39.92 });
   });
 
-  it('filters cached category records by a normalized name query', async () => {
-    const fetchCollection = vi.fn(async (options?: { q?: string; tur?: number }) =>
-      options?.q
-        ? collection([feature(1, 5, 'Park'), feature(2, 5, 'Park')])
-        : collection([
-          feature(10, 5, 'Kuğulu Park'),
-          feature(11, 5, 'Gençlik Parkı'),
-        ]));
+  it('filters category records by a normalized name query without broad queries', async () => {
+    const fetchTypeCatalog = vi.fn(async () => ({
+      types: [{
+        tur: 5,
+        count: 2,
+        samples: [
+          { objectid: 10, adi: 'Kuğulu Park', adres: 'Çankaya', durakNo: null },
+          { objectid: 11, adi: 'Gençlik Parkı', adres: 'Altındağ', durakNo: null },
+        ],
+      }],
+    }));
+    const fetchCollection = vi.fn(async (options?: { q?: string; tur?: number }) => {
+      expect(options?.q).toBeUndefined();
+      expect(options?.tur).toBe(5);
+      return collection([
+        feature(10, 5, 'Kuğulu Park'),
+        feature(11, 5, 'Gençlik Parkı'),
+      ]);
+    });
     const runtime = createKentRehberiFastAccessRuntime({
       fetchCollection: fetchCollection as never,
-      fetchTypeCatalog: emptyTypeCatalogFetch as never,
+      fetchTypeCatalog: fetchTypeCatalog as never,
     });
     const business = runtime.createBusiness('YeniParklarQeryUrl');
 
@@ -271,6 +387,7 @@ describe('kentRehberiFastAccessRuntime', () => {
 
     expect(result?.data).toHaveLength(1);
     expect(result?.data[0]?.attr.adi).toBe('Kuğulu Park');
+    expect(fetchCollection).toHaveBeenCalledTimes(1);
   });
 
   it('routes global search through the Kent Rehberi collection instead of a legacy GIS layer', async () => {

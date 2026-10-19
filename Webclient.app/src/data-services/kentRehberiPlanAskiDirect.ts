@@ -310,7 +310,8 @@ export const fetchPlanAskiFeatureDirect = async (
   options: KentRehberiFetchOptions = {},
 ): Promise<KentRehberiGeoJsonFeature | null> => {
   const id = requiredInteger(objectId, 1, 2147483647);
-  const features = fullSet(await fetchCategories(options));
+  const category = options.tur === undefined ? undefined : sourceType(options.tur);
+  const features = fullSet(await fetchCategories(options, category));
   return features.find((item) => item.properties.objectid === id) ?? null;
 };
 
