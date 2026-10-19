@@ -7,7 +7,6 @@ import {
   describeRuntimeConfigResolution,
   resolveRuntimeConfig,
   runtimeConfigEvidenceFingerprint,
-  runtimeConfigFingerprint,
   type RuntimeConfigFieldEvidence,
 } from './runtimeConfig';
 
