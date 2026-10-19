@@ -45,13 +45,7 @@ let activeOwner: symbol | null = null;
 const listeners = new Set<() => void>();
 
 const notify = (): void => {
-  for (const listener of Array.from(listeners)) {
-    try {
-      listener();
-    } catch {
-      // One consumer must not prevent the other subscribers from updating.
-    }
-  }
+  for (const listener of Array.from(listeners)) listener();
 };
 
 const cleanText = (value: unknown): string => typeof value === 'string'
