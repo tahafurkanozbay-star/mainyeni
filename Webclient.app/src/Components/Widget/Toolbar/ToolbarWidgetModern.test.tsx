@@ -29,14 +29,6 @@ vi.mock('../../../Toolbox/GisGraphicsHelper', () => ({
   },
 }));
 
-vi.mock('../_shared/MapWidgetRuntime', async (importOriginal) => {
-  const original = await importOriginal<typeof import('../_shared/MapWidgetRuntime')>();
-  return {
-    ...original,
-    openExternalUrl: vi.fn(() => true),
-  };
-});
-
 interface WindowManagerStub {
   readonly ShowWindow: ReturnType<typeof vi.fn>;
 }
