@@ -360,10 +360,18 @@ html[data-experience-motion='reduced'] .map-mode-experience__status-dot,
   #esri-map-container:has(.common-query-window-right.is-visible) .map-mode-experience {
     inset-inline-start: max(58px, calc(env(safe-area-inset-left) + 58px));
     inset-inline-end: auto;
-    inset-block-start: max(76px, calc(env(safe-area-inset-top) + 70px));
+    inset-block-start: max(64px, calc(env(safe-area-inset-top) + 58px));
     inline-size: min(164px, calc(100vw - 78px));
     max-inline-size: calc(100vw - 78px);
     padding: 6px;
     gap: 4px;
+  }
+
+  /* Reserve a strip for the 2D/3D switcher so the right-side panel begins
+     below it on phones instead of covering its buttons. */
+  #esri-map-container:has(.common-query-window-right.is-visible) .common-query-window-right.is-visible {
+    inset-block-start: max(126px, calc(env(safe-area-inset-top) + 120px)) !important;
+    max-block-size: calc(100dvh - max(138px, calc(env(safe-area-inset-top) + 132px))) !important;
+    overflow-y: auto;
   }
 }
