@@ -1,4 +1,5 @@
 import { loadArcgisModule } from './arcgisModuleRuntime';
+import { withTimeout } from '../platform/runtime/resilience';
 
 export interface SceneBasemapLike {
   readonly id?: string;
@@ -65,7 +66,7 @@ export class SceneBasemapRuntime {
     if (!sceneBasemap) throw new Error(`ArcGIS 3D altlığı kullanılamıyor: ${this.#basemapId}`);
 
     try {
-      await sceneBasemap.load?.({ signal });
+      await withTimeout(() => sceneBasemap.load?.({ signal }), 15_000, signal);
       throwIfAborted(signal);
       if (map.basemap !== previousBasemap) {
         throw new DOMException('Altlık yüklenirken harita altlığı değişti.', 'AbortError');
