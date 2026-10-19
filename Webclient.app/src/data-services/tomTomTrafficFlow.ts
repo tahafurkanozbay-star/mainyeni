@@ -6,8 +6,14 @@
 export const normalizeTomTomTrafficCredential = (value: unknown): string =>
   typeof value === 'string' ? value.trim() : '';
 
+/** Resolve the documented public browser key first, while accepting the
+ * original CREDENTIAL name as a backwards-compatible deployment alias. */
+export const resolveTomTomTrafficCredential = (environment: Readonly<Record<string, unknown>>): string =>
+  normalizeTomTomTrafficCredential(environment.VITE_TOMTOM_TRAFFIC_API_KEY)
+    || normalizeTomTomTrafficCredential(environment.VITE_TOMTOM_TRAFFIC_CREDENTIAL);
+
 export const getTomTomTrafficCredential = (): string =>
-  normalizeTomTomTrafficCredential(import.meta.env.VITE_TOMTOM_TRAFFIC_CREDENTIAL);
+  resolveTomTomTrafficCredential(import.meta.env as Readonly<Record<string, unknown>>);
 
 export const buildTomTomTrafficFlowUrlTemplate = (credentialValue: string): string => {
   const credential = normalizeTomTomTrafficCredential(credentialValue);
