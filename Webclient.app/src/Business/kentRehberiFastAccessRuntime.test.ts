@@ -331,19 +331,29 @@ describe('kentRehberiFastAccessRuntime', () => {
     expect(fetchCollection).toHaveBeenCalledTimes(1);
   });
 
-  it('loads an object detail from the backend when it is not in the category cache', async () => {
-    const fetchFeature = vi.fn(async (objectId: number) =>
-      objectId === 77 ? feature(77, 4, 'Park Detayı') : null);
+  it('loads an object detail only from the resolved POI category', async () => {
+    const fetchFeature = vi.fn(async (objectId: number, options?: { tur?: number }) =>
+      objectId === 77 && options?.tur === 5 ? feature(77, 5, 'Park Detayı') : null);
+    const fetchTypeCatalog = vi.fn(async () => ({
+      types: [{
+        tur: 5,
+        count: 1,
+        samples: [
+          { objectid: 50, adi: 'Kuğulu Park', adres: 'Çankaya', durakNo: null },
+        ],
+      }],
+    }));
     const runtime = createKentRehberiFastAccessRuntime({
       fetchCollection: vi.fn(async () => collection([])) as never,
       fetchFeature: fetchFeature as never,
-      fetchTypeCatalog: emptyTypeCatalogFetch as never,
+      fetchTypeCatalog: fetchTypeCatalog as never,
     });
     const business = runtime.createBusiness('YeniParklarQeryUrl');
 
-    const result = await business?.Query({ ObjectId: 77 }, true);
+    const result = await business?.Query({ ObjectId: 77 }, true, { cache: false });
 
-    expect(fetchFeature).toHaveBeenCalledWith(77, expect.objectContaining({ limit: 1 }));
+    expect(fetchFeature).toHaveBeenCalledWith(77, expect.objectContaining({ limit: 1, tur: 5 }));
+    expect(fetchFeature).toHaveBeenCalledTimes(1);
     expect(result?.data[0]?.attr.objectid).toBe(77);
     expect(result?.data[0]?.geometry).toMatchObject({ x: 32.85, y: 39.92 });
   });
