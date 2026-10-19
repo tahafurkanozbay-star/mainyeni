@@ -131,7 +131,12 @@ const recordRuntimeProfile = (
 };
 
 export const createApiClient = (options: ApiClientOptions = {}): ModernApiClient => {
-  const config = options.runtimeConfig || runtimeConfig;
+  const config: ApiRuntimeConfig = options.runtimeConfig ?? {
+    apiBaseUrl: '/',
+    requestTimeoutMs: runtimeConfig.requestTimeoutMs,
+    maxRetries: runtimeConfig.maxRetries,
+    cacheTtlMs: runtimeConfig.cacheTtlMs,
+  };
   const capabilityReport = options.capabilityReport || createRuntimeCapabilityReport(
     options.runtime as Record<string, unknown> | undefined
   );
@@ -187,7 +192,16 @@ export const createApiClient = (options: ApiClientOptions = {}): ModernApiClient
   }) as ModernApiClient;
 };
 
-export const apiClient = createApiClient();
+const disabledStaticClientFetch: FetchImplementation = async () => {
+  throw new AppError('The static PlanASKI client has no application API endpoint.', {
+    code: 'APPLICATION_API_DISABLED',
+    retryable: false,
+  });
+};
+
+// Keep the legacy facade shape for compatibility, but fail closed: the static
+// application must never silently issue requests to a guessed same-origin API.
+export const apiClient = createApiClient({ fetchImpl: disabledStaticClientFetch });
 
 export const clearApiClientRuntime = (): void => {
   apiClient.clearCache();
