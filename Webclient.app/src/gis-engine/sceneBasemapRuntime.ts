@@ -1,5 +1,6 @@
 import { loadArcgisModule } from './arcgisModuleRuntime';
 import { withTimeout } from '../platform/runtime/resilience';
+import { runtimeDiagnostics } from '../platform/runtime/runtimeDiagnostics';
 
 export interface SceneBasemapLike {
   readonly id?: string;
@@ -74,7 +75,9 @@ export class SceneBasemapRuntime {
       map.basemap = sceneBasemap;
       this.#ownership = { map, previousBasemap, sceneBasemap };
     } catch (error) {
-      try { sceneBasemap.destroy?.(); } catch { /* keep the original load error */ }
+      try { sceneBasemap.destroy?.(); } catch (cleanupError) {
+        runtimeDiagnostics.captureError(cleanupError, { source: 'gis.scene-basemap.failed-load-cleanup' }, 'warn');
+      }
       throw error;
     }
   }
@@ -99,7 +102,9 @@ export class SceneBasemapRuntime {
       ownership.previousBasemap = ownership.map.basemap;
     }
     ownership.map.basemap = ownership.previousBasemap ?? null;
-    try { ownership.sceneBasemap.destroy?.(); } catch { /* teardown must be best-effort */ }
+    try { ownership.sceneBasemap.destroy?.(); } catch (cleanupError) {
+      runtimeDiagnostics.captureError(cleanupError, { source: 'gis.scene-basemap.teardown' }, 'warn');
+    }
   }
 }
 
