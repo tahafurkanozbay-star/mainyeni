@@ -6,7 +6,9 @@ import {
   fetchPlanAskiGeoJsonDirect,
   fetchPlanAskiSvgOverviewDirect,
   fetchPlanAskiTypeCatalogDirect,
+  takePlanAskiPoiSearchIndex,
 } from './kentRehberiPlanAskiDirect';
+import { publishKentRehberiPoiSearchIndex } from './kentRehberiPoiSearchIndex';
 
 const DEFAULT_LIMIT = 500;
 const MAX_LIMIT = 2000;
@@ -686,6 +688,7 @@ export const attachKentRehberiGeoJsonLayer = async (
   const geojson = isSvgOverview
     ? await fetchKentRehberiSvgOverviewGeoJson(options)
     : await fetchKentRehberiGeoJson(options);
+  const pointSearchRecords = isSvgOverview ? takePlanAskiPoiSearchIndex(geojson) : null;
   if (options.signal?.aborted) throw createAbortError();
 
   const layer = await createKentRehberiGeoJsonLayer(
@@ -705,6 +708,10 @@ export const attachKentRehberiGeoJsonLayer = async (
     layer.destroy?.();
     throw error;
   }
+
+  const releasePointSearchIndex = pointSearchRecords
+    ? publishKentRehberiPoiSearchIndex(pointSearchRecords)
+    : null;
   let disposed = false;
   return Object.freeze({
     layer,
@@ -715,6 +722,7 @@ export const attachKentRehberiGeoJsonLayer = async (
       try {
         options.map.remove(layer);
       } finally {
+        releasePointSearchIndex?.();
         layer.destroy?.();
       }
     },
