@@ -567,7 +567,9 @@ export const createKentRehberiPopupContent = (
   const graphic = feature?.graphic;
   const attributes = graphic?.attributes ?? {};
   const rawAddress = attributes.adres;
-  const address = typeof rawAddress === 'string' ? rawAddress.trim() : '';
+  const address = typeof rawAddress === 'string'
+    ? rawAddress.replace(/[\t\r\n]+/g, ' ').replace(/\s{2,}/g, ' ').trim()
+    : '';
   const coordinates = resolveKentRehberiPopupCoordinates(graphic);
   const target = coordinates
     ? `${coordinates.latitude},${coordinates.longitude}`
@@ -588,17 +590,19 @@ export const createKentRehberiPopupContent = (
     directions.searchParams.set('api', '1');
     directions.searchParams.set('destination', target);
 
-    const streetView = new URL('https://www.google.com/maps/@');
-    streetView.searchParams.set('api', '1');
-    streetView.searchParams.set('map_action', 'pano');
-    streetView.searchParams.set('viewpoint', target);
-
+    // Street View's viewpoint requires coordinates. Do not offer a misleading
+    // pano link for records where only a text address is available.
     const actions = document.createElement('div');
     actions.className = 'kent-rehberi-popup__actions';
-    actions.append(
-      createGoogleMapsPopupLink('Yol tarifi al', directions.toString(), 'primary'),
-      createGoogleMapsPopupLink('Sokak görünümü al', streetView.toString(), 'secondary'),
-    );
+    actions.append(createGoogleMapsPopupLink('Yol tarifi al', directions.toString(), 'primary'));
+
+    if (coordinates) {
+      const streetView = new URL('https://www.google.com/maps/@');
+      streetView.searchParams.set('api', '1');
+      streetView.searchParams.set('map_action', 'pano');
+      streetView.searchParams.set('viewpoint', String(coordinates.latitude) + ',' + String(coordinates.longitude));
+      actions.append(createGoogleMapsPopupLink('Sokak görünümü al', streetView.toString(), 'secondary'));
+    }
     content.append(actions);
   }
 
