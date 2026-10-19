@@ -560,7 +560,6 @@ export function ExperienceMapModeBridge({
     disposedRef.current = true;
     sceneLifetimeRef.current.abort();
     sceneBasemapRuntimeRef.current?.dispose();
-    sceneBasemapRuntimeRef.current = null;
     if (pendingSceneRef.current) destroySceneView(pendingSceneRef.current, (error) => DebugHelper.Log({ context: 'pending-scene-destroy', error }));
     pendingSceneRef.current = null;
     unbindSceneRef.current?.();
