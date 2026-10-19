@@ -17,6 +17,7 @@ import {
 } from '../../gis-engine/sceneRuntime';
 import type { ArcgisAccessorWatch } from '../../gis-engine/arcgisReactiveRuntime';
 import { waitForArcgisView } from '../../gis-engine/viewReadiness';
+import { SceneBasemapRuntime, type SceneBasemapMap } from '../../gis-engine/sceneBasemapRuntime';
 import {
   createSceneExperienceRuntime,
   type SceneExperienceRuntime,
@@ -39,6 +40,19 @@ import { executeSceneCommand as executeSceneRuntimeCommand } from '../../experie
 
 const DEFAULT_SCENE_TILT = 48;
 const SCENE_TRANSITION_DURATION_MS = 320;
+
+const basemapIdForMap = (map: unknown): string | null => {
+  const basemap = (map as { basemap?: { id?: unknown; portalItem?: { id?: unknown } | null; title?: unknown } | string | null } | null)?.basemap;
+  if (typeof basemap === 'string' && basemap.trim()) return basemap.trim();
+  if (!basemap || typeof basemap !== 'object') return null;
+  const candidate = basemap.id ?? basemap.portalItem?.id ?? basemap.title;
+  return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : null;
+};
+
+const synchronizeBasemapId = (bridge: ViewStateBridgeLike | null | undefined, map: unknown): void => {
+  if (!bridge?.getState || !bridge?.setState) return;
+  bridge.setState(createViewState({ ...bridge.getState(), basemapId: basemapIdForMap(map) }));
+};
 
 interface ArcGisMapViewLike {
   map: unknown;
@@ -169,6 +183,8 @@ export function ExperienceMapModeBridge({
 }: ExperienceMapModeBridgeProps) {
   const sceneHostRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<SceneHandle | null>(null);
+  const sceneBasemapRuntimeRef = useRef<SceneBasemapRuntime | null>(null);
+  if (!sceneBasemapRuntimeRef.current) sceneBasemapRuntimeRef.current = new SceneBasemapRuntime();
   const pendingSceneRef = useRef<SceneHandle | null>(null);
   const sceneLifetimeRef = useRef(new AbortController());
   const sceneExperienceRef = useRef<SceneExperienceRuntime | null>(null);
@@ -356,6 +372,14 @@ export function ExperienceMapModeBridge({
         accessorWatch,
       });
 
+      try {
+        await sceneBasemapRuntimeRef.current?.activate(scene.map as SceneBasemapMap, sceneLifetimeRef.current.signal);
+        synchronizeBasemapId(bridge, scene.map);
+      } catch (error) {
+        // Terrain and SceneView remain usable if the remote 3D basemap is unavailable.
+        DebugHelper.Log({ context: 'scene-3d-basemap', error });
+      }
+      if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
       setSceneHostActive(true);
       await nextBrowserFrame();
       synchronizeSceneViewSize(scene.view);
@@ -368,6 +392,8 @@ export function ExperienceMapModeBridge({
       announce('3B görünüm etkinleştirildi.');
     } catch (error) {
       DebugHelper.Log(error);
+      sceneBasemapRuntimeRef.current?.restore(mapView.map as SceneBasemapMap);
+      synchronizeBasemapId(bridge, mapView.map);
       sceneExperienceRef.current?.setActive(false);
       setSceneHostActive(false);
       activeModeRef.current = '2d';
@@ -427,6 +453,8 @@ export function ExperienceMapModeBridge({
 
       if (disposedRef.current) return;
       setSceneHostActive(false);
+      sceneBasemapRuntimeRef.current?.restore(mapView.map as SceneBasemapMap);
+      synchronizeBasemapId(bridge, mapView.map);
       setMode('2d');
       publishMode('2d');
       announce('2B görünüm etkinleştirildi.');
@@ -531,6 +559,8 @@ export function ExperienceMapModeBridge({
   useEffect(() => () => {
     disposedRef.current = true;
     sceneLifetimeRef.current.abort();
+    sceneBasemapRuntimeRef.current?.dispose();
+    sceneBasemapRuntimeRef.current = null;
     if (pendingSceneRef.current) destroySceneView(pendingSceneRef.current, (error) => DebugHelper.Log({ context: 'pending-scene-destroy', error }));
     pendingSceneRef.current = null;
     unbindSceneRef.current?.();
