@@ -24,6 +24,7 @@ const harness = vi.hoisted(() => ({
   } as Record<string, any>,
   bridge: null as null | { getState: () => Record<string, any>; setState: (state: any) => void },
   createSceneView: vi.fn(),
+  loadBasemapModule: vi.fn(),
   applyToMapView: vi.fn(),
   applyToSceneView: vi.fn(),
   resizeScene: vi.fn(),
@@ -74,6 +75,8 @@ vi.mock('../../gis-engine/sceneRuntime', () => ({
   waitForSceneContainer: vi.fn(async () => undefined),
 }));
 
+vi.mock('../../gis-engine/arcgisModuleRuntime', () => ({ loadArcgisModule: harness.loadBasemapModule }));
+
 vi.mock('../../gis-engine/viewReadiness', () => ({
   waitForArcgisView: vi.fn(async () => undefined),
 }));
@@ -122,7 +125,7 @@ vi.mock('./sceneControlsPlacementPolicy', () => ({
 }));
 
 const mapView = {
-  map: { id: 'shared-map' },
+  map: { id: 'shared-map', basemap: { id: 'osm' }, ground: 'world-elevation' },
   padding: {},
   destroyed: false,
   popup: {},
@@ -141,6 +144,10 @@ const dispatchMode = (mode: '2d' | '3d'): void => {
 describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    harness.loadBasemapModule.mockImplementation(async () => ({
+      fromId: (id: string) => ({ id, load: vi.fn(async () => undefined), destroy: vi.fn() }),
+    }));
+    mapView.map.basemap = { id: 'osm' };
     harness.views.length = 0;
     harness.containerAssignments.length = 0;
     harness.state = {
