@@ -66,6 +66,27 @@ describe('MapModeExperienceControl', () => {
     expect(screen.getByText('2B harita')).toBeInTheDocument();
   });
 
+  it('renders as a compact group when embedded in the right toolbar', () => {
+    render(<MapModeExperienceControl embedded />);
+
+    expect(screen.getByRole('group', { name: 'Harita görünüm modu' })).toHaveClass('map-mode-experience--embedded');
+    expect(screen.queryByRole('region', { name: 'Harita görünüm modu' })).not.toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: '2B veya 3B görünüm seç' })).toBeInTheDocument();
+  });
+
+  it('keeps mode-switcher arrow keys from triggering the enclosing toolbar navigation', () => {
+    const parentKeyDown = vi.fn();
+    render(
+      <div onKeyDown={parentKeyDown}>
+        <MapModeExperienceControl embedded />
+      </div>,
+    );
+
+    fireEvent.keyDown(get2D(), { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(get3D());
+    expect(parentKeyDown).not.toHaveBeenCalled();
+  });
+
   it('dispatches the canonical map-mode command when 3B is requested', () => {
     const commands: ExperienceCommandDetail[] = [];
     const onCommand = (event: Event): void => {
