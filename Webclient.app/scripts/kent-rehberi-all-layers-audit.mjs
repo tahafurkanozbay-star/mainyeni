@@ -36,7 +36,7 @@ const readRequired = (files, file, errors) => {
 
 const parseJson = (source, file, errors) => {
   try {
-    return JSON.parse(source.replace(/^\\uFEFF/u, ''));
+    return JSON.parse(source.replace(/^\uFEFF/u, ''));
   } catch (error) {
     errors.push(finding('invalid-json', file, `${file} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`));
     return null;
@@ -44,20 +44,20 @@ const parseJson = (source, file, errors) => {
 };
 
 export const parseSidebarItems = (source) => {
-  const pattern = /\\{\\s*group:\\s*'([^']+)'\\s*,\\s*label:\\s*'([^']+)'\\s*,\\s*windowId:\\s*'([^']+)'\\s*,\\s*iconType:\\s*'([^']+)'\\s*,\\s*serviceKey:\\s*'([^']+)'\\s*\\}/gu;
+  const pattern = /\{\s*group:\s*'([^']+)'\s*,\s*label:\s*'([^']+)'\s*,\s*windowId:\s*'([^']+)'\s*,\s*iconType:\s*'([^']+)'\s*,\s*serviceKey:\s*'([^']+)'\s*\}/gu;
   return Object.freeze([...source.matchAll(pattern)].map((match) => Object.freeze({
     group: match[1], label: match[2], windowId: match[3], iconType: match[4], serviceKey: match[5],
   })));
 };
 
 export const parseQueryWindowIds = (source) => Object.freeze(
-  [...source.matchAll(/defineWindow\\(\\s*'([^']+)'/gu)].map((match) => match[1]),
+  [...source.matchAll(/defineWindow\(\s*'([^']+)'/gu)].map((match) => match[1]),
 );
 
 const parseQuotedArray = (source) => Object.freeze([...source.matchAll(/'([^']+)'/gu)].map((match) => match[1]));
 
 export const parseFastAccessProfiles = (source) => {
-  const pattern = /freezeProfile\\(\\{\\s*serviceKey:\\s*'([^']+)'\\s*,\\s*title:\\s*'([^']+)'\\s*,\\s*probes:\\s*\\[([^\\]]*)\\][\\s\\S]*?mode:\\s*'(first|union)'\\s*,\\s*\\}\\)/gu;
+  const pattern = /freezeProfile\(\{\s*serviceKey:\s*'([^']+)'\s*,\s*title:\s*'([^']+)'\s*,\s*probes:\s*\[([^\]]*)\][\s\S]*?mode:\s*'(first|union)'\s*,\s*\}\)/gu;
   return Object.freeze([...source.matchAll(pattern)].map((match) => Object.freeze({
     serviceKey: match[1], title: match[2], probes: parseQuotedArray(match[3]), mode: match[4],
   })));
@@ -66,7 +66,7 @@ export const parseFastAccessProfiles = (source) => {
 export const parseIconServiceAliases = (source, errors = []) => {
   let parsed;
   try {
-    parsed = JSON.parse(source.replace(/^\\uFEFF/u, ''));
+    parsed = JSON.parse(source.replace(/^\uFEFF/u, ''));
   } catch (error) {
     errors.push(finding('invalid-json', REQUIRED_PATHS.icons, `icon registry JSON is invalid: ${error instanceof Error ? error.message : String(error)}`));
     return new Map();
@@ -191,20 +191,20 @@ const requirePatterns = (files, file, contracts, errors) => {
 
 const checkPlanAskiOnlyContracts = (files, errors) => {
   const factory = requirePatterns(files, REQUIRED_PATHS.businessFactory, [
-    { id: 'missing-kent-rehberi-business-route', pattern: /createKentRehberiFastAccessBusiness\\(serviceKey\\)/u, message: 'all supported fast-access queries must route through the PlanASKI runtime' },
-    { id: 'missing-unsupported-profile-guard', pattern: /if\\s*\\(!business\\)\\s*\\{/u, message: 'unknown services must fail closed instead of falling back to another API' },
+    { id: 'missing-kent-rehberi-business-route', pattern: /createKentRehberiFastAccessBusiness\(serviceKey\)/u, message: 'all supported fast-access queries must route through the PlanASKI runtime' },
+    { id: 'missing-unsupported-profile-guard', pattern: /if\s*\(!business\)\s*\{/u, message: 'unknown services must fail closed instead of falling back to another API' },
     { id: 'missing-unsupported-profile-error', pattern: /No PlanASKI Kent Rehberi profile is registered/u, message: 'unsupported service failures must clearly identify missing PlanASKI profiles' },
   ], errors);
-  if (/createFastAccessBusiness|legacyBusiness|FastAccessQueryBusiness\\.QueryFastAccessService/u.test(factory)) {
+  if (/createFastAccessBusiness|legacyBusiness|FastAccessQueryBusiness\.QueryFastAccessService/u.test(factory)) {
     errors.push(finding('legacy-fast-access-fallback', REQUIRED_PATHS.businessFactory, 'legacy API fallback must not be reachable from the active client'));
   }
 
   requirePatterns(files, REQUIRED_PATHS.runtime, [
     { id: 'missing-type-catalog-fetch', pattern: /fetchKentRehberiTypeCatalog/u, message: 'fast-access resolution must use the bounded PlanASKI type catalog' },
     { id: 'missing-catalog-classifier', pattern: /resolveKentRehberiTypesFromCatalog/u, message: 'profiles must be classified against PlanASKI catalog samples' },
-    { id: 'missing-catalog-first-resolution', pattern: /await\\s+resolveCatalogTypes\\(profile,\\s*control\\)/u, message: 'type catalog must be queried before bounded text probes' },
-    { id: 'missing-bounded-category-limit', pattern: /const\\s+CATEGORY_LIMIT\\s*=\\s*2000/u, message: 'category requests must remain bounded to 2000 records' },
-    { id: 'missing-fast-access-source-tag', pattern: /KENT_REHBERI_FAST_ACCESS_SOURCE\\s*=\\s*'kent-rehberi'/u, message: 'PlanASKI results must retain a stable source tag' },
+    { id: 'missing-catalog-first-resolution', pattern: /await\s+resolveCatalogTypes\(profile,\s*control\)/u, message: 'type catalog must be queried before bounded text probes' },
+    { id: 'missing-bounded-category-limit', pattern: /const\s+CATEGORY_LIMIT\s*=\s*2000/u, message: 'category requests must remain bounded to 2000 records' },
+    { id: 'missing-fast-access-source-tag', pattern: /KENT_REHBERI_FAST_ACCESS_SOURCE\s*=\s*'kent-rehberi'/u, message: 'PlanASKI results must retain a stable source tag' },
   ], errors);
 
   const transport = requirePatterns(files, REQUIRED_PATHS.transport, [
@@ -214,14 +214,14 @@ const checkPlanAskiOnlyContracts = (files, errors) => {
     { id: 'missing-response-budget', pattern: /maxPayloadBytes/u, message: 'the browser transport must keep a response-size budget' },
     { id: 'missing-abort-controller', pattern: /AbortController/u, message: 'the browser transport must support abort/timeout cancellation' },
   ], errors);
-  if (/runtimeConfig|apiBaseUrl|credentials:\\s*['"]same-origin|\\/kent-rehberi\\/types|buildKentRehberiRequestPath/u.test(transport)) {
+  if (/runtimeConfig|apiBaseUrl|credentials:\s*['"]same-origin|\/kent-rehberi\/types|buildKentRehberiRequestPath/u.test(transport)) {
     errors.push(finding('legacy-kent-rehberi-transport', REQUIRED_PATHS.transport, 'Kent Rehberi transport must not retain same-origin API/proxy fallbacks'));
   }
 
   requirePatterns(files, REQUIRED_PATHS.directTransport, [
-    { id: 'missing-fixed-planaski-host', pattern: /https:\\/\\/planaski\\.ankara\\.bel\\.tr\\/kentrehberiapi\\/api\\/kentrehberi/u, message: 'browser endpoint must be pinned to the official PlanASKI host and path' },
-    { id: 'missing-tur-range', pattern: /const\\s+MIN_TYPE\\s*=\\s*0[\\s\\S]*const\\s+MAX_TYPE\\s*=\\s*42/u, message: 'PlanASKI tur values must remain bounded to 0..42' },
-    { id: 'missing-tur-query', pattern: /\\?tur=/u, message: 'all direct source requests must select an explicit tur category' },
+    { id: 'missing-fixed-planaski-host', pattern: /https:\/\/planaski\.ankara\.bel\.tr\/kentrehberiapi\/api\/kentrehberi/u, message: 'browser endpoint must be pinned to the official PlanASKI host and path' },
+    { id: 'missing-tur-range', pattern: /const\s+MIN_TYPE\s*=\s*0[\s\S]*const\s+MAX_TYPE\s*=\s*42/u, message: 'PlanASKI tur values must remain bounded to 0..42' },
+    { id: 'missing-tur-query', pattern: /\?tur=/u, message: 'all direct source requests must select an explicit tur category' },
     { id: 'missing-upstream-byte-budget', pattern: /MAX_BYTES_PER_TYPE/u, message: 'response bytes per category must be bounded' },
     { id: 'missing-upstream-concurrency', pattern: /MAX_IN_FLIGHT/u, message: 'concurrent upstream category requests must be limited' },
     { id: 'missing-upstream-abort', pattern: /AbortController/u, message: 'upstream fetch and catalog collection must support cancellation' },
@@ -231,17 +231,17 @@ const checkPlanAskiOnlyContracts = (files, errors) => {
   }
 
   const vite = requirePatterns(files, REQUIRED_PATHS.vite, [
-    { id: 'missing-planaski-only-vite-mode', pattern: /envPrefix:\\s*\\[\\s*['"]VITE_['"]\\s*\\]/u, message: 'Vite must expose only public VITE environment values' },
+    { id: 'missing-planaski-only-vite-mode', pattern: /envPrefix:\s*\[\s*['"]VITE_['"]\s*\]/u, message: 'Vite must expose only public VITE environment values' },
   ], errors);
-  if (/resolveLocalApiProxyTarget|apiProxyTarget|['"]\\/api['"]|target:\\s*apiProxyTarget/u.test(vite)) {
+  if (/resolveLocalApiProxyTarget|apiProxyTarget|['"]\/api['"]|target:\s*apiProxyTarget/u.test(vite)) {
     errors.push(finding('legacy-local-api-proxy', REQUIRED_PATHS.vite, 'Vite must not proxy requests to a local User API'));
   }
 
   const configuration = requirePatterns(files, REQUIRED_PATHS.configurationBusiness, [
     { id: 'missing-static-map-configuration', pattern: /STATIC_MAP_CONFIGURATION/u, message: 'initial map configuration must be local and deterministic' },
-    { id: 'missing-empty-legacy-service-list', pattern: /GetConfigServices[\\s\\S]*?Object\\.freeze\\(\\[\\]\\)/u, message: 'legacy GIS service catalogue must remain empty' },
+    { id: 'missing-empty-legacy-service-list', pattern: /GetConfigServices[\s\S]*?Object\.freeze\(\[\]\)/u, message: 'legacy GIS service catalogue must remain empty' },
   ], errors);
-  if (/apiClient|AppSettings\\/List|Gis\\/ConfigService\\/List|resolveLocalBootstrapPreviewEnabled/u.test(configuration)) {
+  if (/apiClient|AppSettings\/List|Gis\/ConfigService\/List|resolveLocalBootstrapPreviewEnabled/u.test(configuration)) {
     errors.push(finding('legacy-configuration-api', REQUIRED_PATHS.configurationBusiness, 'startup configuration must not call an API or use preview fallback flags'));
   }
   const env = files[REQUIRED_PATHS.envExample] ?? '';
@@ -269,7 +269,7 @@ const checkReleaseIntegration = (files, errors) => {
   }
   for (const workflow of [REQUIRED_PATHS.qualityWorkflow, REQUIRED_PATHS.releaseWorkflow]) {
     const source = readRequired(files, workflow, errors);
-    if (source && !/npm\\s+run\\s+quality:kent-rehberi-all-layers/u.test(source)) {
+    if (source && !/npm\s+run\s+quality:kent-rehberi-all-layers/u.test(source)) {
       errors.push(finding('missing-workflow-quality-gate', workflow, 'workflow must execute quality:kent-rehberi-all-layers'));
     }
   }
@@ -309,10 +309,10 @@ const isEntrypoint = import.meta.url === new URL(`file://${process.argv[1] ?? ''
 if (isEntrypoint) {
   const args = new Set(process.argv.slice(2));
   const result = auditKentRehberiAllLayersRepository();
-  if (args.has('--json')) process.stdout.write(`${JSON.stringify(result, null, 2)}\\n`);
+  if (args.has('--json')) process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   else {
-    for (const error of result.errors) process.stderr.write(`ERROR [${error.id}] ${error.file}: ${error.message}\\n`);
-    process.stdout.write(`Kent Rehberi all-layer audit checked ${result.checkedFiles.length} files and ${result.sidebarItems} sidebar layers: ${result.errors.length} error(s).\\n`);
+    for (const error of result.errors) process.stderr.write(`ERROR [${error.id}] ${error.file}: ${error.message}\n`);
+    process.stdout.write(`Kent Rehberi all-layer audit checked ${result.checkedFiles.length} files and ${result.sidebarItems} sidebar layers: ${result.errors.length} error(s).\n`);
   }
   if (args.has('--strict') && !result.ok) process.exit(1);
 }
