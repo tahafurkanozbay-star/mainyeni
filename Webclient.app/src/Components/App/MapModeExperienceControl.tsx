@@ -240,12 +240,8 @@ export function MapModeExperienceControl({
         </button>
       </div>
 
-      <div className="map-mode-experience__status" role={statusRole} aria-live={presentation.livePoliteness} aria-atomic="true">
-        <span className="map-mode-experience__status-dot" aria-hidden="true" />
-        <span className="map-mode-experience__status-copy">
-          <strong>{transitionDetail(snapshot)}</strong>
-          <span className="experience-sr-only">{snapshot.announcement}</span>
-        </span>
+      <div className="experience-sr-only" role={statusRole} aria-live={presentation.livePoliteness} aria-atomic="true">
+        {transitionDetail(snapshot)} {snapshot.announcement}
       </div>
 
       {snapshot.phase === 'error' ? (
