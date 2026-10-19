@@ -331,6 +331,3 @@ export const fetchPlanAskiTypeCatalogDirect = async (
   return { types };
 };
 
-// Explicit mode switch: production's existing API transport remains intact.
-export const isDirectPlanAskiSource = (): boolean =>
-  String(import.meta.env.VITE_KENT_REHBERI_SOURCE ?? '').toLowerCase() === 'planaski';
