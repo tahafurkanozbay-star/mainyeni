@@ -29,7 +29,7 @@ describe('map experience layout collision contract', () => {
     expect(mapComponent).toContain('QUERY_WINDOW_DEFINITIONS.map');
     expect(sidebarComponent).toContain('className="kr-sidebar__tool-slot"');
     expect(sidebarCss).toContain(':has(.kr-sidebar__tool-slot > .sidebar-container[aria-hidden="false"])');
-    expect(sidebarCss).toMatch(/\\.kr-sidebar--governed:has\\([\\s\\S]*?\\) \.kr-sidebar__panel,?[\\s\\S]*?\\{\\s*display: none;/u);
+    expect(sidebarCss).toMatch(/\.kr-sidebar--governed:has\([\s\S]*?\)\s+\.kr-sidebar__panel,?[\s\S]*?\{\s*display: none;/u);
   });
 
 
