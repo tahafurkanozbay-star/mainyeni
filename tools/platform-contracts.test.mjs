@@ -78,12 +78,6 @@ async function fixture(overrides = {}) {
     'Webclient.app/src/main.tsx': 'export {};\n',
     'Webclient.app/vite.config.ts': 'export default {};\n',
     'Webclient.app/vitest.config.ts': 'export default {};\n',
-    'global.json': JSON.stringify({
-      sdk: { version: '10.0.401', rollForward: 'latestPatch', allowPrerelease: false },
-      test: { runner: 'Microsoft.Testing.Platform' },
-    }),
-    'Directory.Build.props': '<Project><PropertyGroup><TargetFramework>net10.0</TargetFramework><LangVersion>14.0</LangVersion><Nullable>annotations</Nullable><EnableNETAnalyzers>true</EnableNETAnalyzers><AnalysisLevel>latest</AnalysisLevel><Deterministic>true</Deterministic><RestoreAuditMode>all</RestoreAuditMode><RestoreAuditLevel>moderate</RestoreAuditLevel><WarningsAsErrors>$(WarningsAsErrors);NU1903;NU1904</WarningsAsErrors></PropertyGroup></Project>',
-    'Directory.Packages.props': '<Project><PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup></Project>',
     ...overrides,
   };
 
@@ -96,14 +90,13 @@ async function fixture(overrides = {}) {
   return root;
 }
 
-test('accepts the modern platform baseline while surfacing staged nullable migration', async (t) => {
+test('accepts the modern frontend toolchain baseline without requiring a backend toolchain', async (t) => {
   const root = await fixture();
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const report = await runPlatformContracts(root);
   assert.equal(report.summary.errors, 0);
   assert.equal(report.summary.passed, true);
   assert.ok(report.findings.some((finding) => finding.code === 'typescript-legacy-js-bridge'));
-  assert.ok(report.findings.some((finding) => finding.code === 'dotnet-nullable-staged'));
 });
 
 test('fails when a typecheck script references a missing project', async (t) => {
@@ -151,19 +144,6 @@ test('rejects CRA commands and downgraded modern toolchain dependencies', async 
   assert.ok(codes.has('engine-node-version'));
   assert.equal(report.summary.passed, false);
 });
-
-test('rejects a globally disabled nullable context and weakened NuGet vulnerability gate', async (t) => {
-  const root = await fixture({
-    'Directory.Build.props': '<Project><PropertyGroup><TargetFramework>net10.0</TargetFramework><LangVersion>14.0</LangVersion><Nullable>disable</Nullable><EnableNETAnalyzers>true</EnableNETAnalyzers><AnalysisLevel>latest</AnalysisLevel><Deterministic>true</Deterministic><RestoreAuditMode>all</RestoreAuditMode><RestoreAuditLevel>moderate</RestoreAuditLevel><WarningsAsErrors>NU1903</WarningsAsErrors></PropertyGroup></Project>',
-  });
-  t.after(() => fs.rm(root, { recursive: true, force: true }));
-  const report = await runPlatformContracts(root);
-  const codes = new Set(report.findings.map((finding) => finding.code));
-  assert.ok(codes.has('dotnet-nullable-disabled'));
-  assert.ok(codes.has('dotnet-vulnerability-gate'));
-  assert.equal(report.summary.passed, false);
-});
-
 
 test('rejects Platform TypeScript boundary when allowJs is not explicitly disabled', async (t) => {
   const root = await fixture({
