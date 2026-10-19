@@ -11,22 +11,12 @@ export interface DefaultPlatformGovernanceOptions extends PlatformGovernanceKern
 
 const registerRuntimeConfigSchema = (kernel: PlatformGovernanceKernel): void => {
   kernel.config.register({
-    key: 'api-base-url',
-    aliases: ['api_base_url'],
-    kind: 'string',
-    required: true,
-    minLength: 1,
-    maxLength: 240,
-    pattern: /^\/(?!\/)/u,
-    description: 'Canonical same-origin API base path.',
-  });
-  kernel.config.register({
     key: 'request-timeout-ms',
     kind: 'integer',
     required: true,
     minimum: 1_000,
     maximum: 60_000,
-    description: 'Upper bound for application API request lifetime.',
+    description: 'Upper bound for generic request lifetime.',
   });
   kernel.config.register({
     key: 'cache-ttl-ms',
@@ -34,7 +24,7 @@ const registerRuntimeConfigSchema = (kernel: PlatformGovernanceKernel): void => 
     required: true,
     minimum: 0,
     maximum: 600_000,
-    description: 'Default bounded API cache TTL.',
+    description: 'Default bounded request cache TTL.',
   });
   kernel.config.register({
     key: 'max-retries',
@@ -42,7 +32,7 @@ const registerRuntimeConfigSchema = (kernel: PlatformGovernanceKernel): void => 
     required: true,
     minimum: 0,
     maximum: 4,
-    description: 'Maximum API retry attempts.',
+    description: 'Maximum request retry attempts.',
   });
   kernel.config.register({
     key: 'environment',
@@ -201,7 +191,6 @@ const registerReadiness = (kernel: PlatformGovernanceKernel): void => {
 };
 
 const configSource = (config: RuntimeConfig): Readonly<Record<string, unknown>> => Object.freeze({
-  'api-base-url': config.apiBaseUrl,
   'request-timeout-ms': config.requestTimeoutMs,
   'cache-ttl-ms': config.cacheTtlMs,
   'max-retries': config.maxRetries,
