@@ -56,6 +56,27 @@ describe('arcgisEsmTransport', () => {
     expect(importer).toHaveBeenNthCalledWith(2, '@arcgis/core/rest/identify.js');
     expect(transport.name).toBe('arcgis-core-esm');
   });
+  it('applies an optional browser API key before importing ArcGIS service modules', async () => {
+    const esriConfig: { apiKey?: string } = {};
+    const importer = vi.fn(async (specifier: string) => {
+      if (specifier === '@arcgis/core/config.js') return { default: esriConfig };
+      return { default: class ArcgisModule {} };
+    });
+    const transport = createArcgisEsmTransport(importer, 'restricted-browser-key');
+
+    await transport.loadModules(['esri/Map']);
+
+    expect(importer).toHaveBeenNthCalledWith(1, '@arcgis/core/config.js');
+    expect(esriConfig.apiKey).toBe('restricted-browser-key');
+    expect(importer).toHaveBeenNthCalledWith(2, '@arcgis/core/Map.js');
+
+    transport.configure?.({ apiKey: 'rotated-browser-key' });
+    await transport.loadModules(['esri/views/SceneView']);
+    expect(esriConfig.apiKey).toBe('rotated-browser-key');
+    expect(importer).toHaveBeenNthCalledWith(3, '@arcgis/core/config.js');
+    expect(importer).toHaveBeenNthCalledWith(4, '@arcgis/core/views/SceneView.js');
+  });
+
   it('adapts removed watchUtils, QueryTask and projection APIs onto modern 5.x modules', async () => {
     const handle = { remove: vi.fn() };
     const watch = vi.fn(() => handle);
