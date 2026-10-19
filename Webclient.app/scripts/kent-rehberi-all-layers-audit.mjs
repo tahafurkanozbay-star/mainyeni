@@ -2,9 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// The production client has a single live data dependency: direct browser
-// requests to the official PlanASKI Kent Rehberi endpoint. This audit guards
-// the complete category/profile/icon contract without requiring a local API.
+// Kent Rehberi POI/category queries remain pinned to the official PlanASKI endpoint.
+// The optional TomTom traffic-flow raster overlay is a separate visual map layer;
+// it does not replace or participate in fast-access service/category queries.
+// This audit guards the PlanASKI category/profile/icon contract without a local API.
 const REQUIRED_PATHS = Object.freeze({
   sidebar: 'src/Components/App/SidebarCatalog.ts',
   windows: 'src/Components/Common/QueryWindowRegistry.tsx',
