@@ -17,12 +17,13 @@ Tarayıcı tarafında özel `/api` proxy'si veya kimlik bilgisi iletimi yoktur. 
 - `Webclient.app/` — yayımlanan web uygulaması, UI, ArcGIS motoru, PlanASKI taşıması, testler ve Vite/TypeScript yapılandırmaları.
 - `Operations/` — statik IIS paketini üreten ve yayımlayan PowerShell betikleri.
 - `docs/` — mimari, veri kaynağı ve dağıtım belgeleri.
+- `archive/` — derleme/deploy dışındaki eski kaynak ve prototiplerin geri alınabilir arşivi.
 - `progress/` — kısa güncel görev/devam kaydı; ayrıntılı eski kayıtlar `progress/archive/` altındadır.
 - `_docs/` — derlemeye girmeyen tarihsel görsel referansı; canlı uygulama varlıkları `Webclient.app/public/` altındadır.
 - `database/archive/` — kaldırılan API mimarisine ait tarihsel SQL referansı; aktif yayın girdisi değildir.
 - `quality/` ve `tools/` — sürüm kalite denetimleri, mimari sözleşmeler ve CI araçları.
-- `KentRehberi/webclient/` — ayrı GIS çekirdek modülünün test ve kalite iş akışı; ana statik SPA ile aynı dağıtım paketi değildir.
-- `WebClient/` — ayrı tutulan GIS deneyim/politika kaynakları; üretim SPA'sının giriş noktası olarak kullanılmaz ve bağımsız kalite/bağımlılık kanıtı olmadan aktif uygulamaya taşınmamalıdır.
+- `KentRehberi/webclient/` — etkin GIS çekirdek modülü; `gis-core-quality.yml` bu ağacı TypeScript, lint ve Vitest kontrollerinden geçirir. Kaynaklar ana statik SPA'nın dağıtım paketine doğrudan kopyalanmaz.
+- `archive/legacy-gis-policies/` — eski `WebClient/src/gis` deneyim/politika prototiplerinin dondurulmuş arşivi. Paket/tsconfig/CI bağlantısı bulunmadığı için etkin kaynak köklerinden çıkarıldı; üretim dağıtımına girmez.
 
 Kaldırılmış API dağıtım zinciri için gereken .NET projeleri artık statik web istemcisinin yayımlanma adımında kullanılmaz. Eski IIS sunucusunda kalmış `/api` eşlemesi veya fiziksel `user` klasörü kaynak kod değişikliğiyle otomatik kaldırılmaz; canlı sunucu üzerindeki ayrı bakım çalışmasında doğrulanmalıdır.
 
