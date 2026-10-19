@@ -226,8 +226,8 @@ const checkPlanAskiOnlyContracts = (files, errors) => {
     { id: 'missing-upstream-concurrency', pattern: /MAX_IN_FLIGHT/u, message: 'concurrent upstream category requests must be limited' },
     { id: 'missing-upstream-abort', pattern: /AbortController/u, message: 'upstream fetch and catalog collection must support cancellation' },
   ], errors);
-  if (/VITE_API_URL|VITE_API_BASE_URL|VITE_API_PROXY_TARGET|VITE_LOCAL_BOOTSTRAP_PREVIEW|VITE_PUBLIC_MAP_ONLY_MODE/u.test(files[REQUIRED_PATHS.envExample] ?? '')) {
-    errors.push(finding('legacy-api-env-keys', REQUIRED_PATHS.envExample, 'static-only release must not configure API, proxy or preview flags'));
+  if (/VITE_API_URL|VITE_API_BASE_URL|VITE_API_PROXY_TARGET|VITE_LOCAL_BOOTSTRAP_PREVIEW|VITE_PUBLIC_MAP_ONLY_MODE|VITE_KENT_REHBERI_SOURCE/u.test(files[REQUIRED_PATHS.envExample] ?? '')) {
+    errors.push(finding('legacy-runtime-env-keys', REQUIRED_PATHS.envExample, 'static-only release must not configure API/proxy settings or an unnecessary source-mode flag'));
   }
 
   const vite = requirePatterns(files, REQUIRED_PATHS.vite, [
@@ -243,10 +243,6 @@ const checkPlanAskiOnlyContracts = (files, errors) => {
   ], errors);
   if (/apiClient|AppSettings\/List|Gis\/ConfigService\/List|resolveLocalBootstrapPreviewEnabled/u.test(configuration)) {
     errors.push(finding('legacy-configuration-api', REQUIRED_PATHS.configurationBusiness, 'startup configuration must not call an API or use preview fallback flags'));
-  }
-  const env = files[REQUIRED_PATHS.envExample] ?? '';
-  if (!/VITE_KENT_REHBERI_SOURCE=planaski/u.test(env)) {
-    errors.push(finding('missing-planaski-source-env', REQUIRED_PATHS.envExample, 'local environment template must pin the direct PlanASKI source'));
   }
 };
 
