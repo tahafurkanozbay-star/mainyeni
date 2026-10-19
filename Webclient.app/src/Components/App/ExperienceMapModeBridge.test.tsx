@@ -130,7 +130,7 @@ vi.mock('./sceneControlsPlacementPolicy', () => ({
 }));
 
 const mapView = {
-  map: { id: 'shared-map', basemap: { id: 'osm' }, ground: 'world-elevation' },
+  map: { id: 'shared-map', basemap: { id: 'osm' } },
   padding: {},
   destroyed: false,
   popup: {},

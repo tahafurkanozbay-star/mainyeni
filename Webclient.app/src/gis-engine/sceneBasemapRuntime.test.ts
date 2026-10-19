@@ -76,7 +76,7 @@ describe('SceneBasemapRuntime', () => {
     const current = { id: 'osm' };
     const selected = { id: 'gray-vector' };
     const map: SceneBasemapMap = { basemap: current };
-    const sceneBasemap = makeBasemap('streets-3d');
+    const sceneBasemap = makeBasemap('openstreetmap-3d');
     let finishLoad: () => void = () => undefined;
     sceneBasemap.load = vi.fn(() => new Promise<void>((resolve) => { finishLoad = resolve; }));
     const { runtime } = createRuntime(sceneBasemap);
