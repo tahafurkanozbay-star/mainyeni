@@ -323,7 +323,7 @@ describe('ExperienceUXLayer', () => {
 
     dispatchHelpCommand();
     expect(screen.getByRole('dialog', { name: 'Hızlı kullanım' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Genel arama.*Aç/i })).toBeInTheDocument();
+    expect(within(screen.getByRole('dialog', { name: 'Hızlı kullanım' })).getByRole('button', { name: /Genel arama.*Aç/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Katmanlar/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Lejand/i })).not.toBeInTheDocument();
     expect(manager.ShowWindow).not.toHaveBeenCalled();

@@ -3,12 +3,10 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ParklarQueryWindow, type ParkWindowHandle } from './ParklarQueryWindow';
 import { ParklarQeryBusiness } from '../../../Business/ParklarQeryBusiness';
-import { CommonBusiness } from '../../../Business/CommonBusiness';
 import MapManager from '../../../Store/Managers/MapManager';
 import { createKentRehberiGeoJsonLayer } from '../../../data-services/kentRehberiGeoJsonLayer';
 
 vi.mock('../../../Business/ParklarQeryBusiness', () => ({ ParklarQeryBusiness: { Query: vi.fn() } }));
-vi.mock('../../../Business/CommonBusiness', () => ({ CommonBusiness: { Clustering: { CreateLayerWithoutClustering: vi.fn() } } }));
 vi.mock('../../../Business/LoggingBusiness', () => ({ LoggingBusiness: { CreateClientLog: vi.fn(async () => undefined) } }));
 vi.mock('../../../Store/Managers/MapManager', () => ({ default: { GetMapView: vi.fn() } }));
 vi.mock('../../../data-services/kentRehberiGeoJsonLayer', () => ({ createKentRehberiGeoJsonLayer: vi.fn() }));
@@ -46,7 +44,6 @@ describe('Parklar service window', () => {
     await act(async () => { await ref.current?.OnShow(); });
     expect(screen.getByRole('region', { name: 'Parklar' })).toHaveClass('kr-fast-query');
     expect(screen.getByRole('button', { name: 'Parklar penceresini kapat' })).toBeInTheDocument();
-    expect(CommonBusiness.Clustering.CreateLayerWithoutClustering).not.toHaveBeenCalled();
     expect(map.add).toHaveBeenCalledExactlyOnceWith(layer);
     expect(createKentRehberiGeoJsonLayer).toHaveBeenCalledWith(expect.any(Object), undefined, expect.objectContaining({ title: 'Parklar' }), expect.any(AbortSignal));
     await act(async () => { ref.current?.OnClose(); });

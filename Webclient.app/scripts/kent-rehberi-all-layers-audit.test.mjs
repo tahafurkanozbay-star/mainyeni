@@ -74,7 +74,9 @@ const validFixture = () => {
     [PATHS.businessFactory]: `
       import { createKentRehberiFastAccessBusiness } from './kentRehberiFastAccessRuntime';
       const business = createKentRehberiFastAccessBusiness(serviceKey);
-      if (!business) throw new Error('No PlanASKI Kent Rehberi profile is registered');
+      if (!business) {
+         throw new Error('No PlanASKI Kent Rehberi profile is registered');
+       }
     `,
     [PATHS.runtime]: `
       import { fetchKentRehberiTypeCatalog } from '../data-services/kentRehberiGeoJsonLayer';

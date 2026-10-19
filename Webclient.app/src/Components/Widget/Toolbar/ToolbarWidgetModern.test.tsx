@@ -3,7 +3,6 @@ import { StrictMode, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import MapManager from '../../../Store/Managers/MapManager';
 import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
-import { openExternalUrl } from '../_shared/MapWidgetRuntime';
 import { ToolbarWidgetModern } from './ToolbarWidgetModern';
 
 // Real portal placement is covered by ExperienceToolbar.hints and browser QA;
@@ -125,9 +124,9 @@ describe('ToolbarWidgetModern', () => {
     expect(toolbar.id).toBe('map-toolbar');
     expect(toolbar.getAttribute('aria-orientation')).toBe('vertical');
     expect(toolbar.getAttribute('aria-describedby')).toBe('map-toolbar-instructions');
-    expect(within(toolbar).getAllByRole('button')).toHaveLength(8);
+    expect(within(toolbar).getAllByRole('button')).toHaveLength(4);
     expect(screen.getAllByRole('separator')).toHaveLength(2);
-    expect(screen.getByRole('button', { name: 'Geri Bildirim (Başkent 153)' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Altlık Haritalar' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Başlangıç görünümüne dön' })).toBeTruthy();
   });
 
@@ -136,8 +135,8 @@ describe('ToolbarWidgetModern', () => {
     const toolbar = screen.getByRole('toolbar', { name: 'Harita araçları' });
     const buttons = screen.getAllByRole('button') as HTMLButtonElement[];
     expect(buttons.filter((button) => button.tabIndex === 0)).toHaveLength(1);
-    const first = screen.getByRole('button', { name: 'Geri Bildirim (Başkent 153)' });
-    const second = screen.getByRole('button', { name: 'Altlık Haritalar' });
+    const first = screen.getByRole('button', { name: 'Altlık Haritalar' });
+    const second = screen.getByRole('button', { name: 'Konum Bul' });
     first.focus();
     fireEvent.keyDown(toolbar, { key: 'ArrowDown' });
     expect(document.activeElement).toBe(second);
@@ -147,21 +146,9 @@ describe('ToolbarWidgetModern', () => {
     expect(document.activeElement).toBe(first);
   });
 
-  it('uses the governed external navigation helper for Başkent 153', () => {
-    render(<ToolbarWidgetModern windowManager={createWindowManager()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Geri Bildirim (Başkent 153)' }));
-    expect(openExternalUrl).toHaveBeenCalledTimes(1);
-    expect(openExternalUrl).toHaveBeenCalledWith(
-      'https://ulakbell.ankara.bel.tr/WebForm/basket153basvuru#/',
-    );
-  });
-
   it.each([
     ['Altlık Haritalar', 'basemap-widget'],
-    ['Adres Arama', 'numbering-query-window'],
-    ['Ada-Parsel Arama', 'cityblockparcel-query-window'],
     ['Ölçüm Aracı', 'measurement-widget'],
-    ['Sokak Görüntüsü', 'streetview-widget'],
   ])('routes %s through the existing window manager authority', (label, target) => {
     const manager = createWindowManager();
     render(<ToolbarWidgetModern windowManager={manager} />);

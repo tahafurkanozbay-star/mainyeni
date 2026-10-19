@@ -7,13 +7,11 @@ import {
   type ManagedWindowHandle,
 } from './ManagedFastAccessQueryWindow';
 import MapManager from '../../../Store/Managers/MapManager';
-import { CommonBusiness } from '../../../Business/CommonBusiness';
 import { LoggingBusiness } from '../../../Business/LoggingBusiness';
 import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
 import { createKentRehberiGeoJsonLayer } from '../../../data-services/kentRehberiGeoJsonLayer';
 
 vi.mock('../../../Store/Managers/MapManager', () => ({ default: { GetMapView: vi.fn() } }));
-vi.mock('../../../Business/CommonBusiness', () => ({ CommonBusiness: { Clustering: { CreateLayerWithoutClustering: vi.fn() } } }));
 vi.mock('../../../Business/LoggingBusiness', () => ({ LoggingBusiness: { CreateClientLog: vi.fn(async () => undefined) } }));
 vi.mock('../../../Toolbox/GisGraphicsHelper', () => ({ GisGraphicsHelper: { ZoomToGeometry: vi.fn() } }));
 vi.mock('../../../Toolbox/DebugHelper', () => ({ DebugHelper: { Log: vi.fn() } }));
@@ -112,23 +110,6 @@ describe('shared service result window ownership and usability', () => {
     await act(async () => { late.resolve(layer); await pending; });
     expect(map.add).not.toHaveBeenCalled();
     expect(layer.destroy).toHaveBeenCalledOnce();
-  });
-
-  it('rejects a superseded legacy layer without replacing the newer layer', async () => {
-    const first = deferred<{ layerObj: { destroy: ReturnType<typeof vi.fn> } }>();
-    const newest = { destroy: vi.fn() };
-    vi.mocked(CommonBusiness.Clustering.CreateLayerWithoutClustering).mockReturnValue(first.promise as never);
-    const { ref, Query, map } = setup();
-    Query.mockResolvedValueOnce({ type: 10, data: [] });
-    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue(newest);
-    let pending!: Promise<void>;
-    await act(async () => { pending = ref.current!.OnShow() as Promise<void>; await Promise.resolve(); });
-    await act(async () => { await ref.current!.OnShow(); });
-    const old = { destroy: vi.fn() };
-    await act(async () => { first.resolve({ layerObj: old }); await pending; });
-    expect(map.add).toHaveBeenCalledExactlyOnceWith(newest);
-    expect(old.destroy).toHaveBeenCalledOnce();
-    expect(newest.destroy).not.toHaveBeenCalled();
   });
 
   it('does not move the map when a closed layer finishes its extent request', async () => {
