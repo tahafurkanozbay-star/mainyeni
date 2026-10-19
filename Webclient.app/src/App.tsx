@@ -176,7 +176,6 @@ function App() {
             <MapComponent windowManager={windowManager} />
             <ExperienceWorkspace mapModeControl={mapViewAvailable ? <MapModeExperienceControl /> : <span className="experience-sr-only">Harita hazırlanıyor</span>} />
             <ExperienceUXLayer
-              windowManager={windowManager}
               notificationModel={notificationCenter}
             />
             <ExperienceDataDisclaimer />
