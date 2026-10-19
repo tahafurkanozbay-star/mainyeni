@@ -236,11 +236,13 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
       await act(async () => { dispatchMode('3d'); });
       await waitFor(() => expect(changedModes.filter((mode) => mode === '3d')).toHaveLength(2));
 
-      // The same SceneView is reused, but its DOM renderer is detached and
-      // attached again before 3B is published as active.
+      // Keep the same WebGL host attached across 3B → 2B → 3B transitions.
+      // Setting container=null can strand SceneView's renderer on a blank frame.
       expect(harness.views).toHaveLength(1);
-      expect(harness.containerAssignments.filter((value) => value === null)).toHaveLength(2);
+      expect(harness.containerAssignments.filter((value) => value === null)).toHaveLength(0);
       expect(harness.views[0]?.container).toBe(host);
+      expect(host).toHaveClass('is-active');
+      expect(container.querySelector('.experience-scene-controls')).toBeNull();
       expect(harness.resizeScene).toHaveBeenCalled();
       expect(harness.applyToSceneView).toHaveBeenCalledTimes(2);
     } finally {
