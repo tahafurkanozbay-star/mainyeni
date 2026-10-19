@@ -64,6 +64,10 @@ export const findUnsafeRootAssets = (html) => {
   return findings;
 };
 
+// TomTom's Traffic Flow key is a public browser key, not a server secret. Restrict it
+// to the production site origin and Traffic Flow API in the TomTom developer portal.
+const PUBLIC_BROWSER_API_KEY_ALLOWLIST = new Set(['VITE_TOMTOM_TRAFFIC_API_KEY']);
+
 export const validateEnvironmentExample = (source) => {
   const findings = [];
   for (const rawLine of source.split(/\r?\n/)) {
@@ -71,7 +75,8 @@ export const validateEnvironmentExample = (source) => {
     if (!line || line.startsWith('#')) continue;
     const key = line.split('=', 1)[0]?.trim() ?? '';
     if (key.startsWith('REACT_APP_')) findings.push(`legacy CRA environment key remains: ${key}`);
-    if (/(?:SECRET|TOKEN|PASSWORD|CLIENT_KEY|API_KEY|AUTHORIZATION)/i.test(key)) {
+    if (/(?:SECRET|TOKEN|PASSWORD|CLIENT_KEY|API_KEY|AUTHORIZATION)/i.test(key)
+        && !PUBLIC_BROWSER_API_KEY_ALLOWLIST.has(key)) {
       findings.push(`secret-like browser environment key is forbidden: ${key}`);
     }
     if (key && !key.startsWith('VITE_')) findings.push(`browser environment key must use VITE_ prefix: ${key}`);
@@ -168,6 +173,8 @@ const selfTest = () => {
   assert(findUnsafeRootAssets('<link rel="stylesheet" href="https://cdn.example.com/ui.css">').length === 1, 'remote stylesheet should fail');
   assert(findUnsafeRootAssets('<script src="https://cdn.example.com/app.js"></script>').length === 1, 'remote executable script should fail');
   assert(validateEnvironmentExample('VITE_API_URL=/api').length === 0, 'VITE example should pass');
+  assert(validateEnvironmentExample('VITE_TOMTOM_TRAFFIC_API_KEY=public-browser-key').length === 0, 'the explicitly allowed public TomTom browser key should pass');
+  assert(validateEnvironmentExample('VITE_OTHER_API_KEY=not-allowed').length > 0, 'unapproved browser API keys should remain forbidden');
   assert(validateEnvironmentExample('REACT_APP_API_URL=/api').length > 0, 'CRA key should fail');
   assert(validateGitignoreContract('Webclient.app/.env\n').length === 0, 'ignored local .env should pass');
   assert(validateGitignoreContract('node_modules\n').length > 0, 'missing env protection should fail');
