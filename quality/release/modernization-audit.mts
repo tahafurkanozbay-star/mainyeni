@@ -6,7 +6,7 @@ import {
   type Finding,
   type RepositoryInventory,
 } from './contracts.mts';
-import { collectManifestInventory } from './inventory.mts';
+import { collectManifestInventory, findFile } from './inventory.mts';
 import {
   auditModernizationPlatform,
   type ModernizationPlatformSummary,
