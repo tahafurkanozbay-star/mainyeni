@@ -241,7 +241,7 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
       expect(harness.views).toHaveLength(1);
       expect(harness.containerAssignments.filter((value) => value === null)).toHaveLength(0);
       expect(harness.views[0]?.container).toBe(host);
-      expect(host).toHaveClass('is-active');
+      await waitFor(() => expect(host).toHaveClass('is-active'));
       expect(container.querySelector('.experience-scene-controls')).toBeNull();
       expect(harness.resizeScene).toHaveBeenCalled();
       expect(harness.applyToSceneView).toHaveBeenCalledTimes(2);
