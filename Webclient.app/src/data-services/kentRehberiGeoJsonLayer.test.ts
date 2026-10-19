@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   attachKentRehberiGeoJsonLayer,
   createKentRehberiGeoJsonLayer,
+  createKentRehberiPopupContent,
   resolveKentRehberiOverviewIconKey,
   fetchKentRehberiFeature,
   fetchKentRehberiGeoJson,
@@ -42,6 +43,51 @@ describe('PlanASKI-only Kent Rehberi GeoJSON layer', () => {
     expect(resolveKentRehberiOverviewIconKey({ adi: 'Kütüphane' })).toBe('kutuphane');
     expect(resolveKentRehberiOverviewIconKey({ adi: 'Bilinmeyen bir nokta' })).toBe('default');
     expect(resolveKentRehberiOverviewIconKey({ adi: 'Otopark' })).toBe('default');
+  });
+
+  test('popup shows only the address and opens Google Maps actions for the selected point', () => {
+    const popup = createKentRehberiPopupContent({
+      graphic: {
+        attributes: {
+          adres: '  Kızılay\\nAnkara  ',
+          ilce: 'Çankaya',
+          mahalle: 'Kızılay',
+          objectid: 101,
+        },
+        geometry: { type: 'point', longitude: 32.854, latitude: 39.92 },
+      },
+    });
+
+    expect(popup.querySelector('.kent-rehberi-popup__address')?.textContent).toBe('Kızılay Ankara');
+    expect(popup.textContent).not.toContain('Adres:');
+    expect(popup.textContent).not.toContain('Çankaya');
+    expect(popup.textContent).not.toContain('101');
+
+    const links = [...popup.querySelectorAll('a')];
+    expect(links.map((link) => link.textContent)).toEqual(['Yol tarifi al', 'Sokak görünümü al']);
+    expect(links.every((link) => link.target === '_blank' && link.rel === 'noopener noreferrer')).toBe(true);
+
+    const directions = new URL(links[0].href);
+    expect(directions.origin).toBe('https://www.google.com');
+    expect(directions.pathname).toBe('/maps/dir/');
+    expect(directions.searchParams.get('api')).toBe('1');
+    expect(directions.searchParams.get('destination')).toBe('39.92,32.854');
+
+    const streetView = new URL(links[1].href);
+    expect(streetView.origin).toBe('https://www.google.com');
+    expect(streetView.searchParams.get('map_action')).toBe('pano');
+    expect(streetView.searchParams.get('viewpoint')).toBe('39.92,32.854');
+  });
+
+  test('popup falls back to an address for directions but does not invent a Street View coordinate', () => {
+    const popup = createKentRehberiPopupContent({
+      graphic: { attributes: { adres: 'Atatürk Bulvarı, Ankara' } },
+    });
+
+    const links = [...popup.querySelectorAll('a')];
+    expect(links.map((link) => link.textContent)).toEqual(['Yol tarifi al']);
+    const directions = new URL(links[0].href);
+    expect(directions.searchParams.get('destination')).toBe('Atatürk Bulvarı, Ankara');
   });
 
   test('attaches the overview with an SVG unique-value renderer', async () => {
