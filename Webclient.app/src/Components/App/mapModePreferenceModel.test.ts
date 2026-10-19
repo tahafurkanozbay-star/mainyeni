@@ -14,12 +14,12 @@ const createStorage = (initial: string | null = null): StorageLike & { values: M
 };
 
 describe('MapModePreferenceModel', () => {
-  it('starts with a deterministic 2B preference', () => {
+  it('starts with a deterministic 3B preference', () => {
     const model = createMapModePreferenceModel();
     expect(model.getSnapshot()).toMatchObject({
       revision: 0,
       phase: 'idle',
-      preferredMode: '2d',
+      preferredMode: '3d',
       runtimeMode: null,
       restoreTarget: null,
       restoreAttempted: false,
@@ -37,7 +37,7 @@ describe('MapModePreferenceModel', () => {
     const storage = createStorage(JSON.stringify({ lastMapMode: '7d' }));
     const model = createMapModePreferenceModel();
     model.hydrate(storage);
-    expect(model.getSnapshot().preferredMode).toBe('2d');
+    expect(model.getSnapshot().preferredMode).toBe('3d');
   });
 
   it('reports unavailable storage without throwing', () => {
@@ -70,12 +70,22 @@ describe('MapModePreferenceModel', () => {
     expect(model.getDiagnostics().restoreRequestCount).toBe(1);
   });
 
-  it('does not synthesize restore when runtime already matches preference', () => {
-    const storage = createStorage(JSON.stringify({ lastMapMode: '2d' }));
+  it('does not synthesize restore when runtime already matches the 3B startup mode', () => {
+    const storage = createStorage(JSON.stringify({ lastMapMode: '3d' }));
     const model = createMapModePreferenceModel();
     model.hydrate(storage);
-    expect(model.observeRuntimeMode('2d', 'map-runtime-ready', storage)).toBeNull();
-    expect(model.getSnapshot()).toMatchObject({ phase: 'synchronized', runtimeMode: '2d' });
+    expect(model.observeRuntimeMode('3d', 'map-runtime-ready', storage)).toBeNull();
+    expect(model.getSnapshot()).toMatchObject({ phase: 'synchronized', preferredMode: '3d', runtimeMode: '3d' });
+  });
+
+  it('overrides a previously saved 2B mode on fresh startup while preserving other preferences', () => {
+    const storage = createStorage(JSON.stringify({ lastMapMode: '2d', theme: 'dark' }));
+    const model = createMapModePreferenceModel();
+    model.hydrate(storage);
+    expect(model.getSnapshot().preferredMode).toBe('3d');
+    expect(model.observeRuntimeMode('2d', 'map-runtime-ready', storage)).toBe('3d');
+    expect(model.getSnapshot()).toMatchObject({ phase: 'restore-pending', restoreTarget: '3d' });
+    expect(JSON.parse(storage.values.get(EXPERIENCE_STORAGE_KEY) ?? '{}')).toMatchObject({ lastMapMode: '2d', theme: 'dark' });
   });
 
   it('persists a successful user-visible 3B mode event', () => {
@@ -134,7 +144,7 @@ describe('MapModePreferenceModel', () => {
     };
     const model = createMapModePreferenceModel();
     expect(() => model.hydrate(storage)).not.toThrow();
-    expect(model.getSnapshot()).toMatchObject({ phase: 'storage-unavailable', readFailureCount: 1, preferredMode: '2d' });
+    expect(model.getSnapshot()).toMatchObject({ phase: 'storage-unavailable', readFailureCount: 1, preferredMode: '3d' });
   });
 
   it('allows the one-shot restore guard to be reset explicitly', () => {
