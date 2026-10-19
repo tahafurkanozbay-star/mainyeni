@@ -493,7 +493,6 @@ export function ExperienceMapModeBridge({
     if (sceneLifetimeRef.current.signal.aborted) sceneLifetimeRef.current = new AbortController();
     activeModeRef.current = '2d';
     if (modeRef) modeRef.current = '2d';
-    publishMode('2d', 'map-runtime-ready');
 
     const onCommand = (event: Event) => {
       const detail = (event as CustomEvent<ExperienceCommandDetail>).detail;
@@ -516,6 +515,13 @@ export function ExperienceMapModeBridge({
 
     window.addEventListener(EXPERIENCE_COMMAND_EVENT, onCommand as EventListener);
     document.addEventListener('visibilitychange', onVisibilityChange, { passive: true });
+
+    // Make first-load 3D activation explicit and deterministic. Previously this
+    // depended on another component observing a transient 2D runtime event and
+    // dispatching a second command; if that hand-off was missed, the SceneView
+    // stayed hidden and the map appeared blank in the requested 3D experience.
+    void queueTransition('3d');
+
     return () => {
       window.removeEventListener(EXPERIENCE_COMMAND_EVENT, onCommand as EventListener);
       document.removeEventListener('visibilitychange', onVisibilityChange);

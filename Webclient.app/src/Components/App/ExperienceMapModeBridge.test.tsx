@@ -221,17 +221,16 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
     );
 
     try {
-      await waitFor(() => expect(changedModes).toContain('2d'));
-
-      await act(async () => { dispatchMode('3d'); });
+      // The SceneView must initialize and become visible on the first load.
       await waitFor(() => expect(changedModes.filter((mode) => mode === '3d')).toHaveLength(1));
       expect(harness.views).toHaveLength(1);
       const host = container.querySelector('.experience-scene-host');
       expect(host).not.toBeNull();
       expect(harness.views[0]?.container).toBe(host);
+      await waitFor(() => expect(host).toHaveClass('is-active'));
 
       await act(async () => { dispatchMode('2d'); });
-      await waitFor(() => expect(changedModes.filter((mode) => mode === '2d')).toHaveLength(2));
+      await waitFor(() => expect(changedModes.filter((mode) => mode === '2d')).toHaveLength(1));
 
       await act(async () => { dispatchMode('3d'); });
       await waitFor(() => expect(changedModes.filter((mode) => mode === '3d')).toHaveLength(2));

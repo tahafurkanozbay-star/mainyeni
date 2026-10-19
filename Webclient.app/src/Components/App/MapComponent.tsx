@@ -202,7 +202,8 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
   }, [accessibilityModel, recoveryModel]);
 
   return (
-    <div className="esri-map" id="esri-map-container" ref={mapDiv} tabIndex={-1} aria-label="Kent Rehberi ana harita çalışma alanı" aria-busy={accessibilitySnapshot.isBusy} data-workspace-phase={accessibilitySnapshot.phase}>
+    <div className="esri-map" id="esri-map-container" aria-label="Kent Rehberi ana harita çalışma alanı" aria-busy={accessibilitySnapshot.isBusy} data-workspace-phase={accessibilitySnapshot.phase}>
+      <div ref={mapDiv} className="experience-mapview-host" tabIndex={-1} aria-label="Kent Rehberi harita çizim alanı" />
       <div className="map-workspace-status" role={accessibilitySnapshot.phase === 'error' ? 'alert' : 'status'} aria-live={accessibilitySnapshot.phase === 'error' ? 'assertive' : 'polite'} aria-atomic="true">{accessibilitySnapshot.announcement}</div>
       <MapWorkspaceRecoverySurface model={recoveryModel} onRetry={restartMapWorkspace} />
       {mapView && <>

@@ -44,8 +44,8 @@ beforeEach(() => {
   runtime.load.mockImplementation(async () => [
     class Map { add = vi.fn(); },
     class MapView {
-      constructor(options: { map: unknown }) {
-        const view = { map: options.map, popup: {}, destroy: runtime.destroy, ...runtime.create() };
+      constructor(options: { map: unknown; container: HTMLElement }) {
+        const view = { map: options.map, container: options.container, popup: {}, destroy: runtime.destroy, ...runtime.create() };
         runtime.views.push(view); return view;
       }
     },
@@ -74,6 +74,21 @@ describe('real map workspace admission and recovery', () => {
     expect(screen.getByText('Araçlar hazır')).toBeVisible();
     expect(Store.getState().Map.MapView).toBe(runtime.views[0]);
     expect(document.getElementById('esri-map-container')).toHaveAttribute('data-workspace-phase', 'ready');
+  });
+  it('isolates the ArcGIS canvas from the 3D scene and UI overlays', async () => {
+    setup();
+    await screen.findByText('Araçlar hazır');
+
+    const root = document.getElementById('esri-map-container');
+    const canvasHost = root?.querySelector('.experience-mapview-host') as HTMLElement | null;
+    const status = root?.querySelector('.map-workspace-status');
+
+    expect(root).not.toBeNull();
+    expect(canvasHost).not.toBeNull();
+    expect(canvasHost?.parentElement).toBe(root);
+    expect((Store.getState().Map.MapView as unknown as { container?: HTMLElement })?.container).toBe(canvasHost);
+    expect(status?.parentElement).toBe(root);
+    expect(canvasHost?.contains(status as Node)).toBe(false);
   });
   it('disposes a failed view immediately and recovers without refreshing the page', async () => {
     const ready = deferred(); runtime.create.mockReturnValueOnce({ when: () => ready.promise });
