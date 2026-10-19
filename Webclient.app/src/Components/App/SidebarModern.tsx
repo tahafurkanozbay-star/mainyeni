@@ -271,10 +271,25 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
 
     const openPointPopup = (): void => {
       if (MapManager.GetMapView() !== view || view.destroyed) return;
+
+      // Render upstream text through textContent rather than treating it as
+      // popup markup. The public dataset can contain arbitrary address/name text.
+      const content = document.createElement('div');
+      const heading = document.createElement('strong');
+      heading.textContent = point.name;
+      content.append(heading);
+
+      const detailsText = point.address
+        || [point.district, point.neighborhood].filter(Boolean).join(' · ')
+        || 'Kent Rehberi noktası';
+      const details = document.createElement('p');
+      details.textContent = detailsText;
+      content.append(details);
+
       view.popup?.open?.({
         location: { longitude: point.longitude, latitude: point.latitude },
-        title: point.name,
-        content: point.address || [point.district, point.neighborhood].filter(Boolean).join(' · ') || 'Kent Rehberi noktası',
+        title: 'Nokta arama sonucu',
+        content,
       });
     };
 
