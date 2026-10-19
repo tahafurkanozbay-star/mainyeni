@@ -262,14 +262,9 @@ export const getRecordCategory = (
     ['Category', 'category', 'kategori', 'KATEGORI'],
     '',
   ));
-  // Preserve an explicit, top-level Category field for facet aggregation.
-  // Some legacy records carry generated "Kategori 34" values only in nested
-  // GIS attributes; those are technical fallbacks, not user-facing categories.
-  const explicitCategory = normalizeWhitespace(readFirstValue(record, ['Category', 'category'], ''));
-  if (
-    semanticCategory
-    && (!TECHNICAL_CATEGORY_LABEL.test(semanticCategory) || explicitCategory)
-  ) {
+  // Numeric/category-code labels are implementation details regardless of
+  // whether they arrive at the root or inside nested GIS attributes.
+  if (semanticCategory && !TECHNICAL_CATEGORY_LABEL.test(semanticCategory)) {
     return semanticCategory;
   }
 
