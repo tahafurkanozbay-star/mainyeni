@@ -482,7 +482,7 @@ describe('runtime config admission quantitative budgets', () => {
   test('rejects legacy source budget overflow', () => {
     const result = assessRuntimeConfigAdmission(resolveRuntimeConfig({
       VITE_RELEASE: 'r1',
-      REACT_APP_API_URL: '/api',
+      REACT_APP_TKGM_CITY_ID: '28',
       REACT_APP_REQUEST_TIMEOUT_MS: '5000',
       REACT_APP_CACHE_TTL_MS: '1000',
       REACT_APP_MAX_RETRIES: '2',
@@ -502,8 +502,8 @@ describe('runtime config admission quantitative budgets', () => {
       REACT_APP_ENV: 'legacy',
       VITE_RELEASE: 'r1',
       REACT_APP_RELEASE: 'legacy-r1',
-      VITE_API_URL: '/api',
-      REACT_APP_API_URL: '/legacy',
+      VITE_REQUEST_TIMEOUT_MS: '5000',
+      REACT_APP_REQUEST_TIMEOUT_MS: '7000',
     }), {
       maxShadowedSourceCount: 1,
     });
