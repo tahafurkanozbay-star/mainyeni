@@ -346,7 +346,7 @@
   border-color: var(--exp-border-strong, #94a3b8);
 }
 
-.kr-sidebar--governed.is-collapsed {
+.kr-sidebar.sidebar-container.kr-sidebar--governed.is-collapsed {
   width: 68px;
   min-width: 68px;
   max-width: 68px;
