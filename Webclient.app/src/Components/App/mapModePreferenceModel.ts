@@ -70,7 +70,7 @@ const createSnapshot = (input: Omit<MapModePreferenceSnapshot, 'announcement'>):
 const initialSnapshot = (): MapModePreferenceSnapshot => createSnapshot({
   revision: 0,
   phase: 'idle',
-  preferredMode: '2d',
+  preferredMode: '3d',
   runtimeMode: null,
   restoreTarget: null,
   restoreAttempted: false,
@@ -125,10 +125,15 @@ export class MapModePreferenceModel {
     }
 
     try {
-      this.#preferences = parseExperiencePreferences(storage.getItem(EXPERIENCE_STORAGE_KEY));
+      // A fresh page load always starts in 3D, even when the previous
+      // session ended in 2D. Other user preferences remain persisted.
+      this.#preferences = mergeExperiencePreferences(
+        parseExperiencePreferences(storage.getItem(EXPERIENCE_STORAGE_KEY)),
+        { lastMapMode: '3d' },
+      );
       this.#replace({
         phase: 'idle',
-        preferredMode: this.#preferences.lastMapMode,
+        preferredMode: '3d',
       });
     } catch {
       this.#preferences = normalizeExperiencePreferences(null);
