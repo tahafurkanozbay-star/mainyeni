@@ -340,7 +340,7 @@ export const fetchPlanAskiSvgOverviewDirect = async (
     }];
   });
   svgFeatures.sort((left, right) =>
-    Number(left.properties.objectid ?? 0) - Number(right.properties.objectid ?? 0));
+    (left.properties.objectid as number) - (right.properties.objectid as number));
 
   const features = svgFeatures.slice(0, 20_000);
   return {
