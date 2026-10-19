@@ -7,7 +7,6 @@ const dispatchHelpCommand = (): void => {
 };
 
 const mocks = vi.hoisted(() => ({
-  layerOnShow: vi.fn(),
   toggleTheme: vi.fn(),
   captureError: vi.fn(),
   themeState: { theme: 'light' as 'light' | 'dark' },
@@ -28,20 +27,6 @@ vi.mock('../../platform/runtime/runtimeDiagnostics', () => ({
   },
 }));
 
-vi.mock('../Widget/LayerList/LayerListWidget', async () => {
-  const ReactModule = await import('react');
-  return {
-    LayerListWidget: ReactModule.forwardRef((_props, ref) => {
-      ReactModule.useImperativeHandle(ref, () => ({
-        OnShow: mocks.layerOnShow,
-      }));
-      return ReactModule.createElement('div', {
-        'data-testid': 'layer-list-widget',
-      });
-    }),
-  };
-});
-
 const createWindowManager = () => ({
   ShowWindow: vi.fn(() => true),
   RegisterWindow: vi.fn(() => true),
@@ -61,7 +46,6 @@ const renderLayer = (manager = createWindowManager()) => {
 
 describe('ExperienceUXLayer', () => {
   beforeEach(() => {
-    mocks.layerOnShow.mockReset();
     mocks.toggleTheme.mockReset();
     mocks.captureError.mockReset();
     mocks.themeState.theme = 'light';
@@ -93,13 +77,13 @@ describe('ExperienceUXLayer', () => {
       name: 'Genel aramayı aç',
     })).toBeInTheDocument();
 
-    expect(screen.getByRole('button', {
+    expect(screen.queryByRole('button', {
       name: 'Katman yönetimini aç',
-    })).toBeInTheDocument();
+    })).not.toBeInTheDocument();
 
-    expect(screen.getByRole('button', {
+    expect(screen.queryByRole('button', {
       name: 'Lejandı aç',
-    })).toBeInTheDocument();
+    })).not.toBeInTheDocument();
 
     expect(screen.getByRole('button', {
       name: 'Bildirim merkezini aç',
@@ -123,22 +107,16 @@ describe('ExperienceUXLayer', () => {
     );
   });
 
-  test('routes layer and legend actions to the managed layer surface', () => {
+  test('does not render retired API-backed layer and legend controls', () => {
     const manager = createWindowManager();
     renderLayer(manager);
 
-    fireEvent.click(screen.getByRole('button', {
-      name: 'Katman yönetimini aç',
-    }));
-    fireEvent.click(screen.getByRole('button', {
-      name: 'Lejandı aç',
-    }));
-
-    expect(manager.ShowWindow).toHaveBeenCalledWith('layerlist-widget', { mode: 'layers' });
-    expect(manager.ShowWindow).toHaveBeenCalledWith('layerlist-widget', { mode: 'legend' });
+    expect(screen.queryByRole('button', { name: 'Katman yönetimini aç' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Lejandı aç' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('layer-list-widget')).not.toBeInTheDocument();
   });
 
-  test('responds to externally dispatched Experience commands', () => {
+  test('routes only supported externally dispatched Experience commands', () => {
     const manager = createWindowManager();
     renderLayer(manager);
 
@@ -146,11 +124,8 @@ describe('ExperienceUXLayer', () => {
     dispatchExperienceCommand('layers');
     dispatchExperienceCommand('legend');
 
-    expect(manager.ShowWindow).toHaveBeenCalledWith(
-      'genelarama-query-window',
-    );
-    expect(manager.ShowWindow).toHaveBeenCalledWith('layerlist-widget', { mode: 'layers' });
-    expect(manager.ShowWindow).toHaveBeenCalledWith('layerlist-widget', { mode: 'legend' });
+    expect(manager.ShowWindow).toHaveBeenCalledTimes(1);
+    expect(manager.ShowWindow).toHaveBeenCalledWith('genelarama-query-window');
   });
 
   test('collapses and expands utility copy without removing controls', () => {
@@ -342,19 +317,16 @@ describe('ExperienceUXLayer', () => {
     })).not.toBeInTheDocument();
   });
 
-  test('help action can open layers and closes the modal first', () => {
+  test('help dialog contains only supported direct-source actions', () => {
     const manager = createWindowManager();
     renderLayer(manager);
 
     dispatchHelpCommand();
-    fireEvent.click(screen.getByRole('button', {
-      name: /Katmanlar\s*Aç/i,
-    }));
-
-    expect(screen.queryByRole('dialog', {
-      name: 'Hızlı kullanım',
-    })).not.toBeInTheDocument();
-    expect(manager.ShowWindow).toHaveBeenCalledWith('layerlist-widget', { mode: 'layers' });
+    expect(screen.getByRole('dialog', { name: 'Hızlı kullanım' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Genel arama.*Aç/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Katmanlar/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Lejand/i })).not.toBeInTheDocument();
+    expect(manager.ShowWindow).not.toHaveBeenCalled();
   });
 
   test('theme control exposes the next action, delegates to the provider, and emits bounded feedback', () => {
