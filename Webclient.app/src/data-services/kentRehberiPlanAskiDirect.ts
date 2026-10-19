@@ -305,6 +305,54 @@ export const fetchPlanAskiGeoJsonDirect = async (
   };
 };
 
+/**
+ * Purpose-built, bounded startup snapshot for records that have registered SVG
+ * symbols. The general query endpoint keeps its 2,000-row contract; this
+ * collector filters the already bounded per-category responses and applies a
+ * separate fixed cap to SVG-resolvable records only.
+ */
+export const fetchPlanAskiSvgOverviewDirect = async (
+  options: KentRehberiFetchOptions,
+  resolveIconKey: (properties: Readonly<Record<string, unknown>>) => string,
+): Promise<KentRehberiGeoJsonFeatureCollection> => {
+  if (typeof resolveIconKey !== 'function') {
+    throw new TypeError('A Kent Rehberi SVG icon resolver is required.');
+  }
+
+  const q = requestFilter(options.q, 'q', 120, 2);
+  const ilce = requestFilter(options.ilce, 'ilce', 50, 1);
+  const mahalle = requestFilter(options.mahalle, 'mahalle', 50, 1);
+  const all = fullSet(await fetchCategories(options, options.tur));
+  const svgFeatures = all.flatMap((feature) => {
+    const properties = feature.properties;
+    if (
+      (ilce && normalizeName(properties.ilce) !== ilce)
+      || (mahalle && normalizeName(properties.mahalle) !== mahalle)
+      || (q && ![properties.adi, properties.adres, properties.ilce, properties.mahalle]
+        .some((field) => normalizeName(field).includes(q)))
+    ) return [];
+
+    const iconKey = resolveIconKey(properties);
+    if (!iconKey || iconKey === 'default') return [];
+    return [{
+      ...feature,
+      properties: Object.freeze({ ...properties, iconKey }),
+    }];
+  }).sort((left, right) =>
+    (left.properties.objectid as number) - (right.properties.objectid as number));
+
+  const features = svgFeatures.slice(0, 20_000);
+  return {
+    type: 'FeatureCollection',
+    features,
+    meta: {
+      count: features.length,
+      limit: 20_000,
+      hasMore: svgFeatures.length > features.length,
+    },
+  };
+};
+
 export const fetchPlanAskiFeatureDirect = async (
   objectId: number,
   options: KentRehberiFetchOptions = {},
