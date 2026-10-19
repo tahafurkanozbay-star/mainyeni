@@ -8,7 +8,10 @@ import {
   fetchPlanAskiTypeCatalogDirect,
   takePlanAskiPoiSearchIndex,
 } from './kentRehberiPlanAskiDirect';
-import { publishKentRehberiPoiSearchIndex } from './kentRehberiPoiSearchIndex';
+import {
+  publishKentRehberiPoiSearchIndex,
+  type KentRehberiPoiSearchInput,
+} from './kentRehberiPoiSearchIndex';
 
 const DEFAULT_LIMIT = 500;
 const MAX_LIMIT = 2000;
@@ -109,6 +112,11 @@ export interface KentRehberiGeoJsonFeatureCollection {
   readonly features: readonly KentRehberiGeoJsonFeature[];
   readonly meta?: JsonObject;
 }
+
+const pendingPointSearchIndexes = new WeakMap<
+  KentRehberiGeoJsonFeatureCollection,
+  readonly KentRehberiPoiSearchInput[]
+>();
 
 export interface KentRehberiTypeSample {
   readonly objectid: number;
@@ -449,13 +457,16 @@ export const fetchKentRehberiSvgOverviewGeoJson = async (
 
   const request = createRequestSignal(options.signal, timeoutMs);
   try {
-    return validateKentRehberiFeatureCollection(
-      await fetchPlanAskiSvgOverviewDirect(
-        { ...options, signal: request.signal },
-        resolveKentRehberiOverviewIconKey,
-      ),
-      20_000,
+    const rawCollection = await fetchPlanAskiSvgOverviewDirect(
+      { ...options, signal: request.signal },
+      resolveKentRehberiOverviewIconKey,
     );
+    const pendingSearchIndex = takePlanAskiPoiSearchIndex(rawCollection);
+    const collection = validateKentRehberiFeatureCollection(rawCollection, 20_000);
+    // Validation creates a safe copy of the GeoJSON collection; carry the
+    // compact index to that exact object so the layer can publish it after add.
+    if (pendingSearchIndex) pendingPointSearchIndexes.set(collection, pendingSearchIndex);
+    return collection;
   } finally {
     request.dispose();
   }
@@ -688,7 +699,8 @@ export const attachKentRehberiGeoJsonLayer = async (
   const geojson = isSvgOverview
     ? await fetchKentRehberiSvgOverviewGeoJson(options)
     : await fetchKentRehberiGeoJson(options);
-  const pointSearchRecords = isSvgOverview ? takePlanAskiPoiSearchIndex(geojson) : null;
+  const pointSearchRecords = isSvgOverview ? pendingPointSearchIndexes.get(geojson) ?? null : null;
+  if (isSvgOverview) pendingPointSearchIndexes.delete(geojson);
   if (options.signal?.aborted) throw createAbortError();
 
   const layer = await createKentRehberiGeoJsonLayer(
