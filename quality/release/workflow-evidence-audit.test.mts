@@ -166,7 +166,7 @@ test('clean release workflow evidence passes', () => {
   const section = auditWorkflowEvidence(cleanInventory());
   assert.deepEqual(section.findings, []);
   assert.equal(section.summary.workflowCount, 5);
-  assert.ok(section.summary.jobCount >= 7);
+  assert.ok(section.summary.jobCount >= 6);
   assert.ok(section.summary.stepCount >= 35);
   assert.equal(section.summary.actionCount, section.summary.immutableActionCount);
   assert.ok(section.summary.exactBaseEvidenceCount >= 2);

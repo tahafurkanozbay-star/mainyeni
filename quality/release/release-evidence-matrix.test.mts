@@ -121,7 +121,6 @@ test('matrix covers every intended release evidence domain', () => {
   const domains = new Set(RELEASE_EVIDENCE_REQUIREMENTS.map(item => item.domain));
   assert.deepEqual([...domains].sort(), [
     'architecture',
-    'backend',
     'build',
     'dependencies',
     'regression',

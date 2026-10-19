@@ -71,6 +71,321 @@ const exists = async (file) => {
 const readText = async (file) => fs.readFile(file, 'utf8');
 const readJson = async (file) => JSON.parse(await readText(file));
 
+const firstNumericMajor = (value) => {
+  const match = String(value ?? '').match(/(\d+)/);
+  return match ? Number.parseInt(match[1], 10) : Number.NaN;
+};
+
+const addFinding = (report, severity, code, message, file = null, detail = null) => {
+  report.findings.push(Object.freeze({ severity, code, message, file, detail }));
+};
+
+const compareMajor = (report, source, name, expectedMajor, file, codePrefix) => {
+  const spec = source?.[name];
+  if (!spec) {
+    addFinding(report, 'error', `${codePrefix}-missing`, `${name} must be declared for the modern platform baseline.`, file);
+    return;
+  }
+
+  const major = firstNumericMajor(spec);
+  if (!Number.isFinite(major) || major < expectedMajor) {
+    addFinding(
+      report,
+      'error',
+      `${codePrefix}-version`,
+      `${name} must use major version ${expectedMajor} or newer.`,
+      file,
+      { declared: spec, expectedMajor },
+    );
+  }
+};
+
+const collectTscProjects = (scripts = {}) => {
+  const projects = new Set();
+  for (const command of Object.values(scripts)) {
+    for (const segment of String(command).split(/&&|\|\|/)) {
+      if (!/\btsc\b/.test(segment)) continue;
+      const match = segment.match(/(?:--project|-p)\s+["']?([^"';&|\s]+)["']?/);
+      if (match?.[1]) projects.add(match[1]);
+    }
+  }
+  return [...projects].sort();
+};
+
+const resolveExtendedPath = (file, extended) => {
+  if (!extended.startsWith('.')) return null;
+  const candidate = path.resolve(path.dirname(file), extended);
+  return path.extname(candidate) ? candidate : `${candidate}.json`;
+};
+
+const resolveTsconfig = async (file, seen = new Set()) => {
+  const resolved = path.resolve(file);
+  if (seen.has(resolved)) throw new Error(`Circular tsconfig extends chain: ${resolved}`);
+
+  const nextSeen = new Set(seen);
+  nextSeen.add(resolved);
+  const config = await readJson(resolved);
+  let inherited = {};
+
+  if (typeof config.extends === 'string') {
+    const parentPath = resolveExtendedPath(resolved, config.extends);
+    if (parentPath) inherited = await resolveTsconfig(parentPath, nextSeen);
+  }
+
+  return {
+    ...inherited,
+    ...config,
+    compilerOptions: {
+      ...(inherited.compilerOptions || {}),
+      ...(config.compilerOptions || {}),
+    },
+    include: config.include ?? inherited.include,
+    exclude: config.exclude ?? inherited.exclude,
+  };
+};
+
+const validateCompilerOptions = (report, config, file, root) => {
+  const options = config.compilerOptions || {};
+  const display = relative(root, file);
+  const expectedTrue = [
+    'strict',
+    'noEmit',
+    'isolatedModules',
+    'noUncheckedIndexedAccess',
+    'useUnknownInCatchVariables',
+    'forceConsistentCasingInFileNames',
+  ];
+
+  for (const option of expectedTrue) {
+    if (options[option] !== true) {
+      addFinding(report, 'error', `tsconfig-${option}`, `TypeScript project must enable ${option}.`, display);
+    }
+  }
+
+  if (String(options.moduleResolution || '').toLowerCase() !== 'bundler') {
+    addFinding(
+      report,
+      'error',
+      'tsconfig-module-resolution',
+      'TypeScript project must use Bundler module resolution for the Vite runtime.',
+      display,
+      { declared: options.moduleResolution ?? null },
+    );
+  }
+
+  const targetMajor = firstNumericMajor(options.target);
+  if (!Number.isFinite(targetMajor) || targetMajor < 2022) {
+    addFinding(
+      report,
+      'error',
+      'tsconfig-target',
+      'TypeScript project target must be ES2022 or newer.',
+      display,
+      { declared: options.target ?? null },
+    );
+  }
+};
+
+const validateTypeScriptProjects = async (root, webRoot, packageJson, report) => {
+  const referenced = collectTscProjects(packageJson.scripts);
+
+  for (const expected of EXPECTED_TSC_PROJECTS) {
+    if (!referenced.includes(expected)) {
+      addFinding(
+        report,
+        'error',
+        'tsconfig-not-gated',
+        `${expected} must be executed by a package typecheck script.`,
+        relative(root, path.join(webRoot, 'package.json')),
+        { expected },
+      );
+    }
+  }
+
+  for (const project of referenced) {
+    const file = path.resolve(webRoot, project);
+    if (!await exists(file)) {
+      addFinding(
+        report,
+        'error',
+        'tsconfig-missing',
+        `Typecheck script references a missing TypeScript project: ${project}.`,
+        relative(root, path.join(webRoot, 'package.json')),
+        { project },
+      );
+      continue;
+    }
+
+    try {
+      const config = await resolveTsconfig(file);
+      validateCompilerOptions(report, config, file, root);
+    } catch (error) {
+      addFinding(
+        report,
+        'error',
+        'tsconfig-invalid',
+        `Unable to resolve ${project}.`,
+        relative(root, file),
+        { error: error instanceof Error ? error.message : String(error) },
+      );
+    }
+  }
+
+  const platformConfigPath = path.join(webRoot, 'tsconfig.platform.json');
+  if (await exists(platformConfigPath)) {
+    try {
+      const platformConfig = await resolveTsconfig(platformConfigPath);
+      if (platformConfig.compilerOptions?.allowJs !== false) {
+        addFinding(
+          report,
+          'error',
+          'tsconfig-platform-allow-js',
+          'Platform TypeScript boundary must explicitly disable allowJs after the typed runtime cutover.',
+          relative(root, platformConfigPath),
+        );
+      }
+    } catch (error) {
+      addFinding(
+        report,
+        'error',
+        'tsconfig-platform-invalid',
+        'Platform TypeScript configuration cannot be resolved.',
+        relative(root, platformConfigPath),
+        { error: error instanceof Error ? error.message : String(error) },
+      );
+    }
+  }
+
+  const rootConfigPath = path.join(webRoot, 'tsconfig.json');
+  if (await exists(rootConfigPath)) {
+    try {
+      const rootConfig = await resolveTsconfig(rootConfigPath);
+      const options = rootConfig.compilerOptions || {};
+      for (const option of ['exactOptionalPropertyTypes', 'verbatimModuleSyntax']) {
+        if (options[option] !== true) {
+          addFinding(
+            report,
+            'error',
+            `tsconfig-root-${option}`,
+            `Root TypeScript project must enable ${option}.`,
+            relative(root, rootConfigPath),
+          );
+        }
+      }
+
+      if (options.allowJs === true) {
+        addFinding(
+          report,
+          'warning',
+          'typescript-legacy-js-bridge',
+          'Root TypeScript still allows JavaScript imports. Keep this only while legacy consumers are actively migrating.',
+          relative(root, rootConfigPath),
+        );
+      }
+    } catch (error) {
+      addFinding(
+        report,
+        'error',
+        'tsconfig-root-invalid',
+        'Root TypeScript configuration cannot be resolved.',
+        relative(root, rootConfigPath),
+        { error: error instanceof Error ? error.message : String(error) },
+      );
+    }
+  }
+};
+
+const validateWebclient = async (root, report) => {
+  const webRoot = path.join(root, WEBCLIENT_DIR);
+  const packageFile = path.join(webRoot, 'package.json');
+
+  if (!await exists(packageFile)) {
+    addFinding(report, 'error', 'webclient-package-missing', 'Webclient.app/package.json is required.', WEBCLIENT_DIR);
+    return;
+  }
+
+  let packageJson;
+  try {
+    packageJson = await readJson(packageFile);
+  } catch (error) {
+    addFinding(
+      report,
+      'error',
+      'webclient-package-invalid',
+      'Webclient package.json must be valid JSON.',
+      relative(root, packageFile),
+      { error: error instanceof Error ? error.message : String(error) },
+    );
+    return;
+  }
+
+  if (packageJson.private !== true) {
+    addFinding(report, 'error', 'webclient-private', 'Application package must remain private.', relative(root, packageFile));
+  }
+  if (packageJson.type !== 'module') {
+    addFinding(report, 'error', 'webclient-esm', 'Application package must use native ESM.', relative(root, packageFile));
+  }
+
+  const scripts = packageJson.scripts || {};
+  for (const script of REQUIRED_WEB_SCRIPTS) {
+    if (!scripts[script]) {
+      addFinding(report, 'error', 'webclient-script-missing', `Required webclient script is missing: ${script}.`, relative(root, packageFile), { script });
+    }
+  }
+
+  const allCommands = Object.values(scripts).join('\n');
+  if (/\breact-scripts\b/.test(allCommands)) {
+    addFinding(report, 'error', 'cra-script', 'CRA/react-scripts commands are not allowed in the modern Vite runtime.', relative(root, packageFile));
+  }
+  if (!/\bvite\s+build\b/.test(String(scripts.build || ''))) {
+    addFinding(report, 'error', 'vite-build-script', 'Production build must execute vite build.', relative(root, packageFile));
+  }
+  if (!/\bvitest\s+run\b/.test(String(scripts['test:ci'] || ''))) {
+    addFinding(report, 'error', 'vitest-ci-script', 'CI tests must execute vitest run.', relative(root, packageFile));
+  }
+  if (!/\boxlint\b/.test(String(scripts['lint:strict'] || ''))) {
+    addFinding(report, 'error', 'oxlint-script', 'Strict lint must execute Oxlint.', relative(root, packageFile));
+  }
+
+  const dependencies = packageJson.dependencies || {};
+  const devDependencies = packageJson.devDependencies || {};
+  for (const forbidden of ['react-scripts', 'craco', '@craco/craco']) {
+    if (dependencies[forbidden] || devDependencies[forbidden]) {
+      addFinding(report, 'error', 'legacy-build-dependency', `${forbidden} is not allowed in the modern webclient toolchain.`, relative(root, packageFile));
+    }
+  }
+
+  for (const [name, major] of Object.entries(MODERN_WEB_BASELINE.dependencies)) {
+    compareMajor(report, dependencies, name, major, relative(root, packageFile), `dependency-${name}`);
+  }
+  for (const [name, major] of Object.entries(MODERN_WEB_BASELINE.devDependencies)) {
+    compareMajor(report, devDependencies, name, major, relative(root, packageFile), `dev-dependency-${name}`);
+  }
+  for (const [name, major] of Object.entries(MODERN_WEB_BASELINE.engines)) {
+    compareMajor(report, packageJson.engines || {}, name, major, relative(root, packageFile), `engine-${name}`);
+  }
+
+  for (const entry of WEB_ENTRYPOINTS) {
+    const file = path.join(webRoot, entry);
+    if (!await exists(file)) {
+      addFinding(report, 'error', 'webclient-entrypoint-missing', `Modern webclient entrypoint/config is missing: ${entry}.`, relative(root, file));
+    }
+  }
+
+  const legacyIndex = path.join(webRoot, 'src', 'index.js');
+  if (await exists(legacyIndex)) {
+    addFinding(
+      report,
+      'warning',
+      'legacy-js-entrypoint',
+      'Legacy src/index.js still exists; the production entrypoint should stay on main.tsx.',
+      relative(root, legacyIndex),
+    );
+  }
+
+  await validateTypeScriptProjects(root, webRoot, packageJson, report);
+};
+
 const summarize = (report) => {
   const counts = { error: 0, warning: 0, info: 0 };
   for (const finding of report.findings) counts[finding.severity] = (counts[finding.severity] || 0) + 1;

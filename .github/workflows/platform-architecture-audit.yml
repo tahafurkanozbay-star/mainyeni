@@ -92,7 +92,7 @@ jobs:
             artifacts/platform-audit/platform-boundaries.md \
             artifacts/platform-audit/browser-runtime-boundary.md \
             artifacts/platform-audit/package-lock-integrity.md \
-            artifacts/platform-audit/workflow-supply-chain.md \
+            artifacts/platform-audit/workflow-supply-chain.md
           do
             if [ -f "$report" ]; then
               if [ -s "$GITHUB_STEP_SUMMARY" ]; then
