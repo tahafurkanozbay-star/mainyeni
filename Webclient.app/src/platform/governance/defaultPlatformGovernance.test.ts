@@ -8,7 +8,6 @@ import {
 describe('default Platform governance composition', () => {
   test('starts ready with the canonical runtime config', () => {
     const runtimeConfig = createRuntimeConfig({
-      VITE_API_URL: '/api',
       VITE_RELEASE: '2026.09.21',
       VITE_ENV: 'production',
     });
@@ -25,7 +24,6 @@ describe('default Platform governance composition', () => {
     const runtimeConfig = createRuntimeConfig({});
     const kernel = createDefaultPlatformGovernance({ runtimeConfig });
     expect(kernel.config.keys()).toEqual([
-      'api-base-url',
       'build-mode',
       'cache-ttl-ms',
       'environment',
@@ -150,16 +148,19 @@ describe('default Platform governance composition', () => {
     expect(kernel.snapshot().state.phase).toBe('ready');
   });
 
-  test('refresh applies a new safe config snapshot', () => {
+  test('refresh applies a new generic runtime config snapshot', () => {
     const kernel = createDefaultPlatformGovernance({
-      runtimeConfig: createRuntimeConfig({ VITE_API_URL: '/api' }),
+      runtimeConfig: createRuntimeConfig({
+        VITE_REQUEST_TIMEOUT_MS: '5000',
+        VITE_RELEASE: 'r1',
+      }),
     });
     const next = createRuntimeConfig({
-      VITE_API_URL: '/gateway',
+      VITE_REQUEST_TIMEOUT_MS: '9000',
       VITE_RELEASE: 'r2',
     });
     refreshDefaultPlatformGovernance(kernel, next);
-    expect(kernel.config.get('api-base-url')).toBe('/gateway');
+    expect(kernel.config.get('request-timeout-ms')).toBe(9000);
     expect(kernel.config.get('release')).toBe('r2');
   });
 
@@ -169,18 +170,19 @@ describe('default Platform governance composition', () => {
     });
     const featureRevision = kernel.features.snapshot().revision;
     refreshDefaultPlatformGovernance(kernel, createRuntimeConfig({
-      VITE_API_URL: '/gateway',
+      VITE_RELEASE: 'refresh-release',
     }));
     expect(kernel.features.snapshot().revision).toBe(featureRevision);
   });
 
-  test('runtime config normalization prevents external API origins before governance', () => {
+  test('retired API URL keys do not enter the static runtime governance schema', () => {
     const kernel = createDefaultPlatformGovernance({
       runtimeConfig: createRuntimeConfig({
         VITE_API_URL: 'https://external.invalid/api',
+        REACT_APP_API_URL: '/legacy-api',
       }),
     });
-    expect(kernel.config.get('api-base-url')).toBe('/api');
+    expect(kernel.config.keys()).not.toContain('api-base-url');
     expect(kernel.snapshot().config.valid).toBe(true);
   });
 
@@ -195,7 +197,6 @@ describe('default Platform governance composition', () => {
 
   test('default governance snapshot has a deterministic support fingerprint', () => {
     const config = createRuntimeConfig({
-      VITE_API_URL: '/api',
       VITE_RELEASE: 'same-release',
     });
     const first = createDefaultPlatformGovernance({ runtimeConfig: config });
