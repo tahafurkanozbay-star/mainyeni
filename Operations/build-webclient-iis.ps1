@@ -135,7 +135,6 @@ try {
     # Build a static-only client. No same-origin or local User API is configured.
     # Kent Rehberi data is fetched from PlanASKI by the browser; the upstream must
     # allow CORS from the deployed CBS origin.
-    $env:VITE_KENT_REHBERI_SOURCE = "planaski"
     $env:VITE_KENT_REHBERI_OVERVIEW_ON_STARTUP = "false"
 
     Write-Host "3/4 - IIS alt-yoluna göre üretim paketi derleniyor..." -ForegroundColor Cyan
