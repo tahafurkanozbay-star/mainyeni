@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import MapManager from '../../Store/Managers/MapManager';
 import { DebugHelper } from '../../Toolbox/DebugHelper';
+import { setActiveMapView } from '../../gis-engine/activeMapViewRuntime';
 import {
   applyViewStateToMapView,
   snapshotMapViewState,
@@ -188,9 +189,7 @@ export function ExperienceMapModeBridge({
     activeModeRef.current = mode;
     if (modeRef) modeRef.current = mode;
     const visibleView = mode === '3d' ? sceneRef.current?.view : mapView;
-    MapManager.SetActiveMapView?.(
-      visibleView && !visibleView.destroyed ? visibleView : mapView,
-    );
+    setActiveMapView(visibleView && !visibleView.destroyed ? visibleView : mapView);
     setActiveMode(mode);
   }, [mapView, modeRef]);
 
@@ -296,7 +295,7 @@ export function ExperienceMapModeBridge({
       if (activeModeRef.current === '3d') {
         setSceneHostActive(true);
         synchronizeSceneViewSize(sceneRef.current?.view);
-        MapManager.SetActiveMapView?.(sceneRef.current?.view ?? mapView);
+        setActiveMapView(sceneRef.current?.view ?? mapView);
         publishMode('3d', 'map-runtime-current');
       }
       return;
@@ -378,7 +377,7 @@ export function ExperienceMapModeBridge({
       activeModeRef.current = '2d';
       if (modeRef) modeRef.current = '2d';
       setActiveMode('2d');
-      MapManager.SetActiveMapView?.(mapView);
+      setActiveMapView(mapView);
 
       // A failed SceneView is not safe to cache for the next retry. Dispose its
       // bindings and recreate it on demand instead of reusing a blank renderer.
@@ -443,7 +442,7 @@ export function ExperienceMapModeBridge({
       activeModeRef.current = '3d';
       if (modeRef) modeRef.current = '3d';
       setActiveMode('3d');
-      MapManager.SetActiveMapView?.(sceneRef.current?.view ?? mapView);
+      setActiveMapView(sceneRef.current?.view ?? mapView);
       publishMode('3d', 'map-runtime-recovery');
       announce('2B görünüme dönüş tamamlanamadı. 3B görünüm korunuyor.', 'assertive');
     }
@@ -549,7 +548,7 @@ export function ExperienceMapModeBridge({
     sceneNavigationRef.current?.dispose();
     sceneNavigationRef.current = null;
     sceneNavigationHomeSetRef.current = false;
-    MapManager.SetActiveMapView?.(mapView);
+    setActiveMapView(null);
     if (sceneRef.current) destroySceneView(sceneRef.current, (error) => DebugHelper.Log({ context: 'scene-destroy', error }));
     sceneRef.current = null;
   }, []);
