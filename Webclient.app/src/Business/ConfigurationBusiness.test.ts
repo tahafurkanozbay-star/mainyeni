@@ -1,83 +1,44 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import {
-  ConfigurationBusiness,
-  resolveLocalBootstrapPreviewEnabled,
-} from './ConfigurationBusiness';
+import { ConfigurationBusiness } from './ConfigurationBusiness';
 import { apiClient } from '../platform/http/httpClient';
 
 vi.mock('../platform/http/httpClient', () => ({
-  apiClient: {
-    get: vi.fn(),
-  },
+  apiClient: { get: vi.fn() },
 }));
 
 const mockedGet = vi.mocked(apiClient.get);
 
-describe('local bootstrap preview policy', () => {
-  test('defaults to enabled in Vite development when the env flag is missing', () => {
-    expect(resolveLocalBootstrapPreviewEnabled(true, 'development', undefined)).toBe(true);
-  });
-
-  test.each(['false', '0', 'off', 'disabled'])(
-    'supports explicit local preview opt-out with %s',
-    (value) => {
-      expect(resolveLocalBootstrapPreviewEnabled(true, 'development', value)).toBe(false);
-    },
-  );
-
-  test('stays disabled in production and test mode', () => {
-    expect(resolveLocalBootstrapPreviewEnabled(false, 'production', 'true')).toBe(false);
-    expect(resolveLocalBootstrapPreviewEnabled(true, 'test', 'true')).toBe(false);
-  });
-});
-
-describe('ConfigurationBusiness platform integration', () => {
+describe('API-free public map bootstrap', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  test('loads map configuration through the same-origin platform client with bounded cache', async () => {
-    const response = { isSuccess: true, data: { configValue: '{}' } };
-    mockedGet.mockResolvedValue(response);
-
-    await expect(ConfigurationBusiness.GetMapConfiguration()).resolves.toEqual(response);
-    expect(mockedGet).toHaveBeenCalledWith('/AppSettings/List', expect.objectContaining({
-      params: { key: 'GisMapConfig' },
-      cache: true,
-      dedupe: true,
-      cacheTtlMs: 120_000,
-    }));
-  });
-
-  test('forwards abort signals and disables request deduplication for cancellable bootstrap calls', async () => {
-    const controller = new AbortController();
-    const response = { isSuccess: true, data: [] };
-    mockedGet.mockResolvedValue(response);
-
-    await ConfigurationBusiness.GetConfigServices({ signal: controller.signal, cacheTtlMs: 5_000 });
-
-    expect(mockedGet).toHaveBeenCalledWith('/Gis/ConfigService/List', expect.objectContaining({
-      signal: controller.signal,
-      cache: true,
-      dedupe: false,
-      cacheTtlMs: 5_000,
-    }));
-  });
-
-  test('rejects malformed service envelopes instead of accepting ambiguous configuration data', async () => {
-    mockedGet.mockResolvedValue({ data: [] });
-
-    await expect(ConfigurationBusiness.GetConfigServices()).rejects.toMatchObject({
-      name: 'AppError',
-      code: 'INVALID_RESPONSE',
-      retryable: false,
+  test('uses the local Ankara map configuration without requesting AppSettings', async () => {
+    const result = await ConfigurationBusiness.GetMapConfiguration();
+    expect(result.isSuccess).toBe(true);
+    expect(JSON.parse(result.data?.configValue ?? '{}')).toEqual({
+      Centerx: 32.854,
+      Centery: 39.92,
+      Zoom: 12,
     });
+    expect(mockedGet).not.toHaveBeenCalled();
   });
 
-  test('propagates normalized platform transport failures', async () => {
-    const failure = Object.assign(new Error('Ağ bağlantısı kurulamadı.'), { code: 'NETWORK_ERROR' });
-    mockedGet.mockRejectedValue(failure);
+  test('does not request a private GIS service catalogue', async () => {
+    await expect(ConfigurationBusiness.GetConfigServices()).resolves.toEqual({
+      isSuccess: true,
+      data: [],
+    });
+    expect(mockedGet).not.toHaveBeenCalled();
+  });
 
-    await expect(ConfigurationBusiness.GetMapConfiguration()).rejects.toBe(failure);
+  test('honours cancellation before producing local configuration', async () => {
+    const owner = new AbortController();
+    owner.abort();
+    await expect(ConfigurationBusiness.GetMapConfiguration({ signal: owner.signal }))
+      .rejects.toMatchObject({ name: 'AbortError' });
+    await expect(ConfigurationBusiness.GetConfigServices({ signal: owner.signal }))
+      .rejects.toMatchObject({ name: 'AbortError' });
+    expect(mockedGet).not.toHaveBeenCalled();
   });
 });
