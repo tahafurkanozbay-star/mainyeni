@@ -122,7 +122,8 @@ describe('ToolbarWidgetModern', () => {
     expect(toolbar.getAttribute('aria-orientation')).toBe('vertical');
     expect(toolbar.getAttribute('aria-describedby')).toBe('map-toolbar-instructions');
     expect(toolbar.querySelectorAll('[data-roving-focus-id]')).toHaveLength(4);
-    expect(within(toolbar).getAllByRole('button')).toHaveLength(6);
+    expect(within(toolbar).getAllByRole('button')).toHaveLength(4);
+    expect(within(toolbar).getAllByRole('radio')).toHaveLength(2);
     expect(within(toolbar).getByRole('radiogroup', { name: '2B veya 3B görünüm seç' })).toBeInTheDocument();
     expect(toolbar.querySelector('.map-mode-experience--embedded')).toBeInTheDocument();
     expect(screen.getAllByRole('separator')).toHaveLength(2);
