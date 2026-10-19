@@ -385,19 +385,6 @@ describe('SidebarModern governed interaction integration', () => {
     expect(screen.getByRole('button', { name: 'Hizmet panelini genişlet' })).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('keeps the panel rendered when its managed OnClose hook is called', () => {
-    const { getRegisteredHandle } = renderSidebar();
-    const aside = screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' });
-
-    act(() => { getRegisteredHandle()?.OnClose?.(); });
-    expect(aside).toBeInTheDocument();
-    expect(aside).toHaveClass('is-collapsed');
-
-    act(() => { getRegisteredHandle()?.OnShow?.(); });
-    expect(aside).toBeInTheDocument();
-    expect(aside).not.toHaveClass('is-collapsed');
-  });
-
   it('collapses from a service with Escape when query is empty', async () => {
     const user = userEvent.setup();
     renderSidebar();
@@ -444,21 +431,30 @@ describe('SidebarModern governed interaction integration', () => {
     expect(screen.getByText('1 hizmet')).toBeInTheDocument();
   });
 
-  it('closes through the registered managed-window handle', () => {
+  it('collapses through the registered managed-window handle without removing the sidebar', () => {
     const { RegisterWindow } = renderSidebar();
     const ref = RegisterWindow.mock.calls[0]?.[0] as { readonly current: ManagedWindowHandle | null } | undefined;
+    const aside = screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' });
     expect(ref?.current?.OnClose).toBeTypeOf('function');
+
     act(() => ref?.current?.OnClose?.());
-    expect(screen.queryByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).not.toBeInTheDocument();
+
+    expect(screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).toBe(aside);
+    expect(aside).toHaveClass('is-collapsed');
   });
 
-  it('reopens through the registered managed-window handle after close', () => {
+  it('expands the still-mounted sidebar through the managed OnShow handle', () => {
     const { RegisterWindow } = renderSidebar();
     const ref = RegisterWindow.mock.calls[0]?.[0] as { readonly current: ManagedWindowHandle | null } | undefined;
+    const aside = screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' });
+
     act(() => ref?.current?.OnClose?.());
-    expect(screen.queryByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).not.toBeInTheDocument();
+    expect(aside).toHaveClass('is-collapsed');
+
     act(() => ref?.current?.OnShow?.());
-    expect(screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).toBeInTheDocument();
+
+    expect(screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).toBe(aside);
+    expect(aside).not.toHaveClass('is-collapsed');
   });
 
   it('keeps favorite activation independent from service opening', async () => {
