@@ -1,14 +1,14 @@
 # 3D Altyapı / Üstyapı Koordinasyon Web Uygulaması
 
-Bu deponun etkin harita istemcisi `Webclient.app/` altındaki React, TypeScript, Vite ve ArcGIS uygulamasıdır. Üretim dağıtımı statik web dosyalarından oluşur; bu sürüm için ayrıca `Api.User` veya yönetim API'si gerekmemektedir.
+Bu deponun etkin ürünü `Webclient.app/` altındaki React, TypeScript, Vite ve ArcGIS tabanlı web istemcisidir. Uygulama, Kent Rehberi verilerini tarayıcıdan doğrudan resmi PlanASKI servisine alır. Üretim dağıtımı statik web dosyalarından oluşur; bu mimaride ABB'ye ait ayrı bir uygulama API'si, yönetim API'si veya backend sunucusu bulunmaz.
 
 ## Veri kaynağı
 
-Kent Rehberi kayıtları tarayıcıdan doğrudan resmi PlanASKI servisine alınır:
+Kent Rehberi kayıtları resmi PlanASKI servisine doğrudan yüklenir:
 
 `https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur=`
 
-Araya aynı-köken API, proxy veya API kimlik bilgisi konulmaz. Resmi PlanASKI servisi, yayımlanan CBS istemcisinin origin'i için CORS izni vermelidir. Haritanın ilk görünümü yerel ve sabit bir Ankara görünümüdür; eski GIS servis kataloğu veya backend servisleri yüklenmez. Sadece PlanASKI veri kaynağıyla desteklenmeyen eski işlevler uygulamadan kaldırılmıştır.
+Tarayıcı tarafında aynı-köken `/api` çağrısı, API kimlik bilgisi veya belediyeye ait proxy kullanılmaz. PlanASKI servisi, yayımlanan CBS istemcisinin origin'i için CORS izni vermelidir. İlk harita görünümü yerel ve sabit bir Ankara görünümüdür; eski GIS servis kataloğu ve API üzerinden çalışan eski sorgu işlevleri başlatılmaz. PlanASKI üzerinden desteklenmeyen eski işlevler uygulamadan çıkarılmıştır.
 
 ## Geliştirme
 
@@ -22,14 +22,14 @@ npm run dev
 
 ## IIS dağıtımı
 
-Üretim paketini ve statik IIS yayınını hazırlamak için deponun kökünde:
+Üretim paketi ve statik IIS yayını için depo kökünde:
 
 ```powershell
 .\Operations\build-webclient-iis.ps1
 .\Operations\deploy-webclient-iis.ps1
 ```
 
-Paketleme yalnızca statik web istemcisini oluşturur. Eski bir IIS ortamında API uygulaması hâlâ bulunuyorsa bu betikler onu yayımlamaz, yeniden başlatmaz veya silmez; böyle bir eşlemenin devre dışı bırakılması ayrı bir sunucu bakım işlemidir.
+İki betik statik web istemcisini oluşturur/yayımlar; API uygulaması kurmaz veya API derlemez. Eski IIS sunucusunda daha önce oluşturulmuş bir `/api` eşlemesi ya da fiziksel `user` klasörü varsa, bu kaynak kod değişikliği sunucu üzerindeki eşlemeyi kendiliğinden kapatmaz veya silmez. Bu eski eşlemenin kaldırılması, canlı sunucuda ayrı bir bakım işlemidir.
 
 ## Geliştirme notları
 
