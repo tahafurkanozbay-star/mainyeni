@@ -64,6 +64,14 @@ describe("ExperienceWorkspace", () => {
         expect(modeControl.closest(".experience-map-mode-anchor")).toHaveAttribute("id", "experience-workspace-controls");
     });
 
+    test("keeps the mode control out of the floating status dock when it is hosted in the right toolbar", () => {
+        render(<ExperienceWorkspace externalMapModeControl />);
+        expect(screen.queryByLabelText("Harita çalışma alanı durumu ve görünüm kontrolleri")).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: /2 boyutlu harita/i })).not.toBeInTheDocument();
+        expect(screen.getByRole("status", { name: "Çalışma alanı durumu" })).toHaveTextContent("Bağlantı normal");
+        expect(screen.getByRole("link", { name: "Görünüm kontrollerine geç" })).toHaveAttribute("href", "#toolbar-widget");
+    });
+
     test("dispatches a map-mode command instead of mutating GIS state directly", () => {
         const listener = vi.fn();
         window.addEventListener("kentrehberi:command", listener);
