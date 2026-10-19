@@ -53,8 +53,8 @@ describe("ExperienceWorkspace", () => {
         expect(screen.getByLabelText("Harita çalışma alanı durumu ve görünüm kontrolleri")).toBeInTheDocument();
         expect(screen.getByLabelText("Çalışma alanı durumu")).not.toHaveTextContent("Çevrimiçi");
         expect(screen.queryByRole("button", { name: /Komutlar|Deneyim ayarları/i })).not.toBeInTheDocument();
-        expect(screen.getByRole("button", { name: /2 boyutlu harita, etkin/i })).toHaveAttribute("aria-pressed", "true");
-        expect(screen.getByRole("button", { name: /3 boyutlu sahne/i })).toHaveAttribute("aria-pressed", "false");
+        expect(screen.getByRole("button", { name: /2 boyutlu harita/i })).toHaveAttribute("aria-pressed", "false");
+        expect(screen.getByRole("button", { name: /3 boyutlu sahne, etkin/i })).toHaveAttribute("aria-pressed", "true");
     });
 
     test("keeps an externally supplied 2D/3D control outside the fixed status dock", () => {
@@ -65,6 +65,7 @@ describe("ExperienceWorkspace", () => {
     });
 
     test("dispatches a map-mode command instead of mutating GIS state directly", () => {
+        localStorage.setItem("kent-rehberi-experience-preferences-v2", JSON.stringify({ lastMapMode: "2d" }));
         const listener = vi.fn();
         window.addEventListener("kentrehberi:command", listener);
         render(<ExperienceWorkspace />);
@@ -82,6 +83,7 @@ describe("ExperienceWorkspace", () => {
     });
 
     test("accepts runtime confirmation and updates the active map mode", async () => {
+        localStorage.setItem("kent-rehberi-experience-preferences-v2", JSON.stringify({ lastMapMode: "2d" }));
         render(<ExperienceWorkspace />);
         fireEvent.click(screen.getByRole("button", { name: /3 boyutlu sahne/i }));
 
