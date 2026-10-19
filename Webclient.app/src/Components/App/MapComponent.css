@@ -456,3 +456,30 @@ html[data-experience-motion="reduced"] .experience-scene-controls button {
   }
 }
 
+
+/* Managed query windows are siblings of the persistent Keşfet rail. Keep them
+   above the rail and position them in the free map column, including collapsed mode. */
+.esri-map > .common-query-window:not(.common-query-window-right) {
+  z-index: var(--experience-z-panel, 30);
+  left: calc(var(--sidebar-hover-width, 470px) + 16px);
+  max-width: min(40vw, calc(100vw - var(--sidebar-hover-width, 470px) - var(--toolbar-width, 0px) - 48px));
+}
+
+.esri-map > .sidebar-container.kr-sidebar--governed.is-collapsed ~ .common-query-window:not(.common-query-window-right) {
+  left: 84px;
+  max-width: min(40vw, calc(100vw - 84px - var(--toolbar-width, 0px) - 48px));
+}
+
+.esri-map > .common-query-window.common-query-window-right {
+  z-index: var(--experience-z-panel, 30);
+}
+
+@media (max-width: 780px) {
+  .esri-map > .common-query-window:not(.common-query-window-right) {
+    left: 12px;
+    right: 12px;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+  }
+}
