@@ -381,14 +381,15 @@ describe('ToolbarWidgetModern', () => {
     expect(GisGraphicsHelper.RemoveGraphics).toHaveBeenCalledWith(map.view, [{ id: 'location-graphic' }]);
   });
 
-  it('bounds a browser callback that never arrives and explicitly labels the fallback', async () => {
+  it('bounds a browser callback that never arrives without displaying a false location', async () => {
     const geolocation = installGeolocationHarness();
     render(<ToolbarWidgetModern windowManager={createWindowManager()} />);
     vi.useFakeTimers(); fireEvent.click(screen.getByRole('button', { name: 'Konum Bul' }));
-    await act(async () => { await vi.advanceTimersByTimeAsync(10_001); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(25_001); });
     expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('status')).toHaveTextContent('Konum alınamadı. Ankara merkez konumu gösterildi.');
-    expect(screen.getByText(/Bu nokta cihazınızın konumu değildir/)).toBeVisible();
+    expect(screen.getByRole('status')).toHaveTextContent('Konum gösterilemedi.');
+    expect(GisGraphicsHelper.CreatePoint).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Ankara merkez konumu gösterildi/)).toBeNull();
     expect(screen.getByRole('button', { name: 'Yeniden dene' })).toBeEnabled();
   });
 
@@ -423,13 +424,16 @@ describe('ToolbarWidgetModern', () => {
     await act(async () => { await Promise.resolve(); });
     expect(geolocation.getCurrentPosition).not.toHaveBeenCalled();
   });
-  it('returns keyboard focus to Home after its outcome is dismissed', async () => {
+  it('does not display a success notification after returning to the initial view', async () => {
+    const map = createMapView();
+    vi.mocked(MapManager.GetMapView).mockReturnValue(map.view as never);
     render(<ToolbarWidgetModern windowManager={createWindowManager()} />);
-    const home = screen.getByRole('button', { name: 'Başlangıç görünümüne dön' });
-    fireEvent.click(home);
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Başlangıç görünümü gösterildi.'));
-    fireEvent.click(screen.getByRole('button', { name: 'Mesajı kapat' }));
-    expect(home).toHaveFocus();
+    fireEvent.click(screen.getByRole('button', { name: 'Başlangıç görünümüne dön' }));
+
+    await waitFor(() => expect(map.goTo).toHaveBeenCalledWith(map.clonedExtent));
+    await waitFor(() => expect(screen.getByRole('status')).toBeEmptyDOMElement());
+    expect(screen.queryByRole('button', { name: 'Mesajı kapat' })).toBeNull();
+    expect(screen.queryByText('Başlangıç görünümü gösterildi.')).toBeNull();
   });
 
   it('does not force a fallback after the user interrupts location camera movement', async () => {
@@ -451,13 +455,15 @@ describe('ToolbarWidgetModern', () => {
     expect(screen.queryByRole('button', { name: 'Yeniden dene' })).toBeNull();
   });
 
-  it.each(['success', 'fallback'] as const)('keeps keyboard focus in the notice when a pending operation becomes %s', async outcome => {
+  it.each(['success', 'error'] as const)('keeps keyboard focus in the notice when a pending operation becomes %s', async outcome => {
     const geolocation = installGeolocationHarness(); render(<ToolbarWidgetModern windowManager={createWindowManager()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Konum Bul' }));
     await waitFor(() => expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1));
     expect(screen.getByRole('button', { name: 'İptal et' })).toHaveFocus();
     if (outcome === 'success') geolocation.resolve(32.82, 39.93); else geolocation.reject();
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(outcome === 'success' ? 'Konumunuz haritada gösterildi.' : 'Ankara merkez konumu gösterildi.'));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(
+      outcome === 'success' ? 'Konumunuz haritada gösterildi.' : 'Konum gösterilemedi.',
+    ));
     expect(screen.getByRole('button', { name: outcome === 'success' ? 'Mesajı kapat' : 'Yeniden dene' })).toHaveFocus();
   });
   it('preserves focus deliberately moved outside the notice before completion', async () => {
