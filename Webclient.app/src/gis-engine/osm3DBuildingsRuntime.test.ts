@@ -3,6 +3,7 @@ import {
   buildingHeightMeters,
   createBuildingQuery,
   parseOverpassBuildings,
+  resolveOSMSceneTarget,
   type OSMBounds,
 } from './osm3DBuildingsRuntime';
 
@@ -20,6 +21,23 @@ const closedBuilding = {
 };
 
 describe('OSM 3D building footprint parsing', () => {
+  it('uses the target map center rather than the offset camera position', () => {
+    expect(resolveOSMSceneTarget({
+      center: { longitude: 32.85, latitude: 39.93, spatialReference: { wkid: 4326 } },
+      camera: { position: { longitude: 32.95, latitude: 40.01, altitude: 720 } },
+    })).toEqual({ longitude: 32.85, latitude: 39.93, altitudeMeters: 720 });
+  });
+
+  it('normalizes a WebMercator target center', () => {
+    const target = resolveOSMSceneTarget({
+      center: { x: 3658572.3, y: 4851900.4, spatialReference: { wkid: 3857 } },
+      camera: { position: { altitude: 400 } },
+    });
+    expect(target?.longitude).toBeCloseTo((3658572.3 / 20037508.34) * 180, 4);
+    expect(target?.latitude).toBeCloseTo((Math.atan(Math.exp((4851900.4 / 20037508.34) * Math.PI)) * 2 - Math.PI / 2) * (180 / Math.PI), 4);
+    expect(target?.altitudeMeters).toBe(400);
+  });
+
   it('parses closed OpenStreetMap ways into 3D-ready rings', () => {
     const result = parseOverpassBuildings({ elements: [closedBuilding] });
     expect(result).toHaveLength(1);

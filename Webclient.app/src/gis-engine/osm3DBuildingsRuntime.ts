@@ -43,17 +43,20 @@ interface OSMSceneMapLike {
   add?: (layer: OSMSceneLayerLike, index?: number) => unknown;
   remove?: (layer: OSMSceneLayerLike) => unknown;
 }
-interface OSMCameraPositionLike {
+interface OSMCoordinateLike {
   longitude?: unknown;
   latitude?: unknown;
   x?: unknown;
   y?: unknown;
+  spatialReference?: { wkid?: unknown };
+}
+interface OSMCameraPositionLike extends OSMCoordinateLike {
   z?: unknown;
   altitude?: unknown;
-  spatialReference?: { wkid?: unknown };
 }
 export interface OSM3DSceneViewLike {
   readonly map?: OSMSceneMapLike | null;
+  readonly center?: OSMCoordinateLike | null;
   readonly camera?: { readonly position?: OSMCameraPositionLike | null } | null;
   readonly scale?: number;
   watch?: (property: string, callback: (...args: unknown[]) => void) => { remove?: () => void };
@@ -179,15 +182,16 @@ interface ScenePosition {
   readonly latitude: number;
   readonly altitudeMeters: number | null;
 }
-const positionForView = (view: OSM3DSceneViewLike): ScenePosition | null => {
-  const position = view.camera?.position;
-  if (!position) return null;
-  let longitude = finiteNumber(position.longitude);
-  let latitude = finiteNumber(position.latitude);
+const coordinatesForPoint = (
+  point: OSMCoordinateLike | null | undefined,
+): Readonly<{ longitude: number; latitude: number }> | null => {
+  if (!point) return null;
+  let longitude = finiteNumber(point.longitude);
+  let latitude = finiteNumber(point.latitude);
   if (longitude === null || latitude === null) {
-    const x = finiteNumber(position.x);
-    const y = finiteNumber(position.y);
-    const wkid = finiteNumber(position.spatialReference?.wkid);
+    const x = finiteNumber(point.x);
+    const y = finiteNumber(point.y);
+    const wkid = finiteNumber(point.spatialReference?.wkid);
     if (x === null || y === null) return null;
     if (wkid === 4326) {
       longitude = x;
@@ -198,8 +202,21 @@ const positionForView = (view: OSM3DSceneViewLike): ScenePosition | null => {
     } else return null;
   }
   if (longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) return null;
-  return { longitude, latitude, altitudeMeters: finiteNumber(position.altitude) ?? finiteNumber(position.z) };
+  return { longitude, latitude };
 };
+
+/** Prefers the SceneView target centre to avoid querying at the offset camera position. */
+export const resolveOSMSceneTarget = (view: OSM3DSceneViewLike): ScenePosition | null => {
+  const camera = view.camera?.position;
+  const target = coordinatesForPoint(view.center) ?? coordinatesForPoint(camera);
+  if (!target) return null;
+  return {
+    ...target,
+    altitudeMeters: finiteNumber(camera?.altitude) ?? finiteNumber(camera?.z),
+  };
+};
+
+const positionForView = resolveOSMSceneTarget;
 const cameraIsCloseEnough = (view: OSM3DSceneViewLike, position: ScenePosition): boolean => {
   const scale = finiteNumber(view.scale);
   if (scale !== null && scale > MAX_QUERY_SCALE) return false;
