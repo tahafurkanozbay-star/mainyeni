@@ -9,6 +9,7 @@ const REQUIRED_PATHS = Object.freeze({
   businessFactory: 'src/Business/createFastAccessQueryBusiness.ts',
   runtime: 'src/Business/kentRehberiFastAccessRuntime.ts',
   transport: 'src/data-services/kentRehberiGeoJsonLayer.ts',
+  directSource: 'src/data-services/kentRehberiPlanAskiDirect.ts',
   icons: 'src/gis-engine/iconRegistry.json',
   vite: 'vite.config.ts',
   localProxy: 'tooling/localApiProxy.ts',
@@ -368,16 +369,41 @@ const checkFrontendRuntimeContracts = (files, errors) => {
     },
   ], errors);
 
+  requirePatterns(files, REQUIRED_PATHS.directSource, [
+    {
+      id: 'missing-official-planaski-endpoint',
+      pattern: /planaski\\.ankara\\.bel\\.tr\\/kentrehberiapi\\/api\\/kentrehberi/u,
+      message: 'the browser data source must use the official PlanASKI Kent Rehberi endpoint',
+    },
+    {
+      id: 'missing-browser-cors-mode',
+      pattern: /mode:\\s*'cors'/u,
+      message: 'direct PlanASKI requests must use browser CORS mode',
+    },
+    {
+      id: 'missing-omitted-credentials',
+      pattern: /credentials:\\s*'omit'/u,
+      message: 'direct PlanASKI requests must not send browser credentials',
+    },
+    {
+      id: 'missing-no-store-cache',
+      pattern: /cache:\\s*'no-store'/u,
+      message: 'direct PlanASKI requests must avoid implicit browser transport caching',
+    },
+    {
+      id: 'missing-direct-source-fetch',
+      pattern: /fetchPlanAskiGeoJsonDirect/u,
+      message: 'Kent Rehberi runtime must use the direct browser data source',
+    },
+  ], errors);
+
   const vite = readRequired(files, REQUIRED_PATHS.vite, errors);
   if (vite) {
-    if (
-      !/resolveLocalApiProxyTarget/u.test(vite)
-      || !/target:\s*apiProxyTarget/u.test(vite)
-    ) {
+    if (/resolveLocalApiProxyTarget|['\"]\\/api['\"]\\s*:/u.test(vite)) {
       errors.push(finding(
-        'insecure-or-missing-dev-api-proxy',
+        'private-api-proxy-present',
         REQUIRED_PATHS.vite,
-        'local Vite /api proxy must use the validated localhost Api.User target',
+        'public webclient must not configure a local private /api proxy',
       ));
     }
     for (const marker of [
@@ -394,39 +420,48 @@ const checkFrontendRuntimeContracts = (files, errors) => {
     }
   }
 
-  requirePatterns(files, REQUIRED_PATHS.localProxy, [
-    {
-      id: 'missing-default-local-api-target',
-      pattern: /https:\/\/localhost:3003/u,
-      message: 'local Api.User proxy must default to HTTPS localhost:3003',
-    },
-    {
-      id: 'missing-local-proxy-host-allowlist',
-      pattern: /allowedHosts/u,
-      message: 'local Api.User proxy target must be restricted to localhost origins',
-    },
-  ], errors);
+  const configuration = readRequired(files, REQUIRED_PATHS.configurationBusiness, errors);
+  if (configuration) {
+    if (!/DEFAULT_PUBLIC_MAP_CONFIGURATION/u.test(configuration)) {
+      errors.push(finding(
+        'missing-local-map-defaults',
+        REQUIRED_PATHS.configurationBusiness,
+        'startup configuration must use local public-map defaults',
+      ));
+    }
+    if (/apiClient|httpClient|\\.get<unknown>\\(/u.test(configuration)) {
+      errors.push(finding(
+        'private-api-client-in-bootstrap',
+        REQUIRED_PATHS.configurationBusiness,
+        'public-map startup must not call the private application API',
+      ));
+    }
+    if (!/GetConfigServices/u.test(configuration) || !/data:\\s*\[\]/u.test(configuration)) {
+      errors.push(finding(
+        'missing-empty-service-catalog',
+        REQUIRED_PATHS.configurationBusiness,
+        'startup must not depend on a server-provided private GIS service catalogue',
+      ));
+    }
+  }
 
-  requirePatterns(files, REQUIRED_PATHS.configurationBusiness, [
-    {
-      id: 'missing-local-bootstrap-preview-policy',
-      pattern: /resolveLocalBootstrapPreviewEnabled/u,
-      message: 'local bootstrap must have an explicit development preview policy',
-    },
-  ], errors);
-
-  requirePatterns(files, REQUIRED_PATHS.envExample, [
-    {
-      id: 'missing-local-api-proxy-env',
-      pattern: /VITE_API_PROXY_TARGET=https:\/\/localhost:3003/u,
-      message: 'local env template must align Vite with Api.User HTTPS port 3003',
-    },
-    {
-      id: 'missing-local-bootstrap-preview-env',
-      pattern: /VITE_LOCAL_BOOTSTRAP_PREVIEW=true/u,
-      message: 'local env template must explicitly enable safe bootstrap preview',
-    },
-  ], errors);
+  const envExample = readRequired(files, REQUIRED_PATHS.envExample, errors);
+  if (envExample) {
+    if (!/VITE_KENT_REHBERI_SOURCE=planaski/u.test(envExample)) {
+      errors.push(finding(
+        'missing-planaski-source-env',
+        REQUIRED_PATHS.envExample,
+        'the webclient environment template must select direct PlanASKI data access',
+      ));
+    }
+    if (/^\\s*VITE_(?:API_URL|API_PROXY_TARGET|API_TIMEOUT_MS|API_CACHE_TTL_MS|API_MAX_RETRIES|LOCAL_BOOTSTRAP_PREVIEW|PUBLIC_MAP_ONLY_MODE)=/mu.test(envExample)) {
+      errors.push(finding(
+        'legacy-api-env-present',
+        REQUIRED_PATHS.envExample,
+        'the webclient environment template must not require a private API or API proxy flags',
+      ));
+    }
+  }
 };
 
 const checkBackendContracts = (files, errors) => {
