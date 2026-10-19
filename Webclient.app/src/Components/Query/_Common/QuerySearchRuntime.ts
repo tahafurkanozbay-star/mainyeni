@@ -219,13 +219,7 @@ export const getRecordId = (
   null,
 );
 
-export const getRecordTitle = (
-  record: SearchRecordInput | null | undefined,
-): string => normalizeWhitespace(readFirstValue(
-  record,
-  ['Title', 'title', 'ADI', 'adi', 'ad', 'AD', 'name', 'Name'],
-  'İsimsiz kayıt',
-));
+const TECHNICAL_CATEGORY_LABEL = /^(?:kategori\s*)?\d+$/iu;
 
 export const getRecordAddress = (
   record: SearchRecordInput | null | undefined,
@@ -234,6 +228,23 @@ export const getRecordAddress = (
   ['Address', 'address', 'ADRES', 'adres', '_MAHALLE_ADI', 'mahalleAdi'],
   '',
 ));
+
+export const getRecordTitle = (
+  record: SearchRecordInput | null | undefined,
+): string => {
+  const sourceTitle = normalizeWhitespace(readFirstValue(
+    record,
+    ['Title', 'title', 'ADI', 'adi', 'ad', 'AD', 'name', 'Name'],
+    '',
+  ));
+  const address = getRecordAddress(record);
+
+  // Prefer an address when the upstream source provides only a technical label.
+  if (!sourceTitle || TECHNICAL_CATEGORY_LABEL.test(sourceTitle)) {
+    return address || 'İsimsiz kayıt';
+  }
+  return sourceTitle;
+};
 
 export const getRecordPhone = (
   record: SearchRecordInput | null | undefined,
@@ -251,10 +262,14 @@ export const getRecordCategory = (
     ['Category', 'category', 'kategori', 'KATEGORI'],
     '',
   ));
-  if (semanticCategory) return semanticCategory;
+  if (semanticCategory && !TECHNICAL_CATEGORY_LABEL.test(semanticCategory)) {
+    return semanticCategory;
+  }
 
   const technicalType = normalizeWhitespace(readFirstValue(record, ['type', 'Type'], ''));
-  return technicalType || 'Diğer';
+  return technicalType && !TECHNICAL_CATEGORY_LABEL.test(technicalType)
+    ? technicalType
+    : 'Diğer';
 };
 
 export const createStableResultKey = (
