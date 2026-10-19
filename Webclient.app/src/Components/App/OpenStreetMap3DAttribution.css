@@ -1,0 +1,21 @@
+.osm3d-attribution {
+  position: absolute;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(40px, calc(env(safe-area-inset-bottom) + 32px));
+  z-index: 8;
+  max-width: min(76vw, 360px);
+  padding: 3px 7px;
+  border: 1px solid rgb(42 55 69 / 15%);
+  border-radius: 4px;
+  background: rgb(255 255 255 / 90%);
+  color: #263746;
+  font: 11px/1.35 Arial, sans-serif;
+  pointer-events: auto;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
+}
+
+.osm3d-attribution a {
+  color: #145a88;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

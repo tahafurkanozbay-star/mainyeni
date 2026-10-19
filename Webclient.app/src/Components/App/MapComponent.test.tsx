@@ -53,11 +53,12 @@ beforeEach(() => {
   ]);
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
-describe('3D terrain readiness', () => {
-  it('keeps the existing 2D OpenStreetMap basemap and configures world elevation for SceneView', async () => {
+describe('free OpenStreetMap 3D readiness', () => {
+  it('keeps the 2D OpenStreetMap basemap without requiring Esri World Elevation credentials', async () => {
     setup();
     await screen.findByText('Araçlar hazır');
-    expect(runtime.mapOptions[0]).toMatchObject({ basemap: 'osm', ground: 'world-elevation' });
+    expect(runtime.mapOptions[0]).toMatchObject({ basemap: 'osm' });
+    expect(runtime.mapOptions[0]).not.toHaveProperty('ground');
   });
 });
 

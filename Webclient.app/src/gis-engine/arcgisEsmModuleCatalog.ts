@@ -80,9 +80,11 @@ const ARCGIS_MODULE_CATALOG: readonly ArcgisModuleDescriptor[] = Object.freeze([
   descriptor('esri/layers/GraphicsLayer', '@arcgis/core/layers/GraphicsLayer.js', ['layer'], 2, 'core'),
   descriptor('esri/layers/ImageryLayer', '@arcgis/core/layers/ImageryLayer.js', ['layer'], 6, 'on-demand'),
   descriptor('esri/layers/MapImageLayer', '@arcgis/core/layers/MapImageLayer.js', ['layer'], 5, 'feature'),
+  descriptor('esri/layers/OpenStreetMapLayer', '@arcgis/core/layers/OpenStreetMapLayer.js', ['layer', 'view-3d'], 4, 'feature'),
   descriptor('esri/layers/SceneLayer', '@arcgis/core/layers/SceneLayer.js', ['layer', 'view-3d'], 6, 'on-demand'),
   descriptor('esri/layers/VectorTileLayer', '@arcgis/core/layers/VectorTileLayer.js', ['layer'], 5, 'feature'),
   descriptor('esri/layers/WebTileLayer', '@arcgis/core/layers/WebTileLayer.js', ['layer'], 5, 'on-demand'),
+  descriptor('esri/request', '@arcgis/core/request.js', ['core'], 2, 'on-demand'),
   descriptor('esri/rest/identify', '@arcgis/core/rest/identify.js', ['query'], 2, 'on-demand'),
   descriptor('esri/rest/query', '@arcgis/core/rest/query.js', ['query'], 2, 'feature'),
   descriptor(
