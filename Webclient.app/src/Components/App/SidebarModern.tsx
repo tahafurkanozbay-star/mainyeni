@@ -9,6 +9,13 @@ import React, {
   type ReactNode,
 } from 'react';
 import { DebugHelper } from '../../Toolbox/DebugHelper';
+import { MapManager } from '../../Store/Managers/MapManager';
+import {
+  getKentRehberiPoiSearchSnapshot,
+  searchKentRehberiPoiPoints,
+  subscribeKentRehberiPoiSearchIndex,
+  type KentRehberiPoiSearchPoint,
+} from '../../data-services/kentRehberiPoiSearchIndex';
 import type { ManagedWindowHandle, WindowManagerLike } from '../../experience/contracts';
 import { createSidebarKeyboardController, type SidebarKeyboardFocusTarget } from '../../shell/sidebarKeyboardController';
 import { createSidebarNavigationModel, type SidebarNavigationView } from '../../shell/sidebarNavigationModel';
@@ -27,6 +34,14 @@ import './SidebarInteraction.css';
 interface SidebarProps {
   readonly id: string;
   readonly windowManager: WindowManagerLike;
+}
+
+interface PointSearchMapViewLike {
+  readonly destroyed?: boolean;
+  goTo?: (target: unknown, options?: unknown) => PromiseLike<unknown> | unknown;
+  popup?: {
+    open?: (options: unknown) => void;
+  };
 }
 
 const GROUPS = SIDEBAR_GROUPS as readonly SidebarGroup[];
@@ -91,6 +106,17 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
     navigationModel.getSnapshot,
   );
 
+  const pointSearchSnapshot = useSyncExternalStore(
+    subscribeKentRehberiPoiSearchIndex,
+    getKentRehberiPoiSearchSnapshot,
+    getKentRehberiPoiSearchSnapshot,
+  );
+  const pointSearchActive = navigation.normalizedQuery.length > 0;
+  const pointSearchResults = useMemo(
+    () => searchKentRehberiPoiPoints(pointSearchSnapshot, navigation.query, 100),
+    [pointSearchSnapshot, navigation.query],
+  );
+
   const keyboardController = useMemo(() => createSidebarKeyboardController({
     model: navigationModel,
     groupIds: GROUP_IDS,
@@ -102,6 +128,7 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
   const sidebarToggleRef = useRef<HTMLButtonElement | null>(null);
   const groupButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const serviceButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const pointButtonRefs = useRef(new Map<number, HTMLButtonElement>());
 
   const createManagedWindowHandle = (): ManagedWindowHandle => ({
     id,
@@ -194,10 +221,65 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
   };
 
   const handleSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>): void => {
+    if (pointSearchActive && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+      if (pointSearchResults.items.length === 0) return;
+      event.preventDefault();
+      const point = event.key === 'ArrowDown'
+        ? pointSearchResults.items[0]
+        : pointSearchResults.items[pointSearchResults.items.length - 1];
+      if (point) pointButtonRefs.current.get(point.id)?.focus({ preventScroll: true });
+      return;
+    }
+
     const result = keyboardController.handleSearchKey(event);
     if (!result.handled) return;
     event.preventDefault();
     focusKeyboardTarget(result.focus);
+  };
+
+  const handlePointResultKeyDown = (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    pointId: number,
+    currentIndex: number,
+  ): void => {
+    let targetIndex = currentIndex;
+    if (event.key === 'ArrowDown') targetIndex = (currentIndex + 1) % pointSearchResults.items.length;
+    else if (event.key === 'ArrowUp') targetIndex = (currentIndex - 1 + pointSearchResults.items.length) % pointSearchResults.items.length;
+    else if (event.key === 'Home') targetIndex = 0;
+    else if (event.key === 'End') targetIndex = pointSearchResults.items.length - 1;
+    else return;
+
+    event.preventDefault();
+    const target = pointSearchResults.items[targetIndex];
+    if (target) pointButtonRefs.current.get(target.id)?.focus({ preventScroll: true });
+    void pointId;
+  };
+
+  const focusPointResult = (point: KentRehberiPoiSearchPoint): void => {
+    const view = MapManager.GetMapView() as PointSearchMapViewLike | null;
+    if (!view || view.destroyed) return;
+
+    const openPointPopup = (): void => {
+      if (MapManager.GetMapView() !== view || view.destroyed) return;
+      view.popup?.open?.({
+        location: { longitude: point.longitude, latitude: point.latitude },
+        title: point.name,
+        content: point.address || [point.district, point.neighborhood].filter(Boolean).join(' · ') || 'Kent Rehberi noktası',
+      });
+    };
+
+    try {
+      if (typeof view.goTo !== 'function') {
+        openPointPopup();
+        return;
+      }
+      void Promise.resolve(view.goTo({
+        center: [point.longitude, point.latitude],
+        zoom: 17,
+      }, { duration: 650 })).then(openPointPopup).catch((error: unknown) => DebugHelper.Log(error));
+    } catch (error) {
+      DebugHelper.Log(error);
+    }
   };
 
   const handleGroupKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, groupId: string): void => {
