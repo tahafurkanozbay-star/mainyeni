@@ -41,7 +41,9 @@ export const TrafficFlowLayer = ({ map, visible, onStatusChange }: TrafficFlowLa
       onStatusChange('Gerçek zamanlı trafik için VITE_TOMTOM_TRAFFIC_API_KEY ayarlanmalı.');
       return undefined;
     }
-    if (typeof trafficMap.add !== 'function' || typeof trafficMap.remove !== 'function') {
+    const addLayer = trafficMap.add;
+    const removeLayer = trafficMap.remove;
+    if (typeof addLayer !== 'function' || typeof removeLayer !== 'function') {
       onStatusChange('Trafik katmanı harita katman yöneticisine bağlanamadı.');
       return undefined;
     }
@@ -52,7 +54,7 @@ export const TrafficFlowLayer = ({ map, visible, onStatusChange }: TrafficFlowLa
       const ownedLayer = layer;
       layer = null;
       if (!ownedLayer) return;
-      try { trafficMap.remove?.(ownedLayer); }
+      try { removeLayer.call(trafficMap, ownedLayer); }
       catch (error) { reportTrafficLayerFailure(`${phase}-remove`, error); }
       try { ownedLayer.destroy?.(); }
       catch (error) { reportTrafficLayerFailure(`${phase}-destroy`, error); }
@@ -68,7 +70,7 @@ export const TrafficFlowLayer = ({ map, visible, onStatusChange }: TrafficFlowLa
         opacity: 0.94,
         copyright: 'Traffic flow data © TomTom',
       });
-      trafficMap.add(layer);
+      addLayer.call(trafficMap, layer);
       onStatusChange('Trafik katmanı açıldı. Kırmızı/sarı/yeşil çizgiler için TomTom anahtarının ve Traffic Flow API erişiminin etkin olması gerekir.');
     };
 
