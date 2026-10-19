@@ -34,6 +34,7 @@ const harness = vi.hoisted(() => ({
   disposeSceneNavigation: vi.fn(),
   setSceneHome: vi.fn(),
   bindSceneState: vi.fn(),
+  osmBuildingsRuntime: { activate: vi.fn(async () => undefined), deactivate: vi.fn(), dispose: vi.fn() },
 }));
 
 vi.mock('../../Store/Managers/MapManager', () => ({
@@ -76,6 +77,10 @@ vi.mock('../../gis-engine/sceneRuntime', () => ({
 }));
 
 vi.mock('../../gis-engine/arcgisModuleRuntime', () => ({ loadArcgisModule: harness.loadBasemapModule }));
+
+vi.mock('../../gis-engine/osm3DBuildingsRuntime', () => ({
+  OSM3DBuildingsRuntime: vi.fn(() => harness.osmBuildingsRuntime),
+}));
 
 vi.mock('../../gis-engine/viewReadiness', () => ({
   waitForArcgisView: vi.fn(async () => undefined),
@@ -144,6 +149,7 @@ const dispatchMode = (mode: '2d' | '3d'): void => {
 describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    harness.osmBuildingsRuntime.activate.mockResolvedValue(undefined);
     harness.loadBasemapModule.mockImplementation(async () => ({
       fromId: (id: string) => ({ id, load: vi.fn(async () => undefined), destroy: vi.fn() }),
     }));
@@ -230,8 +236,8 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
     try {
       // The SceneView must initialize and become visible on the first load.
       await waitFor(() => expect(changedModes.filter((mode) => mode === '3d')).toHaveLength(1));
-      expect((mapView.map.basemap as { id?: string }).id).toBe('streets-3d');
-      expect(harness.bridge?.getState().basemapId).toBe('streets-3d');
+      expect((mapView.map.basemap as { id?: string }).id).toBe('openstreetmap-3d');
+      expect(harness.bridge?.getState().basemapId).toBe('openstreetmap-3d');
       expect(harness.views).toHaveLength(1);
       const host = container.querySelector('.experience-scene-host');
       expect(host).not.toBeNull();
@@ -245,7 +251,7 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
 
       await act(async () => { dispatchMode('3d'); });
       await waitFor(() => expect(changedModes.filter((mode) => mode === '3d')).toHaveLength(2));
-      expect((mapView.map.basemap as { id?: string }).id).toBe('streets-3d');
+      expect((mapView.map.basemap as { id?: string }).id).toBe('openstreetmap-3d');
 
       // Keep the same WebGL host attached across 3B → 2B → 3B transitions.
       // Setting container=null can strand SceneView's renderer on a blank frame.

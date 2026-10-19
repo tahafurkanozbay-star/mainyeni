@@ -1,6 +1,9 @@
-import { loadArcgisModule } from './arcgisModuleRuntime';
+import { loadArcgisModules } from './arcgisModuleRuntime';
 import { withTimeout } from '../platform/runtime/resilience';
 import { runtimeDiagnostics } from '../platform/runtime/runtimeDiagnostics';
+
+export const FREE_SCENE_BASEMAP_ID = 'openstreetmap-3d';
+export const FREE_SCENE_BASEMAP_TITLE = 'OpenStreetMap — ücretsiz 3B binalar';
 
 export interface SceneBasemapLike {
   readonly id?: string;
@@ -24,6 +27,25 @@ interface SceneBasemapOwnership {
   readonly sceneBasemap: SceneBasemapLike;
 }
 
+type ArcgisConstructor<T = unknown> = new (properties?: Record<string, unknown>) => T;
+
+const loadFreeOpenStreetMapBasemap = async (): Promise<SceneBasemapModule> => {
+  const [Basemap, OpenStreetMapLayer] = await loadArcgisModules<
+    readonly [ArcgisConstructor<SceneBasemapLike>, ArcgisConstructor<unknown>]
+  >(['esri/Basemap', 'esri/layers/OpenStreetMapLayer']);
+
+  return {
+    fromId: (id: string) => {
+      if (id !== FREE_SCENE_BASEMAP_ID) return null;
+      return new Basemap({
+        id: FREE_SCENE_BASEMAP_ID,
+        title: FREE_SCENE_BASEMAP_TITLE,
+        baseLayers: [new OpenStreetMapLayer()],
+      });
+    },
+  };
+};
+
 const throwIfAborted = (signal?: AbortSignal): void => {
   if (!signal?.aborted) return;
   if (signal.reason instanceof Error) throw signal.reason;
@@ -31,8 +53,9 @@ const throwIfAborted = (signal?: AbortSignal): void => {
 };
 
 /**
- * Temporarily switches a shared Map to a 3D-capable basemap while a SceneView
- * is active. The user's current 2D basemap is retained and restored on return.
+ * Temporarily uses the API-key-free OpenStreetMap layer in SceneView.
+ * It deliberately avoids the authenticated Esri streets-3d style and World
+ * Elevation service; OSM3DBuildingsRuntime supplies the extruded building data.
  */
 export class SceneBasemapRuntime {
   readonly #loadBasemap: () => Promise<SceneBasemapModule>;
@@ -40,8 +63,8 @@ export class SceneBasemapRuntime {
   #ownership: SceneBasemapOwnership | null = null;
 
   constructor(
-    loadBasemap: () => Promise<SceneBasemapModule> = () => loadArcgisModule<SceneBasemapModule>('esri/Basemap'),
-    basemapId = 'streets-3d',
+    loadBasemap: () => Promise<SceneBasemapModule> = loadFreeOpenStreetMapBasemap,
+    basemapId = FREE_SCENE_BASEMAP_ID,
   ) {
     this.#loadBasemap = loadBasemap;
     this.#basemapId = basemapId;
@@ -52,7 +75,6 @@ export class SceneBasemapRuntime {
 
     const existing = this.#ownership;
     if (existing?.map === map) {
-      // A basemap chosen in the gallery becomes the next 2D basemap to restore.
       if (map.basemap !== existing.sceneBasemap) existing.previousBasemap = map.basemap;
       map.basemap = existing.sceneBasemap;
       return;
@@ -64,7 +86,7 @@ export class SceneBasemapRuntime {
     const module = await this.#loadBasemap();
     throwIfAborted(signal);
     const sceneBasemap = module.fromId(this.#basemapId);
-    if (!sceneBasemap) throw new Error(`ArcGIS 3D altlığı kullanılamıyor: ${this.#basemapId}`);
+    if (!sceneBasemap) throw new Error(`Ücretsiz OpenStreetMap 3B altlığı kullanılamıyor: ${this.#basemapId}`);
 
     try {
       await withTimeout((timeoutSignal) => sceneBasemap.load?.({ signal: timeoutSignal }), 15_000, signal);
@@ -85,10 +107,7 @@ export class SceneBasemapRuntime {
   restore(map: SceneBasemapMap): boolean {
     const ownership = this.#ownership;
     if (!ownership || ownership.map !== map) return false;
-
-    if (map.basemap !== ownership.sceneBasemap) {
-      ownership.previousBasemap = map.basemap;
-    }
+    if (map.basemap !== ownership.sceneBasemap) ownership.previousBasemap = map.basemap;
     map.basemap = ownership.previousBasemap ?? null;
     return true;
   }
@@ -97,10 +116,7 @@ export class SceneBasemapRuntime {
     const ownership = this.#ownership;
     this.#ownership = null;
     if (!ownership) return;
-
-    if (ownership.map.basemap !== ownership.sceneBasemap) {
-      ownership.previousBasemap = ownership.map.basemap;
-    }
+    if (ownership.map.basemap !== ownership.sceneBasemap) ownership.previousBasemap = ownership.map.basemap;
     ownership.map.basemap = ownership.previousBasemap ?? null;
     try { ownership.sceneBasemap.destroy?.(); } catch (cleanupError) {
       runtimeDiagnostics.captureError(cleanupError, { source: 'gis.scene-basemap.teardown' }, 'warn');

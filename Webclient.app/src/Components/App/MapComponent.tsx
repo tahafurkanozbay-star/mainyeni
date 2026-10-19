@@ -131,7 +131,9 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       ]);
       if (disposed || signal.aborted || !mapDiv.current) return;
       accessorWatchRef.current = watchUtils.watch;
-      const map = new MapCtor({ basemap: 'osm', ground: 'world-elevation' });
+      // The no-key 3D scene uses OpenStreetMap tiles and extruded OSM building footprints.
+      // Omit World Elevation so the default scene does not depend on an Esri credential.
+      const map = new MapCtor({ basemap: 'osm' });
       view = new MapViewCtor(createMapViewOptions({ container: mapDiv.current, map, configuration: mapConfig, viewportWidth: window.innerWidth }));
       await waitForArcgisView(view, { signal, accessorWatch: watchUtils.watch });
       if (disposed || signal.aborted) return;

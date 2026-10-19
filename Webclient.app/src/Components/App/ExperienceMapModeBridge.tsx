@@ -18,6 +18,8 @@ import {
 import type { ArcgisAccessorWatch } from '../../gis-engine/arcgisReactiveRuntime';
 import { waitForArcgisView } from '../../gis-engine/viewReadiness';
 import { SceneBasemapRuntime, type SceneBasemapMap } from '../../gis-engine/sceneBasemapRuntime';
+import { OSM3DBuildingsRuntime } from '../../gis-engine/osm3DBuildingsRuntime';
+import './OpenStreetMap3DAttribution.css';
 import {
   createSceneExperienceRuntime,
   type SceneExperienceRuntime,
@@ -185,6 +187,8 @@ export function ExperienceMapModeBridge({
   const sceneRef = useRef<SceneHandle | null>(null);
   const sceneBasemapRuntimeRef = useRef<SceneBasemapRuntime | null>(null);
   if (!sceneBasemapRuntimeRef.current) sceneBasemapRuntimeRef.current = new SceneBasemapRuntime();
+  const osmBuildingsRuntimeRef = useRef<OSM3DBuildingsRuntime | null>(null);
+  if (!osmBuildingsRuntimeRef.current) osmBuildingsRuntimeRef.current = new OSM3DBuildingsRuntime();
   const pendingSceneRef = useRef<SceneHandle | null>(null);
   const sceneLifetimeRef = useRef(new AbortController());
   const sceneExperienceRef = useRef<SceneExperienceRuntime | null>(null);
@@ -376,8 +380,15 @@ export function ExperienceMapModeBridge({
         await sceneBasemapRuntimeRef.current?.activate(scene.map as SceneBasemapMap, sceneLifetimeRef.current.signal);
         synchronizeBasemapId(bridge, scene.map);
       } catch (error) {
-        // Terrain and SceneView remain usable if the remote 3D basemap is unavailable.
-        DebugHelper.Log({ context: 'scene-3d-basemap', error });
+        // SceneView stays usable if the keyless OpenStreetMap tile layer is unavailable.
+        DebugHelper.Log({ context: 'scene-free-osm-basemap', error });
+      }
+      if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
+      try {
+        await osmBuildingsRuntimeRef.current?.activate(scene.view as never);
+      } catch (error) {
+        // Overpass availability must not block 2D/3D navigation.
+        DebugHelper.Log({ context: 'scene-osm-3d-buildings', error });
       }
       if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
       setSceneHostActive(true);
@@ -392,6 +403,7 @@ export function ExperienceMapModeBridge({
       announce('3B görünüm etkinleştirildi.');
     } catch (error) {
       DebugHelper.Log(error);
+      osmBuildingsRuntimeRef.current?.deactivate();
       sceneBasemapRuntimeRef.current?.restore(mapView.map as SceneBasemapMap);
       synchronizeBasemapId(bridge, mapView.map);
       sceneExperienceRef.current?.setActive(false);
@@ -453,6 +465,7 @@ export function ExperienceMapModeBridge({
 
       if (disposedRef.current) return;
       setSceneHostActive(false);
+      osmBuildingsRuntimeRef.current?.deactivate();
       sceneBasemapRuntimeRef.current?.restore(mapView.map as SceneBasemapMap);
       synchronizeBasemapId(bridge, mapView.map);
       setMode('2d');
@@ -559,6 +572,7 @@ export function ExperienceMapModeBridge({
   useEffect(() => () => {
     disposedRef.current = true;
     sceneLifetimeRef.current.abort();
+    osmBuildingsRuntimeRef.current?.dispose();
     sceneBasemapRuntimeRef.current?.dispose();
     if (pendingSceneRef.current) destroySceneView(pendingSceneRef.current, (error) => DebugHelper.Log({ context: 'pending-scene-destroy', error }));
     pendingSceneRef.current = null;
@@ -586,6 +600,11 @@ export function ExperienceMapModeBridge({
         data-scene-profile={sceneUi.profileLabel}
         data-scene-status={sceneUi.statusLabel}
       />
+      {sceneHostActive && (
+        <div className="osm3d-attribution" role="note" aria-label="OpenStreetMap bina verisi atfı">
+          3B bina verisi: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer noopener">© OpenStreetMap contributors</a>
+        </div>
+      )}
       {activeMode === '3d' && (
         <output className="experience-sr-only" aria-live="polite">
           3B görünüm durumu: {sceneUi.statusLabel}, {sceneUi.profileLabel}
