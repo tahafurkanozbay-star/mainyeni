@@ -276,7 +276,7 @@ describe('SidebarModern governed interaction integration', () => {
     expect(window.localStorage.getItem('kentrehberi:service-recents')).toContain('egometroduraklar-query-window');
   });
 
-  it('starts expanded on mobile and collapses only when opening a query', async () => {
+  it('keeps the existing category panel expanded on mobile when opening a service', async () => {
     const originalWidth = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
     try {
@@ -289,14 +289,14 @@ describe('SidebarModern governed interaction integration', () => {
 
       await user.click(serviceButton('Parklar'));
       expect(ShowWindow).toHaveBeenCalledWith('park-query-window');
-      expect(aside).toHaveClass('is-collapsed');
-      expect(screen.getByRole('button', { name: 'Hizmet panelini genişlet' })).toHaveFocus();
+      expect(aside).not.toHaveClass('is-collapsed');
+      expect(screen.getByRole('button', { name: 'Hizmet panelini daralt' })).toHaveAttribute('aria-expanded', 'true');
     } finally {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
     }
   });
 
-  it('keeps keyboard focus on the rail when a mobile service is activated with Enter', async () => {
+  it('keeps the selected service focused and the panel expanded after mobile keyboard activation', async () => {
     const originalWidth = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
     try {
@@ -309,14 +309,14 @@ describe('SidebarModern governed interaction integration', () => {
       await user.keyboard('{Enter}');
 
       expect(ShowWindow).toHaveBeenCalledWith('park-query-window');
-      expect(aside).toHaveClass('is-collapsed');
-      expect(screen.getByRole('button', { name: 'Hizmet panelini genişlet' })).toHaveFocus();
+      expect(aside).not.toHaveClass('is-collapsed');
+      expect(park).toHaveFocus();
     } finally {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
     }
   });
 
-  it('starts expanded on tablet and collapses only when opening a query window', async () => {
+  it('keeps the existing category panel expanded on tablet when opening a service', async () => {
     const originalWidth = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 768 });
     try {
@@ -328,14 +328,14 @@ describe('SidebarModern governed interaction integration', () => {
       await user.click(serviceButton('Parklar'));
 
       expect(ShowWindow).toHaveBeenCalledWith('park-query-window');
-      expect(aside).toHaveClass('is-collapsed');
-      expect(screen.getByRole('button', { name: 'Hizmet panelini genişlet' })).toHaveFocus();
+      expect(aside).not.toHaveClass('is-collapsed');
+      expect(screen.getByRole('button', { name: 'Hizmet panelini daralt' })).toHaveAttribute('aria-expanded', 'true');
     } finally {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
     }
   });
 
-  it('preserves rail focus when a tablet service is activated with Enter', async () => {
+  it('keeps the selected service focused and the panel expanded after tablet keyboard activation', async () => {
     const originalWidth = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 768 });
     try {
@@ -348,8 +348,8 @@ describe('SidebarModern governed interaction integration', () => {
       await user.keyboard('{Enter}');
 
       expect(ShowWindow).toHaveBeenCalledWith('park-query-window');
-      expect(aside).toHaveClass('is-collapsed');
-      expect(screen.getByRole('button', { name: 'Hizmet panelini genişlet' })).toHaveFocus();
+      expect(aside).not.toHaveClass('is-collapsed');
+      expect(park).toHaveFocus();
     } finally {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
     }
