@@ -14,7 +14,7 @@ export const KentRehberiDataLayer = ({ map }: { readonly map: KentRehberiMapLike
     serviceKeys: ['kent-rehberi'],
     concurrency: 1,
     timeoutMs: 30_000,
-    loadLayer: async (_key, { signal }) => attachKentRehberiGeoJsonLayer({ map, signal, limit: 2000 }),
+    loadLayer: async (_key, { signal }) => attachKentRehberiGeoJsonLayer({ map, signal }),
     disposeLayer: (handle) => handle.dispose(),
   }), [map]);
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
