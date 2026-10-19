@@ -1,4 +1,5 @@
 import { runtimeConfig } from '../config/runtimeConfig';
+import { AppError } from '../errors/appError';
 import { createFetchTransport } from './fetchTransport';
 import type { FetchImplementation } from './fetchTransport';
 import { createNetworkDiagnostics } from './networkDiagnostics';
@@ -21,15 +22,15 @@ import {
   createRuntimeTuningProfile
 } from './runtimeCapabilities';
 
-interface ApiRuntimeConfig {
-  apiBaseUrl: string;
+interface HttpRuntimeConfig {
+  baseUrl: string;
   requestTimeoutMs: number;
   maxRetries: number;
   cacheTtlMs: number;
 }
 
 interface ApiClientOptions {
-  runtimeConfig?: ApiRuntimeConfig;
+  runtimeConfig?: HttpRuntimeConfig;
   diagnostics?: ReturnType<typeof createNetworkDiagnostics>;
   diagnosticCapacity?: number;
   transport?: RequestTransport;
@@ -131,8 +132,8 @@ const recordRuntimeProfile = (
 };
 
 export const createApiClient = (options: ApiClientOptions = {}): ModernApiClient => {
-  const config: ApiRuntimeConfig = options.runtimeConfig ?? {
-    apiBaseUrl: '/',
+  const config: HttpRuntimeConfig = options.runtimeConfig ?? {
+    baseUrl: '/',
     requestTimeoutMs: runtimeConfig.requestTimeoutMs,
     maxRetries: runtimeConfig.maxRetries,
     cacheTtlMs: runtimeConfig.cacheTtlMs,
@@ -156,7 +157,7 @@ export const createApiClient = (options: ApiClientOptions = {}): ModernApiClient
 
   const hooks = createTransportDiagnosticHooks(diagnostics);
   const transport = options.transport || createFetchTransport({
-    baseUrl: config.apiBaseUrl,
+    baseUrl: config.baseUrl,
     timeoutMs: config.requestTimeoutMs,
     maxRetries: config.maxRetries,
     cacheTtlMs: config.cacheTtlMs,
