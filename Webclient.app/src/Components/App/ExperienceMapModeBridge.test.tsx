@@ -210,7 +210,7 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
     const changedModes: string[] = [];
     const onModeChanged = (event: Event): void => {
       const detail = (event as CustomEvent<{ mode?: string; source?: string }>).detail;
-      if (detail?.source === 'map-runtime' && detail.mode) changedModes.push(detail.mode);
+      if (detail?.source?.startsWith('map-runtime') && detail.mode) changedModes.push(detail.mode);
     };
     window.addEventListener(EXPERIENCE_MAP_MODE_EVENT, onModeChanged);
 
