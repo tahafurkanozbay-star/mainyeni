@@ -7,7 +7,6 @@ import {
 
 const DEFAULT_LIMIT = 500;
 const MAX_LIMIT = 2000;
-const DEFAULT_MAX_PAYLOAD_BYTES = 8 * 1024 * 1024;
 const LAYER_ID = 'kent-rehberi-postgis';
 const LAYER_TITLE = 'Kent Rehberi';
 
