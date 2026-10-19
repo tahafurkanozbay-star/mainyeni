@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   attachKentRehberiGeoJsonLayer,
   createKentRehberiGeoJsonLayer,
+  resolveKentRehberiOverviewIconKey,
   fetchKentRehberiFeature,
   fetchKentRehberiGeoJson,
   fetchKentRehberiTypeCatalog,
@@ -35,6 +36,46 @@ const row = (tur: number, objectId: number) => ({
 
 describe('PlanASKI-only Kent Rehberi GeoJSON layer', () => {
   afterEach(() => vi.restoreAllMocks());
+
+  test('resolves registered SVG symbols from Turkish POI names', () => {
+    expect(resolveKentRehberiOverviewIconKey({ adi: 'Seğmen Su Fabrikası' })).toBe('segmen');
+    expect(resolveKentRehberiOverviewIconKey({ adi: 'Kütüphane' })).toBe('kutuphane');
+    expect(resolveKentRehberiOverviewIconKey({ adi: 'Bilinmeyen bir nokta' })).toBe('default');
+  });
+
+  test('attaches the overview with an SVG unique-value renderer', async () => {
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: () => 'blob:overview-svg' });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
+    const layer = { load: vi.fn(async () => undefined), destroy: vi.fn() };
+    const captured: { options: Record<string, unknown> | null } = { options: null };
+    const Layer = vi.fn(function (options: Record<string, unknown>) { captured.options = options; return layer; });
+    const map = { add: vi.fn(), remove: vi.fn() };
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const tur = Number(new URL(String(input)).searchParams.get('tur'));
+      return response(tur === 13 ? [{ ...row(13, 101), adi: 'Seğmen Su Fabrikası' }] : []);
+    }) as typeof fetch;
+
+    const handle = await attachKentRehberiGeoJsonLayer({
+      map,
+      moduleLoader: (async () => Layer) as never,
+      fetchImpl,
+      tur: 13,
+      limit: 10,
+    });
+
+    const renderer = captured.options?.renderer as {
+      type?: string;
+      field?: string;
+      uniqueValueInfos?: Array<{ value: string; symbol: { url: string } }>;
+      defaultSymbol?: { url: string };
+    };
+    expect(renderer).toMatchObject({ type: 'unique-value', field: 'iconKey' });
+    expect(renderer.uniqueValueInfos?.every((entry) => /\\.svg$/i.test(entry.symbol.url))).toBe(true);
+    expect(renderer.uniqueValueInfos?.find((entry) => entry.value === 'segmen')?.symbol.url).toContain('segmensu.svg');
+    expect(renderer.defaultSymbol?.url).toContain('pictureMarker.png');
+    expect(map.add).toHaveBeenCalledWith(layer);
+    handle.dispose();
+  });
 
   test('always fetches the official PlanASKI endpoint, even if a legacy API flag is present', async () => {
     vi.stubEnv('VITE_KENT_REHBERI_SOURCE', 'api');
