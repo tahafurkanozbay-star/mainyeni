@@ -35,6 +35,7 @@ interface WindowManagerStub {
 
 interface GeolocationHarness {
   readonly getCurrentPosition: ReturnType<typeof vi.fn>;
+  getOptions: () => PositionOptions | undefined;
   resolve: (longitude: number, latitude: number) => void;
   reject: (error?: unknown) => void;
 }
@@ -46,12 +47,15 @@ const createWindowManager = (): WindowManagerStub => ({
 const installGeolocationHarness = (): GeolocationHarness => {
   let successCallback: PositionCallback | undefined;
   let errorCallback: PositionErrorCallback | undefined;
+  let requestedOptions: PositionOptions | undefined;
   const getCurrentPosition = vi.fn((
     success: PositionCallback,
     error?: PositionErrorCallback | null,
+    options?: PositionOptions,
   ) => {
     successCallback = success;
     errorCallback = error ?? undefined;
+    requestedOptions = options;
   });
   Object.defineProperty(navigator, 'geolocation', {
     configurable: true,
@@ -59,6 +63,7 @@ const installGeolocationHarness = (): GeolocationHarness => {
   });
   return {
     getCurrentPosition,
+    getOptions: () => requestedOptions,
     resolve(longitude, latitude) {
       successCallback?.({
         coords: {
@@ -154,6 +159,11 @@ describe('ToolbarWidgetModern', () => {
     const locationButton = screen.getByRole('button', { name: 'Konum Bul' });
     fireEvent.click(locationButton);
     await waitFor(() => expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1));
+    expect(geolocation.getOptions()).toMatchObject({
+      enableHighAccuracy: true,
+      maximumAge: 0,
+      timeout: 20_000,
+    });
     expect(screen.getByRole('button', { name: 'Konum bulunuyor' }).getAttribute('aria-busy')).toBe('true');
     expect(screen.getByRole('status').textContent).toBe('Konumunuz bulunuyor.');
 
@@ -183,7 +193,7 @@ describe('ToolbarWidgetModern', () => {
     expect((busy as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('falls back to Ankara center and restores the sidebar when browser location fails', async () => {
+  it('does not substitute Ankara center when browser location is unavailable', async () => {
     const geolocation = installGeolocationHarness();
     const manager = createWindowManager();
     render(<ToolbarWidgetModern windowManager={manager} />);
@@ -192,26 +202,8 @@ describe('ToolbarWidgetModern', () => {
     geolocation.reject();
 
     await waitFor(() => {
-      expect(GisGraphicsHelper.CreatePoint).toHaveBeenCalledWith({
-        x: 32.80409955978453,
-        y: 39.94494728389463,
-        spatialReference: { wkid: 4326 },
-      });
-      expect(manager.ShowWindow).toHaveBeenCalledWith('sidebar');
-      expect(screen.getByRole('status').textContent).toBe(
-        'Konum alınamadı. Ankara merkez konumu gösterildi.',
-      );
-    });
-  });
-
-  it('announces a stable error if neither requested nor fallback location can render', async () => {
-    const geolocation = installGeolocationHarness();
-    vi.mocked(GisGraphicsHelper.CreatePoint).mockRejectedValue(new Error('map unavailable'));
-    render(<ToolbarWidgetModern windowManager={createWindowManager()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Konum Bul' }));
-    await waitFor(() => expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1));
-    geolocation.reject();
-    await waitFor(() => {
+      expect(GisGraphicsHelper.CreatePoint).not.toHaveBeenCalled();
+      expect(manager.ShowWindow).not.toHaveBeenCalledWith('sidebar');
       expect(screen.getByRole('status').textContent).toBe(
         'Konum gösterilemedi. Harita araçlarını kullanmaya devam edebilirsiniz.',
       );
