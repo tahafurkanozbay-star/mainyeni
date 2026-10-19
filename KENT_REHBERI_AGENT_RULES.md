@@ -1,7 +1,7 @@
 # Kent Rehberi — Agent Orchestration Rules
 
 ## Amaç
-Bu repository kurumsal Kent Rehberi/CBS uygulamasıdır. Amaç uygulamayı modern, profesyonel, güvenli, erişilebilir, hızlı, ölçeklenebilir ve sürdürülebilir bir 2D + 3D GIS platformuna dönüştürmektir.
+Bu depo, ABB'nin **3D Altyapı / Üstyapı Koordinasyon Web Uygulaması** içindir. Aktif yayın ürünü `Webclient.app/` altındaki statik React/TypeScript/Vite/ArcGIS SPA'sıdır. Kent Rehberi katmanları yalnızca resmi PlanASKI uç noktasından doğrudan tarayıcıyla yüklenir; yayın çalışma zamanı için ayrı User/Admin API, uygulama veritabanı veya uygulamaya özel proxy bulunmaz.
 
 ## Her turda zorunlu başlangıç
 1. Önce bu dosyayı oku.
@@ -44,11 +44,11 @@ Bu repository kurumsal Kent Rehberi/CBS uygulamasıdır. Amaç uygulamayı moder
 12. `KENT_REHBERI_PROGRESS.md` içinde net sonraki tur başlangıcı bırak.
 
 ## Network / Veri Erişimi Güvenlik Politikası
-- Dış kullanıcı tarayıcısının gereksiz veya kontrolsüz üçüncü taraf network çağrısı yapmasını engelle. Mümkün olan veri akışlarını same-origin backend/BFF/proxy/server-side katmana taşı.
-- Tarayıcıya ulaşmak zorunda olan verinin ağ üzerinde tamamen gizlenebileceği varsayımını yapma; güvenliği network gizliliğine değil, sunucu tarafı yetkilendirme, least-privilege, erişim kontrolü, veri minimizasyonu ve güvenli API tasarımına dayandır.
-- Gereksiz analytics, telemetry, remote fonts, CDN, maps, geocoding veya başka üçüncü taraf çağrıları ekleme. Tüm harici endpointleri açıkça listele, gerekçelendir ve timeout/cache/cancellation uygula.
-- Uygulama yavaşlığını azaltmak için aynı veriyi tekrar tekrar indirme; cache, request deduplication, lazy loading ve incremental loading kullan.
-- CORS ve güvenlik başlıklarını kontrollü yapılandır; token/secret/API key hiçbir şekilde istemci bundle'ına gömülmesin.
+- Aktif Kent Rehberi veri akışı, statik-only mimari gereği tarayıcıdan doğrudan `https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur=N` adresine gider. Bu akış için User API, Admin API, veritabanı/PostGIS, BFF veya aynı-köken proxy ekleme.
+- Yalnızca sabit resmi host/path kullanılmalı; kategori aralığı, yanıt byte/kayıt sayısı ve eşzamanlılık sınırları, timeout/cancellation, JSON/şema/koordinat doğrulaması korunmalıdır. `credentials: omit`, `redirect: error` ve güvenli CORS isteği kullanılmalı; secret/API key/token istemciye gömülmemelidir.
+- Üretimde CORS izni olduğu varsayılmamalı; `https://cbs.ankara.bel.tr` origin'inden gerçek tarayıcı isteğiyle doğrulanmalıdır. CORS sorunu varsa veri servisi sahibinin allowlist'i düzeltilmeli; tarayıcı güvenlik denetimini aşmak için gizli/örtük bir proxy eklenmemelidir.
+- Ek dış veri kaynağı veya endpoint yalnızca açık ürün gereksinimi, response sözleşmesi, güvenlik incelemesi ve regression testiyle eklenebilir. Gereksiz analytics, telemetry, remote fonts, CDN, geocoding veya başka üçüncü taraf çağrıları ekleme.
+- Arama/katalog işlemleri birden fazla kategori isteği oluşturabileceği için request sınırları, iptal, deduplication ve ölçülebilir davranış korunmalıdır. Cache eklemeden önce veri güncelliği ve resmi hizmet koşulları doğrulanmalıdır.
 
 ## GIS Veri Protokolü
 - Bu proje kapsamında WMS ve WFS servisleri varsayılmayacak ve yeni WMS/WFS entegrasyonu eklenmeyecek; mevcut ve gerekli servisler repository'deki gerçek konfigürasyona göre doğrulanacak.
@@ -89,7 +89,7 @@ Core Web Vitals, bundle size, lazy loading, code splitting, memoization, virtual
 - Aynı dakikada çalışan otomasyonların aynı repo/ortak dosyalara yazabileceğini varsay. Her merge öncesi son bir `main` refresh + mergeability kontrolü zorunludur; zamanlama çakışması branch güvenliği yerine geçmez.
 
 ## Sonraki görev için durum bırakma
-`KENT_REHBERI_PROGRESS.md` içinde tamamlanan işler, devam eden işler, bilinen sorunlar, test/build sonucu, son commit/PR/merge durumu ve sonraki görev için notları güncelle.
+`KENT_REHBERI_PROGRESS.md` kısa ve güncel entrypoint olarak tutulur. Tarihsel/uzun kayıtlar `progress/archive/` altında saklanır; arşivlere yeni canlı durum eklenmez. Tamamlanan işler, devam eden işler, bilinen sorunlar, test/build sonucu, son commit/PR/merge durumu ve sonraki görev notları entrypoint'e özetlenir.
 
 ## Tur sonu raporu
 TUR / GÖREV / BRANCH / COMMIT / PR / MERGE DURUMU / ÖNEMLİ ÖZELLİKLER / DEĞİŞEN DOSYALAR / YAKLAŞIK SATIR / TESTLER / BUILD / NETWORK DEĞİŞİKLİKLERİ / GÜVENLİK KONTROLLERİ / İKON EŞLEŞTİRME / MODERNİZASYON KARARLARI / PERFORMANS ETKİSİ / ÇÖZÜLEN HATALAR / KALAN SORUNLAR / SONRAKİ GÖREV NOTU alanlarını kaydet.
