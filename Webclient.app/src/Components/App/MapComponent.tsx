@@ -94,7 +94,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
 
   const toggleTraffic = useCallback((): void => {
     if (!trafficCredentialConfigured) {
-      setTrafficStatus('Gerçek zamanlı trafik için Webclient.app/.env dosyasında VITE_TOMTOM_TRAFFIC_CREDENTIAL ayarlanmalı.');
+      setTrafficStatus('Canlı trafik için Webclient.app/.env dosyasında VITE_TOMTOM_TRAFFIC_API_KEY ayarlayıp uygulamayı yeniden derleyin. Eski VITE_TOMTOM_TRAFFIC_CREDENTIAL adı da desteklenir.');
       return;
     }
     const next = !trafficEnabled;
@@ -161,6 +161,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       window.addEventListener('resize', updatePadding, { passive: true });
       handles.push({ remove: () => window.removeEventListener('resize', updatePadding) });
       Store.dispatch({ type: MapReducer_ActionTypes.SetMapView, payload: view });
+      MapManager.SetActiveMapView?.(view);
       setMapView(view);
       accessibilityModel.markReady();
       if (recoveryAttemptId !== null) recoveryModel.succeed(recoveryAttemptId);
@@ -173,6 +174,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       unbindViewState(); performanceMonitor?.dispose?.(); MapManager.ClearViewPerformanceMonitor?.(performanceMonitor);
       MapManager.ClearViewStateBridge?.(bridge as never); bridge?.destroy?.(); handles.forEach(safeRemove); windowManager.SetMapUpdating(false);
       Store.dispatch({ type: MapReducer_ActionTypes.SetMapView, payload: null });
+      MapManager.SetActiveMapView?.(null);
       setMapView(null);
       if (view) { try { view.container = null; view.destroy?.(); } catch (error) { DebugHelper.Log(error); } }
     };
