@@ -467,6 +467,13 @@ export const createSceneExperienceRuntime = (
     if (!error || disposed) return;
     void recoverFatalError();
   }, options.accessorWatch);
+  // The SDK can report a non-ready renderer through readyState before or
+  // without a useful fatalError payload. Treat that as a recoverable WebGL
+  // rendering failure as well, rather than leaving a blank 3B scene active.
+  const readyStateHandle = watchArcgisProperty(view, 'readyState', (state: unknown) => {
+    if (state !== 'rendering-error' || disposed) return;
+    void recoverFatalError();
+  }, options.accessorWatch);
 
   const performanceUnsubscribe = adaptive.subscribe((snapshot, reason) => {
     if (disposed) return;
@@ -497,6 +504,11 @@ export const createSceneExperienceRuntime = (
       fatalHandle?.remove?.();
     } catch (error) {
       reportRuntimeError(error, 'fatal-watch-dispose');
+    }
+    try {
+      readyStateHandle?.remove?.();
+    } catch (error) {
+      reportRuntimeError(error, 'ready-state-watch-dispose');
     }
     performanceUnsubscribe?.();
     visibilityUnsubscribe?.();
