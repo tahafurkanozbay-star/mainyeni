@@ -427,15 +427,39 @@ describe('SidebarModern governed interaction integration', () => {
     expect(screen.queryByRole('button', { name: 'Parklar sorgusunu aç' })).not.toBeInTheDocument();
   });
 
-  it('toggles the selected institution back to all services', async () => {
+  it('keeps the selected institution and its subcategory list open when the same main category is clicked again', async () => {
     const user = userEvent.setup();
-    renderSidebar();
+    const { ShowWindow } = renderSidebar();
+    const sidebar = screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' });
     const ego = screen.getByRole('button', { name: 'EGO Genel Müdürlüğü' });
+
     await user.click(ego);
     expect(ego).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('8 hizmet')).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).toBe(sidebar);
+
     await user.click(ego);
-    expect(ego).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByText('40 hizmet')).toBeInTheDocument();
+    expect(ego).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('8 hizmet')).toBeInTheDocument();
+    expect(screen.queryByText('40 hizmet')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).toHaveLength(1);
+    expect(ShowWindow).not.toHaveBeenCalled();
+  });
+
+  it('switches the existing category panel to another institution without creating a new panel', async () => {
+    const user = userEvent.setup();
+    const { ShowWindow } = renderSidebar();
+    const sidebar = screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' });
+
+    await user.click(screen.getByRole('button', { name: 'EGO Genel Müdürlüğü' }));
+    expect(screen.getByText('8 hizmet')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'ASKİ Genel Müdürlüğü' }));
+    expect(screen.getByRole('heading', { name: 'ASKİ Genel Müdürlüğü' })).toBeInTheDocument();
+    expect(screen.getByText('6 hizmet')).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).toBe(sidebar);
+    expect(screen.getAllByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).toHaveLength(1);
+    expect(ShowWindow).not.toHaveBeenCalled();
   });
 
   it('moves group focus with ArrowRight without selecting the next group', async () => {
