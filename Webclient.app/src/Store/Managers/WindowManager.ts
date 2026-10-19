@@ -164,6 +164,11 @@ export const createWindowManager = (requestRender: () => void = noop): WindowMan
     ToggleWindow: (windowid, query) => {
       const target = getWindow(windowid);
       if (!target) return false;
+      // The city-services sidebar is persistent: its toggle collapses/expands
+      // the rail rather than removing the workspace navigation surface.
+      if (windowid === 'sidebar') {
+        return target.minimized ? manager.ShowWindow(windowid, query) : manager.HideWindow(windowid);
+      }
       return target.visible ? manager.HideWindow(windowid) : manager.ShowWindow(windowid, query);
     },
 
@@ -193,7 +198,9 @@ export const createWindowManager = (requestRender: () => void = noop): WindowMan
         return true;
       }
       getWindowList().forEach((item) => {
-        if (item.id === windowid || !item.visible) return;
+        // Activating another tool must not deliver an exclusive-window close
+        // to the persistent city-services sidebar.
+        if (item.id === windowid || item.id === 'sidebar' || !item.visible) return;
         callSafely(readWindowHandle(item)?.OnClose);
       });
 
@@ -212,6 +219,22 @@ export const createWindowManager = (requestRender: () => void = noop): WindowMan
     HideWindow: (windowid) => {
       const target = getWindow(windowid);
       if (!target) return false;
+
+      if (windowid === 'sidebar') {
+        // "Hide" on this persistent surface means collapse. Preserve the
+        // registration and visibility so other tools cannot make it vanish.
+        callSafely(readWindowHandle(target)?.OnClose);
+        Store.dispatch({
+          type: CommonReducer_ActionTypes.SetWindowVisibility,
+          payload: { windowid, visible: true, query: target.query ?? {} },
+        });
+        Store.dispatch({
+          type: CommonReducer_ActionTypes.SetWindowMinimized,
+          payload: { windowid, minimized: true },
+        });
+        refresh();
+        return true;
+      }
 
       callSafely(readWindowHandle(target)?.OnClose);
       Store.dispatch({
