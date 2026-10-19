@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { BiZoomIn } from 'react-icons/bi';
 import MapManager from '../../../Store/Managers/MapManager';
+import { getActiveMapView } from '../../../gis-engine/activeMapViewRuntime';
 import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
 import { LoggingBusiness } from '../../../Business/LoggingBusiness';
 import { createIdentifySession } from '../../../gis-engine/identifyRuntime';
@@ -89,7 +90,7 @@ export const GlobalIdentifyWidget = forwardRef<ManagedWindowHandle, GlobalIdenti
     const highlightGraphicRef = useRef<unknown>(null);
 
     const clearHighlight = useCallback((): void => {
-      const view = MapManager.GetActiveMapView?.() ?? MapManager.GetMapView() ?? mapView;
+      const view = getActiveMapView(MapManager.GetMapView()) ?? mapView;
       if (view && highlightGraphicRef.current) {
         GisGraphicsHelper.RemoveGraphics(view, highlightGraphicRef.current);
         highlightGraphicRef.current = null;
@@ -104,7 +105,7 @@ export const GlobalIdentifyWidget = forwardRef<ManagedWindowHandle, GlobalIdenti
 
     const executeIdentify = useCallback(async (event: unknown): Promise<void> => {
       const generation = ++identifyGenerationRef.current;
-      const view = MapManager.GetActiveMapView?.() ?? MapManager.GetMapView() ?? mapView;
+      const view = getActiveMapView(MapManager.GetMapView()) ?? mapView;
       const eventWithPoint = event as { mapPoint?: unknown } | null;
       if (!view || !eventWithPoint?.mapPoint) {
         if (mountedRef.current) {
@@ -157,7 +158,7 @@ export const GlobalIdentifyWidget = forwardRef<ManagedWindowHandle, GlobalIdenti
     useEffect(() => {
       mountedRef.current = true;
       windowManager.RegisterWindow(ref as RefObject<ManagedWindowHandle | null>);
-      setMapView(MapManager.GetActiveMapView?.() ?? MapManager.GetMapView());
+      setMapView(getActiveMapView(MapManager.GetMapView()));
       const session = sessionRef.current;
 
       return () => {
@@ -174,7 +175,7 @@ export const GlobalIdentifyWidget = forwardRef<ManagedWindowHandle, GlobalIdenti
     }, [id, ref, windowManager]);
 
     const goToItem = useCallback(async (item: IdentifyFeatureResult): Promise<void> => {
-      const view = MapManager.GetActiveMapView?.() ?? MapManager.GetMapView() ?? mapView;
+      const view = getActiveMapView(MapManager.GetMapView()) ?? mapView;
       const geometry = geometryOf(item);
       if (!view || !geometry) return;
 
