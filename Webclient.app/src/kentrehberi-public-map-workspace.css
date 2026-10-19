@@ -971,3 +971,35 @@ body {
   white-space: nowrap !important;
   border: 0 !important;
 }
+
+@media (max-width: 560px) {
+  /* Keep the theme button available on mobile without bringing back the lower dock. */
+  #app-shell .mainbar-container .mainbar-right {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    min-width: 40px;
+  }
+  #app-shell .mainbar-container .kr-theme-toggle {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0;
+  }
+  #app-shell .mainbar-container .kr-theme-toggle span { display: none !important; }
+}
+
+/* The map uses a true grid, so the brand, address search and portal/theme controls
+   have separate tracks instead of visually sitting over the basemap. */
+@media (min-width: 821px) {
+  #app-shell .mainbar-container .mainbar {
+    display: grid !important;
+    grid-template-columns: minmax(210px, 1fr) minmax(280px, min(560px, 44vw)) max-content !important;
+  }
+  #app-shell .mainbar-container .ns-input { width: 100% !important; }
+}
