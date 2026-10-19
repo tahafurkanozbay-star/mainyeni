@@ -167,7 +167,7 @@ describe('ToolbarWidgetModern', () => {
       expect(GisGraphicsHelper.ZoomToGeometry).toHaveBeenCalledWith(
         expect.anything(),
         expect.anything(),
-        15,
+        18,
       );
       expect(screen.getByRole('status').textContent).toBe('Konumunuz haritada gösterildi.');
     });
