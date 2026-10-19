@@ -25,13 +25,13 @@
 ## Doğrulama ve durum
 
 - Ana dal tabanı, bu çalışmanın başlangıcında `9d83821c132e43afe14d9924435e271d5506fbc6` idi; önceki statik-only API kaldırma değişikliği [PR #538](https://github.com/tahafurkanozbay-star/mainyeni/pull/538) ile birleştirilmişti.
-- Bu yapı/hijyen çalışması `agent/structure-hygiene-20261019-0520-9d83821` dalında. CI sonucu bu tam başlık SHA'sı için henüz onaylanmış sayılmamalıdır; PR oluşturulduktan sonra kalite iş akışları exact-head bazında kontrol edilecek.
+- Yapı/hijyen PR'ı [#540](https://github.com/tahafurkanozbay-star/mainyeni/pull/540) `0701d47f7e032832a2812208e04031da1844b4ba` exact-head SHA'sında beş kontrolün tamamını başarıyla geçti: Webclient Quality, Release QA, Platform Architecture Audit, Platform Dependency Governance ve Typed Source Boundary. PR 19 Ekim 2026 tarihinde squash-merge edildi; merge commit ve güncel `main` SHA'sı `10d4161d6576444bd83d0bfd67d5669108ff2515`.
 - Bu ortamda canlı IIS sunucusu veya üretim tarayıcısında değişiklik yapılmadı; dağıtım sonucu ya da üretim CORS başarısı iddia edilmiyor.
 
 ## Sonraki adımlar
 
-1. PR oluşturulduktan sonra bütün ilgili GitHub Actions iş akışlarını bu dalın son SHA'sında kontrol et.
-2. Başarısız lint/test/build/kalite kapılarını kapsamı düşürmeden düzelt; ardından exact-head CI'ı yeniden doğrula.
-3. Canlı yayından sonra Network panelinde Kent Rehberi isteklerinin yalnız PlanASKI hostuna gittiğini ve CORS nedeniyle tarayıcı hatası oluşmadığını doğrula.
-4. Eski IIS eşlemesi/klasörü için canlı sunucu envanteri çıkar; yalnız ayrı onaylı bakım adımında kaldır.
-5. Ayrı GIS modülleri `KentRehberi/webclient/` ve `WebClient/` dosyalarını otomatik silme veya birleştirme: aktif bağımlılık/CI rolünü kanıtlayan envanter tamamlandıktan sonra ayrı bir migration planı hazırla.
+1. Kod tarafında mevcut statik-only release ve PlanASKI kaynak sınırlarını koru; yeni API/proxy/source toggle ekleme.
+2. Canlı yayından sonra Network panelinde Kent Rehberi isteklerinin yalnız PlanASKI hostuna gittiğini ve CORS nedeniyle tarayıcı hatası oluşmadığını doğrula.
+3. Eski IIS eşlemesi/klasörü için canlı sunucu envanteri çıkar; yalnız ayrı onaylı bakım adımında kaldır. Bu ortamda canlı IIS'e erişilmedi.
+4. `KentRehberi/webclient/` ayrı `gis-core-quality.yml` kalite iş akışı tarafından hâlâ derlenip test ediliyor; bu modülü aktif mimari envanteri olmadan silme.
+5. `WebClient/` ayrı test/policy kaynaklarından oluşuyor ancak gözden geçirilen workflow envanterinde doğrudan build/release işi görülmedi. Dosyaları otomatik silme: import, typed-boundary, kalite aracı ve tarihsel amaç kontrolü tamamlandıktan sonra ayrı kaldırma/arsivleme PR'ı hazırla.
