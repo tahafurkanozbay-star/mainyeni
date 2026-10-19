@@ -28,6 +28,7 @@ import {
   type GeometryLike,
 } from '../_Common/QueryInteractionRuntime';
 import {
+  isTechnicalCategoryLabel,
   normalizeSearchCollection,
   type NormalizedSearchRecord,
   type SearchRecordInput,
@@ -354,6 +355,15 @@ export const GenelAramaQeryWindow = forwardRef<
   const renderResult = useCallback((item: GeneralSearchPresentedRecordV10): ReactNode => {
     const record = item.record;
     const busy = detailLoadingKey === record.key;
+    const googleMapsQuery = record.address || record.title;
+    const canSearchGoogleMaps = Boolean(
+      googleMapsQuery
+      && googleMapsQuery !== 'İsimsiz kayıt'
+      && !isTechnicalCategoryLabel(googleMapsQuery),
+    );
+    const googleMapsUrl = canSearchGoogleMaps
+      ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(googleMapsQuery)
+      : null;
     return (
       <article
         id={resultDomId(id, item)}
@@ -383,7 +393,7 @@ export const GenelAramaQeryWindow = forwardRef<
           <span className="result-item-info-title">
             {renderHighlightSegments(item.titleSegments, record.title)}
           </span>
-          {record.category && record.category !== 'Diğer' ? (
+          {record.category && record.category !== 'Diğer' && !isTechnicalCategoryLabel(record.category) ? (
             <span className="genel-arama-result-category">{record.category}</span>
           ) : null}
           {record.address ? (
@@ -402,6 +412,18 @@ export const GenelAramaQeryWindow = forwardRef<
             <span className="genel-arama-result-status">İşlem sürüyor…</span>
           ) : null}
         </button>
+        {googleMapsUrl ? (
+          <a
+            className="genel-arama-result-google-maps"
+            href={googleMapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`${googleMapsQuery} adresini Google Haritalar'da aç`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            Google Haritalar’da aç
+          </a>
+        ) : null}
         <CommonQueryResultItemTools
           item={record}
           zoomCallback={() => {

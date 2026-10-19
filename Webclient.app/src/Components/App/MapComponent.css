@@ -88,8 +88,8 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--exp-transition, 180ms ease);
-  contain: layout paint;
-  /* Intentionally no content-visibility: the WebGL host must stay measurable. */
+  /* Do not contain or collapse the live WebGL surface; ArcGIS must be able to
+   * size and paint its full renderer while this host is temporarily inactive. */
 }
 
 .experience-scene-host.is-active {
@@ -218,9 +218,17 @@
   color: var(--exp-warning-text, #92400e);
 }
 
-/* React-owned navigation, panels and managed windows stay above either Esri
- * view. Individual components retain their own z-index contracts. */
-.esri-map > .mainbar-container,
+/* Keep the header pinned to the viewport top above both MapView and SceneView.
+ * Sidebars stay in the normal workspace stack so they do not obscure the header. */
+.esri-map > .mainbar-container {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline: 0;
+  z-index: 2000;
+  box-sizing: border-box;
+  background: var(--exp-surface, #fff);
+}
+
 .esri-map > .sidebar-container,
 .esri-map > .sidebar-container1 {
   position: relative;

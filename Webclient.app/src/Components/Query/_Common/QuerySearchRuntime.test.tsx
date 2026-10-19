@@ -10,6 +10,7 @@ import {
     getRecordId,
     getRecordPhone,
     getRecordTitle,
+    isTechnicalCategoryLabel,
     groupSearchResults,
     isResultActivationKey,
     isSmallViewport,
@@ -106,7 +107,15 @@ describe("QuerySearchRuntime", () => {
         test("keeps descriptive types but does not expose technical category codes", () => {
             expect(getRecordCategory({ type: "Kategori 34" })).toBe("Diğer");
             expect(getRecordCategory({ attr: { kategori: "Kategori 34" } })).toBe("Diğer");
+            expect(getRecordCategory({ category: "34" })).toBe("34");
+            expect(getRecordCategory({ Category: "Kategori 34" })).toBe("Kategori 34");
             expect(getRecordCategory({ type: "Kültür tesisi" })).toBe("Kültür tesisi");
+        });
+
+        test("identifies technical categories for display without changing their facet identity", () => {
+            expect(isTechnicalCategoryLabel("34")).toBe(true);
+            expect(isTechnicalCategoryLabel("Kategori 34")).toBe(true);
+            expect(isTechnicalCategoryLabel("Kültür tesisleri")).toBe(false);
         });
     });
 

@@ -221,6 +221,9 @@ export const getRecordId = (
 
 const TECHNICAL_CATEGORY_LABEL = /^(?:kategori\s*)?\d+$/iu;
 
+export const isTechnicalCategoryLabel = (value: unknown): boolean =>
+  TECHNICAL_CATEGORY_LABEL.test(normalizeWhitespace(value));
+
 export const getRecordAddress = (
   record: SearchRecordInput | null | undefined,
 ): string => normalizeWhitespace(readFirstValue(
@@ -240,7 +243,7 @@ export const getRecordTitle = (
   const address = getRecordAddress(record);
 
   // Prefer an address when the upstream source provides only a technical label.
-  if (!sourceTitle || TECHNICAL_CATEGORY_LABEL.test(sourceTitle)) {
+  if (!sourceTitle || isTechnicalCategoryLabel(sourceTitle)) {
     return address || 'İsimsiz kayıt';
   }
   return sourceTitle;
@@ -262,19 +265,18 @@ export const getRecordCategory = (
     ['Category', 'category', 'kategori', 'KATEGORI'],
     '',
   ));
-  // Preserve an explicit, top-level Category field for facet aggregation.
-  // Some legacy records carry generated "Kategori 34" values only in nested
-  // GIS attributes; those are technical fallbacks, not user-facing categories.
+  // Keep the actual category identity intact for facet filtering. Whether a
+  // category code is suitable for display is decided by the result presentation.
   const explicitCategory = normalizeWhitespace(readFirstValue(record, ['Category', 'category'], ''));
   if (
     semanticCategory
-    && (!TECHNICAL_CATEGORY_LABEL.test(semanticCategory) || explicitCategory)
+    && (!isTechnicalCategoryLabel(semanticCategory) || explicitCategory)
   ) {
     return semanticCategory;
   }
 
   const technicalType = normalizeWhitespace(readFirstValue(record, ['type', 'Type'], ''));
-  return technicalType && !TECHNICAL_CATEGORY_LABEL.test(technicalType)
+  return technicalType && !isTechnicalCategoryLabel(technicalType)
     ? technicalType
     : 'Diğer';
 };

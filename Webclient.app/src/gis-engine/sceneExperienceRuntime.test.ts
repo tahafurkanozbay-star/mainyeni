@@ -268,6 +268,26 @@ describe('sceneExperienceRuntime lifecycle', () => {
     expect(view.recover).toHaveBeenCalledTimes(1);
     runtime.dispose();
     expect(view.watchers.has('fatalError')).toBe(false);
+    expect(view.watchers.has('readyState')).toBe(false);
+  });
+
+  it('attempts WebGL recovery when SceneView readyState enters rendering-error', async () => {
+    const view = createView();
+    const runtime = createSceneExperienceRuntime(view, {
+      now: () => 50_000,
+      recoveryCooldownMs: 250,
+      requestFrame: () => 1,
+      cancelFrame: () => undefined,
+    });
+
+    view.watchers.get('readyState')?.('rendering-error');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(view.recover).toHaveBeenCalledTimes(1);
+    expect(runtime.getSnapshot().recovery.attempts).toBe(1);
+    runtime.dispose();
+    expect(view.watchers.has('readyState')).toBe(false);
   });
 
   it('caps recovery attempts and enters degraded status after repeated failures', async () => {
@@ -310,9 +330,10 @@ describe('sceneExperienceRuntime reactive watch boundary', () => {
     });
 
     expect(accessorWatch).toHaveBeenCalledWith(view, 'fatalError', expect.any(Function));
+    expect(accessorWatch).toHaveBeenCalledWith(view, 'readyState', expect.any(Function));
     expect(legacyWatch).not.toHaveBeenCalled();
 
     runtime.dispose();
-    expect(remove).toHaveBeenCalledTimes(1);
+    expect(remove).toHaveBeenCalledTimes(2);
   });
 });

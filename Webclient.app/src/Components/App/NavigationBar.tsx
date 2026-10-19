@@ -13,9 +13,13 @@ type SearchFeedback = Readonly<{
   phase: 'idle' | 'loading' | 'success' | 'error';
   message: string;
   attributionUrl?: string;
+  googleMapsUrl?: string;
 }>;
 
 const EMPTY_FEEDBACK: SearchFeedback = Object.freeze({ phase: 'idle', message: '' });
+
+const googleMapsSearchUrl = (query: string): string =>
+  'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(query);
 
 export function NavigationBar({ id, onAddressSearch }: NavigationBarProps) {
   const searchModel = useMemo(() => new NavigationSearchModel(), []);
@@ -39,8 +43,9 @@ export function NavigationBar({ id, onAddressSearch }: NavigationBarProps) {
     const controller = new AbortController();
     searchControllerRef.current = controller;
     const requestId = ++searchSequenceRef.current;
+    const mapsUrl = googleMapsSearchUrl(query);
     setSearching(true);
-    setFeedback({ phase: 'loading', message: 'Adres aranıyor…' });
+    setFeedback({ phase: 'loading', message: 'Adres aranıyor…', googleMapsUrl: mapsUrl });
 
     try {
       const address = await onAddressSearch(query, controller.signal);
@@ -49,6 +54,7 @@ export function NavigationBar({ id, onAddressSearch }: NavigationBarProps) {
         phase: 'success',
         message: 'Bulundu: ' + address,
         attributionUrl: 'https://www.openstreetmap.org/copyright',
+        googleMapsUrl: mapsUrl,
       });
     } catch (error) {
       if (controller.signal.aborted || requestId !== searchSequenceRef.current) return;
@@ -57,6 +63,7 @@ export function NavigationBar({ id, onAddressSearch }: NavigationBarProps) {
         message: error instanceof Error && error.message
           ? error.message
           : 'Adres bulunamadı. Daha açık bir adres deneyin.',
+        googleMapsUrl: mapsUrl,
       });
     } finally {
       if (requestId === searchSequenceRef.current) {
@@ -136,6 +143,16 @@ export function NavigationBar({ id, onAddressSearch }: NavigationBarProps) {
               aria-atomic="true"
             >
               <span>{feedback.message}</span>
+              {feedback.googleMapsUrl ? (
+                <a
+                  className="kr-google-maps-link"
+                  href={feedback.googleMapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Google Haritalar’da adresi aç
+                </a>
+              ) : null}
               {feedback.attributionUrl ? (
                 <a href={feedback.attributionUrl} target="_blank" rel="noopener noreferrer">© OpenStreetMap katkıcıları</a>
               ) : null}

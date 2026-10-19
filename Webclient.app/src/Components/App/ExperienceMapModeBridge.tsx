@@ -25,7 +25,6 @@ import {
 } from '../../gis-engine/sceneExperienceRuntime';
 import {
   createSceneNavigationRuntime,
-  type SceneNavigateOptions,
   type SceneNavigationRuntime,
 } from '../../gis-engine/sceneNavigationRuntime';
 import { createViewState } from '../../gis-engine/viewState';
@@ -37,20 +36,9 @@ import {
   type ExperienceMapMode,
 } from '../../experience/experienceRuntime';
 import { executeSceneCommand as executeSceneRuntimeCommand } from '../../experience/sceneCommandRuntime';
-import { chooseSceneControlsPlacement } from './sceneControlsPlacementPolicy';
 
 const DEFAULT_SCENE_TILT = 48;
 const SCENE_TRANSITION_DURATION_MS = 320;
-
-type SceneNavigationAction =
-  | 'back'
-  | 'forward'
-  | 'home'
-  | 'north'
-  | 'rotate-left'
-  | 'rotate-right'
-  | 'tilt-less'
-  | 'tilt-more';
 
 interface ArcGisMapViewLike {
   map: unknown;
@@ -158,12 +146,6 @@ const prefersReducedMotion = (): boolean => (
   && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 );
 
-const sceneControlOptions = (reason: string): SceneNavigateOptions => ({
-  animate: !prefersReducedMotion(),
-  durationMs: prefersReducedMotion() ? 0 : 220,
-  reason,
-});
-
 const nextBrowserFrame = (): Promise<void> => new Promise((resolve) => {
   if (typeof requestAnimationFrame === 'function') {
     requestAnimationFrame(() => resolve());
@@ -186,7 +168,6 @@ export function ExperienceMapModeBridge({
   accessorWatch,
 }: ExperienceMapModeBridgeProps) {
   const sceneHostRef = useRef<HTMLDivElement | null>(null);
-  const sceneControlsRef = useRef<HTMLElement | null>(null);
   const sceneRef = useRef<SceneHandle | null>(null);
   const pendingSceneRef = useRef<SceneHandle | null>(null);
   const sceneLifetimeRef = useRef(new AbortController());
@@ -335,16 +316,13 @@ export function ExperienceMapModeBridge({
       if (!sceneHost) throw new Error('3B harita kapsayıcısı kullanılamıyor.');
       if (scene.view.destroyed) throw new Error('3B harita görünümü kapatılmış.');
 
-      // ArcGIS can retain a SceneView instance after its overlapping host was
-      // hidden, while the renderer no longer paints correctly on reactivation.
-      // Detach and reattach that same view (the Map and layer state are retained),
-      // then resize across rendered frames before applying the latest viewpoint.
-      if (scene.view.container === sceneHost) {
-        scene.view.container = null;
-        await nextBrowserFrame();
+      // Keep the SceneView attached to its measurable host for its entire
+      // lifetime. Detaching the WebGL view between 2B/3B transitions can leave
+      // the renderer blank even after the same container is attached again.
+      if (scene.view.container !== sceneHost) {
+        scene.view.container = sceneHost;
       }
       if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
-      scene.view.container = sceneHost;
       await nextBrowserFrame();
       synchronizeSceneViewSize(scene.view);
       await nextBrowserFrame();
@@ -490,27 +468,6 @@ export function ExperienceMapModeBridge({
     });
   }, []);
 
-  const runSceneNavigationAction = useCallback(async (action: SceneNavigationAction): Promise<boolean> => {
-    if (activeModeRef.current !== '3d') return false;
-    const navigation = sceneNavigationRef.current;
-    if (!navigation) return false;
-
-    const options = sceneControlOptions(`control-${action}`);
-    let success = false;
-    if (action === 'back') success = await navigation.back(options);
-    else if (action === 'forward') success = await navigation.forward(options);
-    else if (action === 'home') success = await navigation.goHome(options);
-    else if (action === 'north') success = await navigation.resetNorth(options);
-    else if (action === 'rotate-left') success = await navigation.rotateBy(-15, options);
-    else if (action === 'rotate-right') success = await navigation.rotateBy(15, options);
-    else if (action === 'tilt-less') success = await navigation.tiltBy(-10, options);
-    else if (action === 'tilt-more') success = await navigation.tiltBy(10, options);
-
-    if (success && action === 'home') announce('3B başlangıç görünümüne dönüldü.');
-    if (success && action === 'north') announce('3B kamera kuzeye hizalandı.');
-    return success;
-  }, []);
-
   useEffect(() => {
     if (!sceneReady || !sceneHostActive) return undefined;
     const host = sceneHostRef.current;
@@ -565,169 +522,6 @@ export function ExperienceMapModeBridge({
     };
   }, [executeActiveSceneCommand, mapView, modeRef, queueTransition]);
 
-  useEffect(() => {
-    if (activeMode !== '3d' || typeof window === 'undefined' || typeof document === 'undefined') {
-      return undefined;
-    }
-
-    const controls = sceneControlsRef.current;
-    const mapRoot = controls?.closest('#esri-map-container');
-    if (!(controls instanceof HTMLElement) || !(mapRoot instanceof HTMLElement)) return undefined;
-
-    const overlaySelector = [
-      '.map-mode-experience',
-      '.experience-utility',
-      '.experience-data-disclaimer',
-      '.experience-connectivity-notice',
-      '.experience-notification-center',
-      '.experience-notification-triage',
-      '.experience-settings',
-      '.experience-settings-backdrop',
-      '.workspace-accessibility-center__panel',
-      '.experience-workspace',
-      '.map-workspace-shell-overlay:not(.map-workspace-shell-overlay--headless)',
-      '.experience-scene-health',
-      '.kr-lazy-window',
-      '.esri-popup__main-container',
-      '#layerlist-widget',
-      '.sidebar-container',
-      '.sidebar-container1',
-      '#sidebar',
-      '#toolbar-widget',
-      '.common-query-window',
-      '.kr-command',
-      '.esri-ui-top-left',
-      '.esri-ui-top-right',
-      '.esri-ui-bottom-left',
-      '.esri-ui-bottom-right',
-    ].join(', ');
-    const observedResizeTargets = new Set<Element>();
-    const observedMutationTargets = new Set<Element>();
-    let frame: number | null = null;
-
-    const getVisibleRect = (element: Element): DOMRect | null => {
-      if (!(element instanceof HTMLElement) || element.hasAttribute('hidden')) return null;
-      if (element.getAttribute('aria-hidden') === 'true') return null;
-      const style = window.getComputedStyle(element);
-      if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return null;
-      const rect = element.getBoundingClientRect();
-      if (rect.width < 1 || rect.height < 1) return null;
-      return rect;
-    };
-
-    const syncObservedTargets = (): void => {
-      const targets = new Set<Element>([
-        mapRoot,
-        controls,
-        ...Array.from(document.querySelectorAll<HTMLElement>(overlaySelector)),
-      ]);
-      targets.forEach((target) => {
-        if (resizeObserver && !observedResizeTargets.has(target)) {
-          resizeObserver.observe(target);
-          observedResizeTargets.add(target);
-        }
-        if (mutationObserver && target !== mapRoot && target !== controls && !observedMutationTargets.has(target)) {
-          mutationObserver.observe(target, {
-            attributes: true,
-            attributeFilter: ['class', 'style', 'hidden', 'aria-hidden'],
-          });
-          observedMutationTargets.add(target);
-        }
-      });
-    };
-
-    const refreshPlacement = (): void => {
-      frame = null;
-      const mapRect = mapRoot.getBoundingClientRect();
-      const controlRect = controls.getBoundingClientRect();
-      if (controlRect.width < 1 || controlRect.height < 1) return;
-
-      const modeElement = document.querySelector('.map-mode-experience');
-      const modeRect = modeElement ? getVisibleRect(modeElement) : null;
-      const obstacleRects: DOMRect[] = [];
-      const seenRects = new Set<string>();
-      document.querySelectorAll<HTMLElement>(overlaySelector).forEach((element) => {
-        const rect = getVisibleRect(element);
-        if (!rect) return;
-        const key = [rect.left, rect.top, rect.right, rect.bottom].join(':');
-        if (seenRects.has(key)) return;
-        seenRects.add(key);
-        obstacleRects.push(rect);
-      });
-
-      const placement = chooseSceneControlsPlacement({
-        mapRect,
-        controlWidth: controlRect.width,
-        controlHeight: controlRect.height,
-        viewportWidth: window.innerWidth,
-        viewportHeight: window.innerHeight,
-        modeRect,
-        obstacleRects,
-      });
-
-      controls.style.left = `${placement.left - mapRect.left}px`;
-      controls.style.top = `${placement.top - mapRect.top}px`;
-      controls.style.right = 'auto';
-      controls.style.bottom = 'auto';
-      controls.dataset.placement = placement.strategy;
-      syncObservedTargets();
-    };
-
-    const schedulePlacement = (): void => {
-      if (frame !== null) return;
-      frame = window.requestAnimationFrame(refreshPlacement);
-    };
-
-    const resizeObserver = typeof ResizeObserver === 'undefined'
-      ? null
-      : new ResizeObserver(schedulePlacement);
-    const mutationObserver = typeof MutationObserver === 'undefined'
-      ? null
-      : new MutationObserver(schedulePlacement);
-    // Track panels that mount after the 3D scene is enabled (query windows,
-    // dialogs and toasts). Attribute-only observation of the initial DOM misses
-    // these late overlays and can leave camera controls layered on top of them.
-    const contentObserver = typeof MutationObserver === 'undefined'
-      ? null
-      : new MutationObserver(() => {
-        syncObservedTargets();
-        schedulePlacement();
-      });
-    if (document.body) {
-      contentObserver?.observe(document.body, { childList: true, subtree: true });
-    }
-
-    const onViewportChange = (): void => schedulePlacement();
-    const onRuntimeCommand = (): void => schedulePlacement();
-    window.addEventListener('resize', onViewportChange, { passive: true });
-    window.addEventListener('orientationchange', onViewportChange, { passive: true });
-    window.addEventListener('online', onViewportChange);
-    window.addEventListener('offline', onViewportChange);
-    window.addEventListener(EXPERIENCE_COMMAND_EVENT, onRuntimeCommand as EventListener);
-    document.addEventListener('scroll', onViewportChange, true);
-
-    syncObservedTargets();
-    refreshPlacement();
-
-    return () => {
-      window.removeEventListener('resize', onViewportChange);
-      window.removeEventListener('orientationchange', onViewportChange);
-      window.removeEventListener('online', onViewportChange);
-      window.removeEventListener('offline', onViewportChange);
-      window.removeEventListener(EXPERIENCE_COMMAND_EVENT, onRuntimeCommand as EventListener);
-      document.removeEventListener('scroll', onViewportChange, true);
-      if (frame !== null) window.cancelAnimationFrame(frame);
-      resizeObserver?.disconnect();
-      mutationObserver?.disconnect();
-      contentObserver?.disconnect();
-      controls.style.removeProperty('left');
-      controls.style.removeProperty('top');
-      controls.style.removeProperty('right');
-      controls.style.removeProperty('bottom');
-      delete controls.dataset.placement;
-    };
-  }, [activeMode]);
-
   useEffect(() => () => {
     disposedRef.current = true;
     sceneLifetimeRef.current.abort();
@@ -757,18 +551,6 @@ export function ExperienceMapModeBridge({
         data-scene-profile={sceneUi.profileLabel}
         data-scene-status={sceneUi.statusLabel}
       />
-      {activeMode === '3d' && (
-        <nav ref={sceneControlsRef} className="experience-scene-controls" aria-label="3B kamera denetimleri">
-          <button type="button" onClick={() => void runSceneNavigationAction('back')} aria-label="3B kamera geçmişinde geri" title="Geri">←</button>
-          <button type="button" onClick={() => void runSceneNavigationAction('forward')} aria-label="3B kamera geçmişinde ileri" title="İleri">→</button>
-          <button type="button" onClick={() => void runSceneNavigationAction('home')} aria-label="3B başlangıç görünümüne dön" title="Başlangıç">⌂</button>
-          <button type="button" onClick={() => void runSceneNavigationAction('north')} aria-label="3B kamerayı kuzeye hizala" title="Kuzeye hizala">N</button>
-          <button type="button" onClick={() => void runSceneNavigationAction('rotate-left')} aria-label="3B kamerayı sola döndür" title="Sola döndür">↶</button>
-          <button type="button" onClick={() => void runSceneNavigationAction('rotate-right')} aria-label="3B kamerayı sağa döndür" title="Sağa döndür">↷</button>
-          <button type="button" onClick={() => void runSceneNavigationAction('tilt-less')} aria-label="3B kamera eğimini azalt" title="Eğimi azalt">↓</button>
-          <button type="button" onClick={() => void runSceneNavigationAction('tilt-more')} aria-label="3B kamera eğimini artır" title="Eğimi artır">↑</button>
-        </nav>
-      )}
       {activeMode === '3d' && (
         <output className="experience-sr-only" aria-live="polite">
           3B görünüm durumu: {sceneUi.statusLabel}, {sceneUi.profileLabel}
