@@ -30,6 +30,11 @@ describe('httpClient public facade', () => {
     expect(getApiClientDiagnosticSummary()).toMatchObject({ retainedEvents: 0, totalRecorded: 0, droppedEvents: 0 });
   });
 
+  test('static application facade fails closed instead of guessing an API endpoint', async () => {
+    await expect(apiClient.get('/health'))
+      .rejects.toMatchObject({ code: 'APPLICATION_API_DISABLED' });
+  });
+
   test('default singleton fails closed because the static app has no application API', async () => {
     await expect(apiClient.get('/items')).rejects.toMatchObject({
       code: 'APPLICATION_API_DISABLED',
