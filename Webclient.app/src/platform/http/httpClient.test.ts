@@ -30,6 +30,13 @@ describe('httpClient public facade', () => {
     expect(getApiClientDiagnostics()).toEqual([]);
     expect(getApiClientDiagnosticSummary()).toMatchObject({ retainedEvents: 0, totalRecorded: 0, droppedEvents: 0 });
   });
+
+  test('default singleton fails closed because the static app has no application API', async () => {
+    await expect(apiClient.get('/items')).rejects.toMatchObject({
+      code: 'APPLICATION_API_DISABLED',
+      retryable: false,
+    });
+  });
 });
 
 describe('createApiClient compatibility', () => {
