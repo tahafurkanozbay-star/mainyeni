@@ -328,7 +328,9 @@ const buildModeEvidence = (
     const supportedKeys = new Set<string>(Object.values(RUNTIME_CONFIG_SOURCE_KEYS).flat());
     const key = Object.keys(source)
       .filter(
-        (candidate) => supportedKeys.has(candidate) || VITE_BUILTIN_KEYS.has(candidate),
+        (candidate) =>
+          (candidate.startsWith('VITE_') && supportedKeys.has(candidate))
+          || VITE_BUILTIN_KEYS.has(candidate),
       )
       .sort()[0];
     return evidence(
