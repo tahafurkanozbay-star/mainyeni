@@ -97,6 +97,25 @@ describe('SidebarModern governed interaction integration', () => {
     expect(UnregisterWindow).toHaveBeenCalledWith('services-sidebar', expect.any(Object));
   });
 
+  it('exposes the existing in-panel host for service query content', () => {
+    const harness = createManager();
+    const onToolHostChange = vi.fn();
+    const result = render(
+      <SidebarModern
+        id="services-sidebar"
+        windowManager={harness.manager}
+        onToolHostChange={onToolHostChange}
+      />,
+    );
+    const sidebar = screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' });
+    const host = sidebar.querySelector<HTMLDivElement>('.kr-sidebar__tool-slot');
+
+    expect(host).toBeInTheDocument();
+    expect(onToolHostChange).toHaveBeenCalledWith(host);
+    result.unmount();
+    expect(onToolHostChange).toHaveBeenLastCalledWith(null);
+  });
+
   it('renders the governed all-services view with semantic list structure', () => {
     renderSidebar();
     const sidebar = screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' });
