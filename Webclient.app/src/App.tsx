@@ -79,7 +79,12 @@ function App() {
   useEffect(() => {
     startupModel.beginAttempt();
 
+    const rawArcgisApiKey = (import.meta as ImportMeta & {
+      readonly env?: Readonly<Record<string, unknown>>;
+    }).env?.VITE_ARCGIS_API_KEY;
+    const arcgisApiKey = typeof rawArcgisApiKey === 'string' ? rawArcgisApiKey.trim() : '';
     const arcgisRuntime = configureArcgisModuleRuntime({
+      ...(arcgisApiKey ? { apiKey: arcgisApiKey } : {}),
       version: AppConfig.App.EsriApiVersion,
       css: true,
       insertCssBefore: 'link[rel="stylesheet"]',
