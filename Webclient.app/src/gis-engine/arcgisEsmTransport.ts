@@ -64,6 +64,7 @@ const defaultImporters: Readonly<Record<string, () => Promise<unknown>>> = Objec
   '@arcgis/core/layers/MapImageLayer.js': () => import('@arcgis/core/layers/MapImageLayer.js'),
   '@arcgis/core/layers/SceneLayer.js': () => import('@arcgis/core/layers/SceneLayer.js'),
   '@arcgis/core/layers/VectorTileLayer.js': () => import('@arcgis/core/layers/VectorTileLayer.js'),
+  '@arcgis/core/layers/WebTileLayer.js': () => import('@arcgis/core/layers/WebTileLayer.js'),
   '@arcgis/core/rest/identify.js': () => import('@arcgis/core/rest/identify.js'),
   '@arcgis/core/rest/query.js': () => import('@arcgis/core/rest/query.js'),
   '@arcgis/core/rest/support/IdentifyParameters.js': () => import('@arcgis/core/rest/support/IdentifyParameters.js'),
