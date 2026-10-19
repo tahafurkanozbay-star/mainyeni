@@ -80,7 +80,7 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
       items: ITEMS,
       initialFavoriteIds: preferences.favoriteIds,
       initialRecentIds: preferences.recentIds,
-      initialCollapsed: typeof window !== 'undefined' && window.innerWidth <= 880,
+      initialCollapsed: false,
       limits: { maxRecentIds: MAX_RECENT_SERVICES },
     });
   }, [preferenceStore]);
@@ -112,8 +112,8 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
       navigationModel.show();
     },
     OnClose: () => {
-      DebugHelper.Log(`closing ${id}`);
-      navigationModel.close();
+      DebugHelper.Log(`collapsing ${id}`);
+      navigationModel.setCollapsed(true);
     },
   });
 
@@ -141,15 +141,33 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
   const isConstrainedViewport = (): boolean =>
     typeof window !== 'undefined' && window.innerWidth <= 880;
 
+  const setSidebarCollapsed = (collapsed: boolean): void => {
+    if (navigation.collapsed === collapsed) return;
+
+    // Keep WindowManager visibility/minimized flags aligned with the rail.
+    // Only query activation on a compact viewport calls this automatically.
+    if (id === 'sidebar') {
+      if (collapsed && windowManager.HideWindow) {
+        windowManager.HideWindow(id);
+        return;
+      }
+      if (!collapsed) {
+        windowManager.ShowWindow(id);
+        return;
+      }
+    }
+
+    navigationModel.setCollapsed(collapsed);
+  };
+
   const openWindow = (windowId: string): void => {
     navigationModel.recordRecent(windowId);
     preferenceStore.saveRecents(navigationModel.getSnapshot().recentIds);
 
-    // A full drawer and a query window cannot be used side-by-side at compact
-    // phone/tablet widths. Keep the visible rail, then give the query the
-    // remaining viewport; responsive CSS coordinates competing fixed surfaces.
+    // A query needs room on phone/tablet widths. Keep the persistent rail
+    // available and collapse it only for this explicit space-constrained case.
     if (isConstrainedViewport()) {
-      navigationModel.setCollapsed(true);
+      setSidebarCollapsed(true);
       sidebarToggleRef.current?.focus({ preventScroll: true });
     }
 
@@ -224,7 +242,7 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
           type="button"
           ref={sidebarToggleRef}
           className="kr-sidebar__toggle"
-          onClick={() => navigationModel.toggleCollapsed()}
+          onClick={() => setSidebarCollapsed(!navigation.collapsed)}
           aria-expanded={!navigation.collapsed}
           aria-controls="kr-sidebar-services"
           aria-label={navigation.collapsed ? 'Hizmet panelini genişlet' : 'Hizmet panelini daralt'}

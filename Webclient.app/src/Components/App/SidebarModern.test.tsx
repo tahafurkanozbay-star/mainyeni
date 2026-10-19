@@ -195,18 +195,16 @@ describe('SidebarModern governed interaction integration', () => {
     expect(window.localStorage.getItem('kentrehberi:service-recents')).toContain('egometroduraklar-query-window');
   });
 
-  it('collapses the mobile service rail before opening a query and keeps focus on its visible toggle', async () => {
+  it('starts expanded on mobile and collapses only when opening a query', async () => {
     const originalWidth = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
     try {
       const user = userEvent.setup();
       const { ShowWindow } = renderSidebar();
       const aside = screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' });
-      const toggle = screen.getByRole('button', { name: 'Hizmet panelini genişlet' });
 
-      expect(aside).toHaveClass('is-collapsed');
-      await user.click(toggle);
       expect(aside).not.toHaveClass('is-collapsed');
+      expect(screen.getByRole('button', { name: 'Hizmet panelini daralt' })).toHaveAttribute('aria-expanded', 'true');
 
       await user.click(serviceButton('Parklar'));
       expect(ShowWindow).toHaveBeenCalledWith('park-query-window');
@@ -217,14 +215,14 @@ describe('SidebarModern governed interaction integration', () => {
     }
   });
 
-  it('keeps keyboard focus on the visible rail when a mobile service is activated with Enter', async () => {
+  it('keeps keyboard focus on the rail when a mobile service is activated with Enter', async () => {
     const originalWidth = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
     try {
       const user = userEvent.setup();
       const { ShowWindow } = renderSidebar();
       const aside = screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' });
-      await user.click(screen.getByRole('button', { name: 'Hizmet panelini genişlet' }));
+      expect(aside).not.toHaveClass('is-collapsed');
       const park = serviceButton('Parklar');
       park.focus();
       await user.keyboard('{Enter}');
@@ -237,17 +235,15 @@ describe('SidebarModern governed interaction integration', () => {
     }
   });
 
-  it('collapses the expanded tablet service rail before opening a query window', async () => {
+  it('starts expanded on tablet and collapses only when opening a query window', async () => {
     const originalWidth = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 768 });
     try {
       const user = userEvent.setup();
       const { ShowWindow } = renderSidebar();
       const aside = screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' });
-      expect(aside).toHaveClass('is-collapsed');
-
-      await user.click(screen.getByRole('button', { name: 'Hizmet panelini genişlet' }));
       expect(aside).not.toHaveClass('is-collapsed');
+
       await user.click(serviceButton('Parklar'));
 
       expect(ShowWindow).toHaveBeenCalledWith('park-query-window');
@@ -265,7 +261,7 @@ describe('SidebarModern governed interaction integration', () => {
       const user = userEvent.setup();
       const { ShowWindow } = renderSidebar();
       const aside = screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' });
-      await user.click(screen.getByRole('button', { name: 'Hizmet panelini genişlet' }));
+      expect(aside).not.toHaveClass('is-collapsed');
       const park = serviceButton('Parklar');
       park.focus();
       await user.keyboard('{Enter}');
@@ -435,21 +431,30 @@ describe('SidebarModern governed interaction integration', () => {
     expect(screen.getByText('1 hizmet')).toBeInTheDocument();
   });
 
-  it('closes through the registered managed-window handle', () => {
+  it('collapses through the registered managed-window handle without removing the sidebar', () => {
     const { RegisterWindow } = renderSidebar();
     const ref = RegisterWindow.mock.calls[0]?.[0] as { readonly current: ManagedWindowHandle | null } | undefined;
+    const aside = screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' });
     expect(ref?.current?.OnClose).toBeTypeOf('function');
+
     act(() => ref?.current?.OnClose?.());
-    expect(screen.queryByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).not.toBeInTheDocument();
+
+    expect(screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).toBe(aside);
+    expect(aside).toHaveClass('is-collapsed');
   });
 
-  it('reopens through the registered managed-window handle after close', () => {
+  it('expands the still-mounted sidebar through the managed OnShow handle', () => {
     const { RegisterWindow } = renderSidebar();
     const ref = RegisterWindow.mock.calls[0]?.[0] as { readonly current: ManagedWindowHandle | null } | undefined;
+    const aside = screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' });
+
     act(() => ref?.current?.OnClose?.());
-    expect(screen.queryByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).not.toBeInTheDocument();
+    expect(aside).toHaveClass('is-collapsed');
+
     act(() => ref?.current?.OnShow?.());
-    expect(screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).toBeInTheDocument();
+
+    expect(screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).toBe(aside);
+    expect(aside).not.toHaveClass('is-collapsed');
   });
 
   it('keeps favorite activation independent from service opening', async () => {

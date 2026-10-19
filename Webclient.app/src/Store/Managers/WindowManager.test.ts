@@ -344,6 +344,51 @@ describe('lazy placeholder ownership and current activation', () => {
 });
 
 describe('navigation and query coexistence', () => {
+  test('keeps the expanded sidebar visible when the basemap tool is activated', () => {
+    const manager = createWindowManager();
+    const sidebar = createRef('sidebar');
+    const basemap = createRef('basemap-widget');
+    try {
+      manager.RegisterWindow(sidebar);
+      manager.RegisterWindow(basemap);
+      expect(manager.ShowWindow('sidebar')).toBe(true);
+      expect(manager.IsVisible('sidebar')).toBe(true);
+
+      expect(manager.ShowWindow('basemap-widget')).toBe(true);
+
+      expect(manager.IsVisible('sidebar')).toBe(true);
+      expect(manager.IsMinimized('sidebar')).toBe(false);
+      expect(manager.IsVisible('basemap-widget')).toBe(true);
+      expect(sidebar.current.OnClose).not.toHaveBeenCalled();
+    } finally {
+      manager.UnregisterWindow('basemap-widget');
+      manager.UnregisterWindow('sidebar');
+      manager.Dispose();
+    }
+  });
+
+  test('hiding the sidebar collapses it without hiding it, and toggling restores it', () => {
+    const manager = createWindowManager();
+    const sidebar = createRef('sidebar');
+    try {
+      manager.RegisterWindow(sidebar);
+      expect(manager.ShowWindow('sidebar')).toBe(true);
+
+      expect(manager.HideWindow('sidebar')).toBe(true);
+      expect(manager.IsVisible('sidebar')).toBe(true);
+      expect(manager.IsMinimized('sidebar')).toBe(true);
+      expect(sidebar.current.OnClose).toHaveBeenCalledOnce();
+
+      expect(manager.ToggleWindow('sidebar')).toBe(true);
+      expect(manager.IsVisible('sidebar')).toBe(true);
+      expect(manager.IsMinimized('sidebar')).toBe(false);
+      expect(sidebar.current.OnShow).toHaveBeenCalledTimes(2);
+    } finally {
+      manager.UnregisterWindow('sidebar');
+      manager.Dispose();
+    }
+  });
+
   test('keeps a lazy query active when its OnShow reveals the sidebar', async () => {
     const manager = createWindowManager();
     const id = uniqueId('lazy-with-navigation');
