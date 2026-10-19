@@ -481,6 +481,7 @@ export const createKentRehberiFastAccessRuntime = (
   const cache = new Map<string, CacheEntry>();
   let typeCatalogCache: TypeCatalogCacheEntry | null = null;
   let typeCatalogInFlight: Promise<KentRehberiTypeCatalog> | null = null;
+  let typeCatalogGeneration = 0;
 
   const pruneCache = (timestamp: number): void => {
     for (const [key, entry] of cache) {
@@ -543,12 +544,13 @@ export const createKentRehberiFastAccessRuntime = (
       // bounded discovery job, not a POI result query: do not bind it to one
       // caller's AbortSignal or cache:false flag, otherwise each selected POI
       // can restart all 43 upstream requests.
+      const generation = typeCatalogGeneration;
       let catalogRequest: Promise<KentRehberiTypeCatalog>;
       catalogRequest = Promise.resolve()
         .then(() => fetchTypeCatalog({}))
         .then((catalog) => {
           const completedAt = Number(now());
-          if (Number.isFinite(completedAt)) {
+          if (typeCatalogGeneration === generation && Number.isFinite(completedAt)) {
             typeCatalogCache = Object.freeze({
               catalog,
               expiresAt: completedAt + TYPE_CATALOG_CACHE_TTL_MS,
@@ -562,7 +564,9 @@ export const createKentRehberiFastAccessRuntime = (
       typeCatalogInFlight = catalogRequest;
     }
 
-    return awaitWithAbortSignal(typeCatalogInFlight, control.signal);
+    const sharedCatalogRequest = typeCatalogInFlight;
+    if (!sharedCatalogRequest) throw new Error('PlanASKI type catalog request is unavailable.');
+    return awaitWithAbortSignal(sharedCatalogRequest, control.signal);
   };
 
   const resolveCatalogTypes = async (
@@ -715,6 +719,7 @@ export const createKentRehberiFastAccessRuntime = (
     createBusiness,
     clearCache: () => {
       cache.clear();
+      typeCatalogGeneration += 1;
       typeCatalogCache = null;
       typeCatalogInFlight = null;
     },
