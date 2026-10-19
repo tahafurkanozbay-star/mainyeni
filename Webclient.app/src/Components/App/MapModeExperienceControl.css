@@ -310,3 +310,60 @@ html[data-experience-motion='reduced'] .map-mode-experience__status-dot,
   white-space: nowrap !important;
   border: 0 !important;
 }
+
+
+/* A visible right-hand query window owns the right column. Reposition the
+ * mode switcher into the free map column rather than letting the two panels
+ * stack over each other. */
+#esri-map-container:has(.common-query-window-right.is-visible) .map-mode-experience {
+  inset-inline-start: max(354px, calc(env(safe-area-inset-left) + 354px));
+  inset-inline-end: auto;
+  inset-block-start: max(78px, calc(env(safe-area-inset-top) + 72px));
+  min-inline-size: 0;
+  inline-size: min(212px, calc(100vw - 590px));
+  max-inline-size: calc(100vw - 590px);
+  padding: 9px;
+  gap: 7px;
+}
+
+#esri-map-container:has(.common-query-window-right.is-visible) .map-mode-experience__header {
+  display: none;
+}
+
+#esri-map-container:has(.common-query-window-right.is-visible) .map-mode-experience__switcher {
+  gap: 4px;
+  padding: 3px;
+}
+
+#esri-map-container:has(.common-query-window-right.is-visible) .map-mode-experience__mode {
+  padding-inline: 4px;
+}
+
+#esri-map-container:has(.common-query-window-right.is-visible) .map-mode-experience__mode > small {
+  font-size: 0.62rem;
+}
+
+@media (min-width: 881px) and (max-width: 1120px) {
+  #esri-map-container:has(.common-query-window-right.is-visible) .map-mode-experience {
+    inset-inline-start: max(354px, calc(env(safe-area-inset-left) + 354px));
+    inline-size: min(150px, calc(100vw - 730px));
+    max-inline-size: calc(100vw - 730px);
+    padding: 6px;
+  }
+
+  #esri-map-container:has(.common-query-window-right.is-visible) .map-mode-experience__mode > small {
+    display: none;
+  }
+}
+
+@media (max-width: 880px) {
+  #esri-map-container:has(.common-query-window-right.is-visible) .map-mode-experience {
+    inset-inline-start: max(58px, calc(env(safe-area-inset-left) + 58px));
+    inset-inline-end: auto;
+    inset-block-start: max(76px, calc(env(safe-area-inset-top) + 70px));
+    inline-size: min(164px, calc(100vw - 78px));
+    max-inline-size: calc(100vw - 78px);
+    padding: 6px;
+    gap: 4px;
+  }
+}
