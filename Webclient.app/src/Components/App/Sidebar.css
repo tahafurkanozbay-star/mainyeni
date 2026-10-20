@@ -116,7 +116,6 @@
     height: 40px;
     width: 40%;
     border-radius: 12px;
-    outline: none;
     border: none;
     background: #0dcaf0;
     font-weight: 500;
@@ -124,6 +123,20 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+}
+
+
+.sidebar-header button:focus-visible {
+  outline: 3px solid var(--exp-accent, #155eef);
+  outline-offset: 2px;
+  box-shadow: var(--exp-focus, 0 0 0 3px rgb(21 94 239 / 24%));
+}
+
+@media (forced-colors: active) {
+  .sidebar-header button:focus-visible {
+    outline-color: Highlight;
+    box-shadow: none;
+  }
 }
 
 .sidebar-header button:hover{
