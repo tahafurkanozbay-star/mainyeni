@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { AppConfig } from '../../Core/AppConfig';
+import type { AddressGeocodingResult } from '../../data-services/addressGeocoding';
 import { useExperienceTheme } from '../Common/ExperienceDesignSystem';
 import { NAVIGATION_SEARCH_QUERY_LIMIT, NavigationSearchModel } from './navigationSearchModel';
 import './NavigationBar.css';
 
 export interface NavigationBarProps {
   readonly id?: string;
-  readonly onAddressSearch: (query: string, signal: AbortSignal) => Promise<string>;
+  readonly onAddressSearch: (query: string, signal: AbortSignal) => Promise<readonly AddressGeocodingResult[]>;
+  readonly onAddressSelect: (result: AddressGeocodingResult, signal: AbortSignal) => Promise<void>;
 }
 
 type SearchFeedback = Readonly<{
@@ -23,6 +25,7 @@ export function NavigationBar({ id, onAddressSearch }: NavigationBarProps) {
   const searchControllerRef = useRef<AbortController | null>(null);
   const searchSequenceRef = useRef(0);
   const [searching, setSearching] = useState(false);
+  const [results, setResults] = useState<readonly AddressGeocodingResult[]>([]);
   const [feedback, setFeedback] = useState<SearchFeedback>(EMPTY_FEEDBACK);
 
   useEffect(() => () => {
@@ -39,12 +42,48 @@ export function NavigationBar({ id, onAddressSearch }: NavigationBarProps) {
     searchControllerRef.current = controller;
     const requestId = ++searchSequenceRef.current;
     setSearching(true);
-    setFeedback({ phase: 'loading', message: 'Adres aranıyor…' });
+    setResults([]);
+    setFeedback({ phase: 'loading', message: 'Adres seçenekleri aranıyor…' });
 
     try {
-      await onAddressSearch(query, controller.signal);
+      const candidates = await onAddressSearch(query, controller.signal);
       if (controller.signal.aborted || requestId !== searchSequenceRef.current) return;
-      // Navigasyon araması sessiz tamamlanır; yalnızca hata durumunda bildirim gösterilir.
+      if (!Array.isArray(candidates) || candidates.length === 0) {
+        throw new Error('Adres bulunamadı. Daha açık bir adres deneyin.');
+      }
+      setResults(candidates.slice(0, 5));
+      setFeedback(EMPTY_FEEDBACK);
+    } catch (error) {
+      if (controller.signal.aborted || requestId !== searchSequenceRef.current) return;
+      setResults([]);
+      setFeedback({
+        phase: 'error',
+        message: error instanceof Error && error.message
+          ? error.message
+          : 'Adres bulunamadı. Daha açık bir adres deneyin.',
+      });
+    } finally {
+      if (requestId === searchSequenceRef.current) {
+        setSearching(false);
+        if (searchControllerRef.current === controller) searchControllerRef.current = null;
+      }
+    }
+  };
+
+  const selectAddress = async (result: AddressGeocodingResult): Promise<void> => {
+    if (searching) return;
+    searchControllerRef.current?.abort();
+    const controller = new AbortController();
+    searchControllerRef.current = controller;
+    const requestId = ++searchSequenceRef.current;
+    setSearching(true);
+    setResults([]);
+    setFeedback({ phase: 'loading', message: 'Konum işaretleniyor…' });
+
+    try {
+      await onAddressSelect(result, controller.signal);
+      if (controller.signal.aborted || requestId !== searchSequenceRef.current) return;
+      // Seçim tamamlandığında başarılı işlem bildirimi veya harita yönlendirmesi gösterilmez.
       setFeedback(EMPTY_FEEDBACK);
     } catch (error) {
       if (controller.signal.aborted || requestId !== searchSequenceRef.current) return;
@@ -52,7 +91,7 @@ export function NavigationBar({ id, onAddressSearch }: NavigationBarProps) {
         phase: 'error',
         message: error instanceof Error && error.message
           ? error.message
-          : 'Adres bulunamadı. Daha açık bir adres deneyin.',
+          : 'Seçilen konum haritada gösterilemedi. Yeniden deneyin.',
       });
     } finally {
       if (requestId === searchSequenceRef.current) {
@@ -70,6 +109,7 @@ export function NavigationBar({ id, onAddressSearch }: NavigationBarProps) {
       setSearching(false);
     }
     setFeedback(EMPTY_FEEDBACK);
+    setResults([]);
     searchModel.setQuery(value);
   };
 
@@ -108,8 +148,13 @@ export function NavigationBar({ id, onAddressSearch }: NavigationBarProps) {
               onCompositionEnd={(event) => searchModel.endComposition(event.currentTarget.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Escape' && !event.nativeEvent.isComposing && !search.isComposing) {
-                  changeSearchQuery('');
-                  event.currentTarget.blur();
+                  if (results.length > 0) {
+                    setResults([]);
+                    setFeedback(EMPTY_FEEDBACK);
+                  } else {
+                    changeSearchQuery('');
+                    event.currentTarget.blur();
+                  }
                 }
               }}
               autoComplete="off"
@@ -132,6 +177,29 @@ export function NavigationBar({ id, onAddressSearch }: NavigationBarProps) {
               aria-atomic="true"
             >
               <span>{feedback.message}</span>
+            </div>
+          ) : null}
+          {results.length > 0 ? (
+            <div className="kr-address-search-results" role="listbox" aria-label="Adres arama sonuçları">
+              <div className="kr-address-search-results-heading">Adres seçenekleri</div>
+              {results.map((result, index) => (
+                <button
+                  key={`${result.latitude}:${result.longitude}:${result.displayName}:${index}`}
+                  type="button"
+                  role="option"
+                  aria-selected="false"
+                  className="kr-address-search-result"
+                  onClick={() => { void selectAddress(result); }}
+                  disabled={searching}
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
+                    <path d="M20 10.2c0 5.1-8 11.3-8 11.3S4 15.3 4 10.2a8 8 0 1 1 16 0Z" fill="currentColor" opacity=".14" />
+                    <path d="M20 10.2c0 5.1-8 11.3-8 11.3S4 15.3 4 10.2a8 8 0 1 1 16 0Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+                    <circle cx="12" cy="10" r="2.6" stroke="currentColor" strokeWidth="1.7" />
+                  </svg>
+                  <span>{result.displayName}</span>
+                </button>
+              ))}
             </div>
           ) : null}
         </form>
