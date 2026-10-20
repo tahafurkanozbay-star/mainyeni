@@ -172,13 +172,14 @@ html,body,#root,#app-shell{margin:0!important;padding:0!important;}
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.kr-address-search-result:hover,
-.kr-address-search-result:focus-visible {
-  outline: 0;
+.kr-address-search-result:hover {
   background: var(--exp-surface-3);
 }
 .kr-address-search-result:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--exp-accent);
+  outline: 2px solid var(--exp-accent);
+  outline-offset: -2px;
+  background: var(--exp-surface-3);
+  box-shadow: inset 0 0 0 1px var(--exp-surface);
 }
 .kr-address-search-result:disabled {
   opacity: .55;
