@@ -75,6 +75,7 @@ jobs:
       - name: Full lint visibility
         run: npm run lint
 
+      # Run the full strict lint contract, not only changed files.
       - name: Strict lint on all Webclient sources
         run: npm run lint:strict
 
