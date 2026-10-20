@@ -47,7 +47,7 @@ export function NavigationBar({ id, onAddressSearch }: NavigationBarProps) {
       if (controller.signal.aborted || requestId !== searchSequenceRef.current) return;
       setFeedback({
         phase: 'success',
-        message: 'Bulundu: ' + address,
+        message: 'Haritada bulundu: ' + address,
         attributionUrl: 'https://www.openstreetmap.org/copyright',
       });
     } catch (error) {
