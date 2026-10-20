@@ -71,7 +71,7 @@ beforeEach(() => {
       class GraphicsLayer {
         readonly options: unknown;
         constructor(options: unknown) { this.options = options; }
-        add = (graphic: unknown): void => { runtime.graphics.push(graphic as Record<string, unknown>); };
+        add = vi.fn();
         removeAll = vi.fn();
       }
       class Graphic {
