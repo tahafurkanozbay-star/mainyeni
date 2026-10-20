@@ -24,7 +24,6 @@ import {
 import { SharedGISIcon } from '../../Common/SharedGISIcon';
 import { createManagedWindowFocusLifecycle } from './ManagedWindowFocus';
 import { setKentRehberiMapFilter } from '../../../shell/kentRehberiMapFilter';
-import { ServiceWindowActions } from './ServiceWindowActions';
 import {
   createLatestRequestGate,
   normalizeErrorMessage,
@@ -597,8 +596,8 @@ export function createManagedFastAccessQueryWindow({
       const initialExtent = initialExtentRef.current;
       const mapView = mapViewRef.current;
       resetSurface();
-      // Returning with the existing X closes the filtered service view and
-      // restores every Kent Rehberi point without another data request.
+      // Returning to the existing services list clears the filtered service view
+      // and restores every Kent Rehberi point without another data request.
       setKentRehberiMapFilter(null);
       windowManager.HideWindow?.(id);
       windowManager.ShowWindow?.('sidebar');
@@ -628,7 +627,6 @@ export function createManagedFastAccessQueryWindow({
             className="common-query-window-header-icon"
           />
           <h2 id={id + '-title'}>{title}</h2>
-          <ServiceWindowActions title={title} minimized={minimized} onMinimize={() => windowManager.ToggleMinimiseWindow?.(id)} onClose={returnToServices} />
         </header>
 
         <div className="kr-fast-query__toolbar">

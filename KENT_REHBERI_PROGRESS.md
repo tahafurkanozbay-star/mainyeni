@@ -2,6 +2,13 @@
 
 > Bu dosya kısa ve güncel başlangıç kaydıdır. Eski, ayrıntılı durum kayıtlarının tam kopyaları [`progress/archive/`](./progress/archive/) altındadır. Yapısal düzenleme öncesindeki eksiksiz kayıt [`KENT_REHBERI_PROGRESS_ARCHIVE_MAIN_THROUGH_20261019_PRE_STRUCTURE_HYGIENE.md`](./progress/archive/KENT_REHBERI_PROGRESS_ARCHIVE_MAIN_THROUGH_20261019_PRE_STRUCTURE_HYGIENE.md) dosyasında korunur.
 
+## 2026-10-20 — Hizmet penceresi başlığındaki yinelenen kontroller kaldırıldı
+
+- Hizmet sonuç penceresinin başlığındaki yukarı okla küçült/büyüt ve X ile kapat düğmeleri kaldırıldı; mevcut `Hizmetlere dön` düğmesi tek dönüş kontrolü olarak bırakıldı.
+- Başlık ızgarası iki kaldırılan kontrolün sütunlarından arındırıldı; açık/koyu ve forced-colors stilleri sadeleştirildi.
+- Regresyon testleri yalnızca `Hizmetlere dön` kontrolünün bulunduğunu, dönüşte harita filtresinin temizlendiğini ve tüm noktaların geri gösterildiğini doğrular.
+- PR ve son exact-head CI sonucu birleştirmeden sonra kaydedilecektir.
+
 ## 2026-10-20 — Keşfet filtre temizleme UX iyileştirmesi
 
 - Birleştirme öncesi güncel `main` tabanı: `70d37031c421e1558fd0df974a344b2eb35b39bb`; dal: `agent/keşfet-map-filter-clear-ux-20261020`.
