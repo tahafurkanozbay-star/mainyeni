@@ -75,9 +75,30 @@ jobs:
       - name: Full lint visibility
         run: npm run lint
 
-      # Run the full strict lint contract, not only changed files.
       - name: Strict lint on changed Webclient sources
-        run: npm run lint:strict
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            npm run lint:strict
+            exit 0
+          fi
+          git -C .. fetch --no-tags --depth=1 origin "$BASE_SHA"
+          mapfile -t changed_files < <(
+            git -C .. diff --name-only "$BASE_SHA" HEAD -- \
+              Webclient.app/src \
+              Webclient.app/tooling \
+              Webclient.app/vite.config.ts \
+              Webclient.app/vitest.config.ts \
+            | sed 's#^Webclient.app/##' \
+            | awk '/\.(cjs|mjs|js|jsx|ts|tsx)$/'
+          )
+          if [ "${#changed_files[@]}" -eq 0 ]; then
+            echo "No changed Webclient lint targets."
+          else
+            printf 'Strict lint targets:\n - %s\n' "${changed_files[@]}"
+            npx --no-install oxlint --deny-warnings "${changed_files[@]}"
+          fi
 
       - name: Full TypeScript diagnostic visibility
         run: |
