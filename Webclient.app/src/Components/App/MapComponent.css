@@ -555,6 +555,7 @@ html[data-experience-motion="reduced"] .experience-scene-controls button {
    an inset and extend the panel below the viewport after the header offset. */
 .esri-map > .sidebar-container.kr-sidebar--governed {
   position: absolute;
+  width: min(var(--sidebar-hover-width, 520px), 100dvw);
   top: var(--mainbar-height, 60px);
   inset-block-start: var(--mainbar-height, 60px);
   left: 0;
@@ -575,7 +576,7 @@ html[data-experience-motion="reduced"] .experience-scene-controls button {
   .esri-map > .sidebar-container.kr-sidebar--governed {
     top: 58px;
     inset-block-start: 58px;
-    width: min(470px, 100dvw);
+    width: min(var(--sidebar-hover-width, 520px), 100dvw);
     max-width: 100dvw;
   }
 }
