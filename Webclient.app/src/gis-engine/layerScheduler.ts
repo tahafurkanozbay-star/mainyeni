@@ -1,5 +1,6 @@
 import { LAYER_STATUS, isScaleVisible, layerReducer, visibleLayersAtScale } from './layerRuntime';
 import type { ArcGisLayerLike, LayerAction, LayerDescriptor, LayerTree } from './contracts';
+import { runtimeDiagnostics } from '../platform/runtime/runtimeDiagnostics';
 
 export const LAYER_LOAD_PRIORITY = Object.freeze({ BACKGROUND: 10, PREFETCH: 25, VISIBLE: 100, USER_REQUESTED: 250, SELECTED: 500 });
 export interface LayerSchedulerErrorDetails { code?: string; layerId?: string | null; cause?: unknown; }
@@ -11,9 +12,11 @@ const finite = (value: unknown, fallback: number | null = null): number | null =
 const positiveInteger = (value: unknown, fallback: number, max = Number.MAX_SAFE_INTEGER): number => { const numeric = Number(value); if (!Number.isFinite(numeric) || numeric <= 0) return fallback; return Math.min(max, Math.max(1, Math.floor(numeric))); };
 const now = (): number => Date.now();
 const cancelledError = (layerId: string): LayerSchedulerError => new LayerSchedulerError('Layer request cancelled.', { code: 'CANCELLED', layerId });
+const isCancellationError = (error: unknown): boolean => error instanceof Error
+  && (error.name === 'AbortError' || ('code' in error && error.code === 'CANCELLED'));
 const normalizeLayerId = (layerOrId: unknown): string => { const raw = typeof layerOrId === 'object' && layerOrId ? (layerOrId as { id?: unknown }).id : layerOrId; const id = String(raw ?? '').trim(); if (!id) throw new LayerSchedulerError('A layer id is required.', { code: 'INVALID_LAYER_ID' }); return id; };
 const normalizePriority = (value: unknown, fallback: number = LAYER_LOAD_PRIORITY.VISIBLE): number => { const numeric = Number(value); return Number.isFinite(numeric) ? numeric : fallback; };
-const safeAbort = (controller: AbortController | null): boolean => { if (!controller || controller.signal?.aborted) return false; try { controller.abort(); return true; } catch { return false; } };
+const safeAbort = (controller: AbortController | null): boolean => { if (!controller || controller.signal?.aborted) return false; try { controller.abort(); return true; } catch (error) { runtimeDiagnostics.captureError(error, { source: 'gis.layer-scheduler.abort' }, 'warn'); return false; } };
 const createController = (): AbortController | null => typeof AbortController === 'undefined' ? null : new AbortController();
 
 export interface LayerPriorityContext { selectedLayerId?: unknown; userRequestedIds?: unknown[]; visibleIds?: unknown[]; prefetchIds?: unknown[]; [key: string]: unknown; }
@@ -74,7 +77,7 @@ export const createLayerLoadScheduler = (configuration: { maxConcurrent?: unknow
   const settings = { maxConcurrent: positiveInteger(configuration.maxConcurrent, 4, 16) }; const clock = typeof configuration.now === 'function' ? configuration.now : now; const onEvent = typeof configuration.onEvent === 'function' ? configuration.onEvent : () => {};
   const queue: SchedulerEntry[] = []; const entries = new Map<string, SchedulerEntry>(); let sequence = 0; let active = 0; let destroyed = false; let draining = false;
   const metrics = { enqueued: 0, deduped: 0, started: 0, completed: 0, failed: 0, cancelled: 0, underlyingAborts: 0, reprioritized: 0, peakConcurrent: 0, totalLoadMs: 0, lastLoadMs: null as number | null };
-  const emit = (type: string, entry: SchedulerEntry, extra: Record<string, any> = {}): void => { try { onEvent({ type, ...eventSnapshot(entry), ...extra }); } catch { /* observer isolation */ } };
+  const emit = (type: string, entry: SchedulerEntry, extra: Record<string, any> = {}): void => { try { onEvent({ type, ...eventSnapshot(entry), ...extra }); } catch (error) { runtimeDiagnostics.captureError(error, { source: 'gis.layer-scheduler.observer', eventType: type, layerId: entry.layerId }, 'warn'); } };
   const sortQueue = (): void => { queue.sort((a, b) => b.priority - a.priority || a.sequence - b.sequence); };
   const removeFromQueue = (entry: SchedulerEntry): void => { const index = queue.indexOf(entry); if (index >= 0) queue.splice(index, 1); };
   const finishSubscriber = <T>(entry: SchedulerEntry<any, T>, subscriber: Subscriber<T>, callback: (value: any) => void, value: any, reason: 'cancelled' | null = null): void => {
@@ -138,7 +141,28 @@ export const createLayerRuntimeLoader = ({ scheduler, getTree, setTree, loadLaye
       .finally(() => { if (activeLoads.get(layerId) === promise) activeLoads.delete(layerId); });
     activeLoads.set(layerId, promise); return promise;
   };
-  const unload = async (layerId: unknown, reason = 'idle'): Promise<boolean> => { const id = normalizeLayerId(layerId); const tree = getTree(); const descriptor = tree?.byId?.get(id); scheduler.cancel(id, reason); try { await activeLoads.get(id); } catch { /* state already reflected */ } if (descriptor?.sdkLayer && typeof unloadLayer === 'function') await unloadLayer(descriptor.sdkLayer, descriptor, reason); residency?.forget?.(id); update({ type: 'SET_SDK_LAYER', layerId: id, sdkLayer: null }); return true; };
+  const unload = async (layerId: unknown, reason = 'idle'): Promise<boolean> => {
+    const id = normalizeLayerId(layerId);
+    const tree = getTree();
+    const descriptor = tree?.byId?.get(id);
+    scheduler.cancel(id, reason);
+    try {
+      await activeLoads.get(id);
+    } catch (error) {
+      if (!isCancellationError(error)) {
+        runtimeDiagnostics.captureError(error, {
+          source: 'gis.layer-scheduler.unload-active-load',
+          layerId: id,
+        }, 'warn');
+      }
+    }
+    if (descriptor?.sdkLayer && typeof unloadLayer === 'function') {
+      await unloadLayer(descriptor.sdkLayer, descriptor, reason);
+    }
+    residency?.forget?.(id);
+    update({ type: 'SET_SDK_LAYER', layerId: id, sdkLayer: null });
+    return true;
+  };
   const reconcile = async (scale: unknown, context: LayerPriorityContext = {}) => { const tree = getTree(); const plan = createLayerLoadPlan(tree, scale, context); scheduler.cancelExcept(plan.desiredIds); const loadPromises = plan.load.map(({ layer, priority }) => { residency?.touch?.(layer.id, { desired: true, scale }); if (layer.sdkLayer) { applyRuntimeToSdkLayer(layer); return Promise.resolve(layer.sdkLayer); } return load(layer, { priority, metadata: { scale } }); }); const unloadIds = new Set(plan.unload.map((layer) => layer.id)); residency?.idleCandidates?.(plan.desiredIds).forEach((record) => unloadIds.add(record.layerId)); const unloadPromises = [...unloadIds].map((id) => unload(id)); const [loaded, unloaded] = await Promise.all([Promise.allSettled(loadPromises), Promise.allSettled(unloadPromises)]); return { plan, loaded, unloaded }; };
   return { load, unload, reconcile, hasActiveLoad: (layerId: unknown) => activeLoads.has(String(layerId)) };
 };

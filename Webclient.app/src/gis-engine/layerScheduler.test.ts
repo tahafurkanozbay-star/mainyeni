@@ -13,6 +13,7 @@ import {
   createLayerTree,
   layerReducer,
 } from './layerRuntime';
+import { runtimeDiagnostics } from '../platform/runtime/runtimeDiagnostics';
 
 const deferred = () => {
   let resolve;
@@ -560,6 +561,9 @@ describe('layer load scheduler', () => {
 
   test('emits observability events without trusting event listener code', async () => {
     const events = [];
+    const previousDiagnosticIds = new Set(
+      runtimeDiagnostics.snapshot().events.map((event) => event.id),
+    );
     const scheduler = createLayerLoadScheduler({
       onEvent: (event) => {
         events.push(event.type);
@@ -570,6 +574,10 @@ describe('layer load scheduler', () => {
     await expect(scheduler.schedule({ id: 'parks' }, () => Promise.resolve('layer')))
       .resolves.toBe('layer');
     expect(events).toEqual(['enqueued', 'started', 'completed']);
+    expect(runtimeDiagnostics.snapshot().events.some((event) => (
+      !previousDiagnosticIds.has(event.id)
+      && event.details.source === 'gis.layer-scheduler.observer'
+    ))).toBe(true);
   });
 
   test('snapshot exposes queue and running state without internal objects', async () => {
