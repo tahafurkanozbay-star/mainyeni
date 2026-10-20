@@ -320,7 +320,7 @@ html[data-experience-motion='reduced'] .map-mode-experience__status-dot,
   inline-size: 100%;
   max-inline-size: none;
   gap: 4px;
-  padding: 0 0 4px;
+  padding: 0;
   border: 0;
   border-radius: 0;
   color: inherit;
@@ -335,23 +335,38 @@ html[data-experience-motion='reduced'] .map-mode-experience__status-dot,
   display: none;
 }
 
-.map-mode-experience--embedded .map-mode-experience__switcher {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px;
-  padding: 2px;
-  border-radius: 10px;
-}
-
-.map-mode-experience--embedded .map-mode-experience__mode {
-  min-inline-size: 0;
+/* One compact destination-mode button: only the active alternative (2B/3B)
+   is visible, instead of a two-column selector with labels. */
+.map-mode-experience--embedded .map-mode-experience__toggle {
+  box-sizing: border-box;
+  display: grid;
+  inline-size: 100%;
+  min-inline-size: 44px;
   min-block-size: 44px;
-  padding: 4px 2px;
-  border-radius: 8px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--exp-border, #cbd5e1) 88%, transparent);
+  border-radius: 9px;
+  color: var(--exp-text, #0f172a);
+  background: var(--exp-surface-2, var(--exp-surface, #fff));
+  font-size: 0.9rem;
+  font-weight: 850;
+  line-height: 1;
 }
 
-.map-mode-experience--embedded .map-mode-experience__mode > small {
-  font-size: 0.58rem;
-  line-height: 1.15;
+.map-mode-experience--embedded .map-mode-experience__toggle:hover:not([aria-disabled='true']) {
+  border-color: var(--exp-accent, #155eef);
+  color: var(--exp-accent-strong, #0b4bb3);
+  background: color-mix(in srgb, var(--exp-accent, #155eef) 9%, var(--exp-surface, #fff));
+}
+
+.map-mode-experience--embedded .map-mode-experience__toggle:focus-visible {
+  outline: 3px solid var(--exp-accent, #155eef);
+  outline-offset: 2px;
+}
+
+.map-mode-experience--embedded .map-mode-experience__toggle[aria-disabled='true'] {
+  cursor: wait;
+  opacity: 0.58;
 }
 
 .map-mode-experience--embedded .map-mode-experience__recovery {
@@ -359,23 +374,41 @@ html[data-experience-motion='reduced'] .map-mode-experience__status-dot,
 }
 
 .map-mode-experience--embedded .map-mode-experience__retry {
+  box-sizing: border-box;
   inline-size: 100%;
   min-inline-size: 0;
-  padding-inline: 4px;
-  font-size: 0.64rem;
-  overflow-wrap: anywhere;
+  min-block-size: 44px;
+  padding: 0;
+  font-size: 1rem;
+}
+
+.map-mode-experience--embedded .map-mode-experience__limit {
+  display: grid;
+  min-block-size: 32px;
+  place-items: center;
+  border: 1px solid var(--exp-danger, #d92d20);
+  border-radius: 8px;
+  font-size: 0.9rem;
 }
 
 @media (pointer: coarse) {
-  .map-mode-experience--embedded .map-mode-experience__mode {
+  .map-mode-experience--embedded .map-mode-experience__toggle,
+  .map-mode-experience--embedded .map-mode-experience__retry {
     min-block-size: 48px;
   }
 }
 
 @media (forced-colors: active) {
-  .map-mode-experience--embedded {
-    border: 0;
-    background: transparent;
+  .map-mode-experience--embedded .map-mode-experience__toggle,
+  .map-mode-experience--embedded .map-mode-experience__retry,
+  .map-mode-experience--embedded .map-mode-experience__limit {
+    border-color: ButtonText;
+    color: ButtonText;
+    background: ButtonFace;
     box-shadow: none;
+  }
+
+  .map-mode-experience--embedded .map-mode-experience__toggle:focus-visible {
+    outline-color: Highlight;
   }
 }
