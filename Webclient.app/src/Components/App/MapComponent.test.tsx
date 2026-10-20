@@ -16,10 +16,21 @@ const runtime = vi.hoisted(() => ({
   goToCalls: [] as Array<Record<string, unknown>>,
   navigationProps: null as Record<string, unknown> | null,
   create: vi.fn(),
-  waitForView: vi.fn(),
+  waitForViewOverride: null as null | ((view: unknown, options?: unknown) => Promise<void>),
 }));
 vi.mock('../../gis-engine/arcgisModuleRuntime', () => ({ loadArcgisModules: runtime.load }));
-vi.mock('../../gis-engine/viewReadiness', () => ({ waitForArcgisView: runtime.waitForView }));
+vi.mock('../../gis-engine/viewReadiness', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../gis-engine/viewReadiness')>();
+  return {
+    ...actual,
+    waitForArcgisView: (
+      view: Parameters<typeof actual.waitForArcgisView>[0],
+      options?: Parameters<typeof actual.waitForArcgisView>[1],
+    ) => runtime.waitForViewOverride
+      ? runtime.waitForViewOverride(view, options)
+      : actual.waitForArcgisView(view, options),
+  };
+});
 vi.mock('../../Store/Managers/MapManager', () => ({ default: {
   GetMapConfiguration: () => ({}), SetViewStateBridge: vi.fn(), SetViewPerformanceMonitor: vi.fn(),
   ClearViewPerformanceMonitor: vi.fn(), ClearViewStateBridge: vi.fn(),
@@ -68,7 +79,7 @@ beforeEach(() => {
   runtime.navigationProps = null;
   Store.dispatch({ type: MapReducer_ActionTypes.SetMapView, payload: null });
   runtime.create.mockImplementation(() => ({ ready: true, readyState: 'ready' }));
-  runtime.waitForView.mockResolvedValue(undefined);
+  runtime.waitForViewOverride = null;
   runtime.load.mockImplementation(async (moduleIds?: string[]) => {
     if (moduleIds?.[0] === 'esri/layers/GraphicsLayer') {
       class GraphicsLayer {
@@ -133,7 +144,10 @@ describe('free OpenStreetMap 3D readiness', () => {
   });
 
   it('falls back to OSM only if the no-basemap view cannot become ready', async () => {
-    runtime.waitForView.mockRejectedValueOnce(new Error('empty-map'));
+    const waitForViewOverride = vi.fn()
+      .mockRejectedValueOnce(new Error('empty-map'))
+      .mockResolvedValueOnce(undefined);
+    runtime.waitForViewOverride = waitForViewOverride;
 
     setup();
     await screen.findByText('Araçlar hazır');
@@ -142,7 +156,7 @@ describe('free OpenStreetMap 3D readiness', () => {
     const initializedView = runtime.views[0];
     if (!initializedView) throw new Error('MapView was not initialized');
     expect((initializedView.map as { basemap?: unknown }).basemap).toBe('osm');
-    expect(runtime.waitForView).toHaveBeenCalledTimes(2);
+    expect(waitForViewOverride).toHaveBeenCalledTimes(2);
   });
 });
 
