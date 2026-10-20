@@ -109,7 +109,7 @@ beforeEach(() => {
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 describe('free OpenStreetMap 3D readiness', () => {
-  it('avoids 2D tiles without creating an ArcGIS empty-map readiness deadlock', async () => {
+  it('keeps a visible local layer and avoids 2D tiles during normal startup', async () => {
     setup();
     await screen.findByText('Araçlar hazır');
     expect(runtime.mapOptions[0]).toMatchObject({
@@ -117,7 +117,7 @@ describe('free OpenStreetMap 3D readiness', () => {
       layers: [{
         options: {
           title: 'Startup readiness (no network)',
-          visible: false,
+          visible: true,
           listMode: 'hide',
         },
       }],
