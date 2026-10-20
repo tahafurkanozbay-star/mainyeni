@@ -144,7 +144,7 @@ describe('SidebarModern governed interaction integration', () => {
     expect(groups[0]).toHaveAttribute('title', 'Ankara Büyükşehir Belediyesi');
   });
 
-  it('clears the institution map filter from beside the selected category without leaving the list', async () => {
+  it('filters institution points without adding a separate all-points button', async () => {
     const user = userEvent.setup();
     renderSidebar();
 
@@ -154,25 +154,19 @@ describe('SidebarModern governed interaction integration', () => {
     const selected = getKentRehberiMapFilterSnapshot();
     expect(selected.label).toBe('EGO Genel Müdürlüğü');
     expect(selected.iconKeys).not.toBeNull();
-    expect(screen.getByText('Haritada yalnızca')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Tüm noktaları göster' })).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'Tüm noktaları göster' }));
-    expect(getKentRehberiMapFilterSnapshot().iconKeys).toBeNull();
     expect(screen.getByRole('heading', { name: 'EGO Genel Müdürlüğü' })).toBeInTheDocument();
     expect(serviceButton('Metro Hattı')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Tüm noktaları göster' })).not.toBeInTheDocument();
   });
 
-  it('clears the selected service map filter with one click without resetting navigation', async () => {
+  it('filters a selected service without adding a separate all-points button', async () => {
     const user = userEvent.setup();
     renderSidebar();
 
     await user.click(serviceButton('Parklar'));
     expect(getKentRehberiMapFilterSnapshot().label).toBe('Parklar');
-    await user.click(screen.getByRole('button', { name: 'Tüm noktaları göster' }));
-
-    expect(getKentRehberiMapFilterSnapshot().iconKeys).toBeNull();
+    expect(getKentRehberiMapFilterSnapshot().iconKeys).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Tüm noktaları göster' })).not.toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'Tüm kent servisleri hizmet listesi' })).toBeInTheDocument();
   });
 

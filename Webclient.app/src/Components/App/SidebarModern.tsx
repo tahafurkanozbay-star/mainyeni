@@ -480,26 +480,6 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
         ))}
       </nav>
 
-      {mapFilter.iconKeys !== null ? (
-        <div className="kr-sidebar__map-filter" role="group" aria-label="Harita nokta filtresi">
-          <span className="kr-sidebar__map-filter-label">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z" />
-              <path d="M9 3v15M15 6v15" />
-            </svg>
-            <span>Haritada yalnızca <strong>{mapFilter.label}</strong></span>
-          </span>
-          <button
-            type="button"
-            className="kr-sidebar__map-filter-clear"
-            onClick={() => setKentRehberiMapFilter(null)}
-            aria-label="Tüm noktaları göster"
-            title="Harita filtresini kaldır ve tüm noktaları göster"
-          >
-            Tüm noktalar
-          </button>
-        </div>
-      ) : null}
 
       {/* Query tools portal into this slot so results reuse Keşfet's existing panel
           instead of creating a second floating panel over the category navigation. */}

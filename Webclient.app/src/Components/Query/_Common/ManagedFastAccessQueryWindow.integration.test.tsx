@@ -10,6 +10,7 @@ import MapManager from '../../../Store/Managers/MapManager';
 import { LoggingBusiness } from '../../../Business/LoggingBusiness';
 import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
 import { createKentRehberiGeoJsonLayer } from '../../../data-services/kentRehberiGeoJsonLayer';
+import { getKentRehberiMapFilterSnapshot, setKentRehberiMapFilter } from '../../../shell/kentRehberiMapFilter';
 
 vi.mock('../../../Store/Managers/MapManager', () => ({ default: { GetMapView: vi.fn() } }));
 vi.mock('../../../Business/LoggingBusiness', () => ({ LoggingBusiness: { CreateClientLog: vi.fn(async () => undefined) } }));
@@ -43,6 +44,7 @@ const setup = () => {
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  setKentRehberiMapFilter(null);
   vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({ destroy: vi.fn() });
   vi.mocked(LoggingBusiness.CreateClientLog).mockResolvedValue(undefined);
 });
@@ -80,12 +82,17 @@ describe('shared service result window ownership and usability', () => {
     expect(screen.getByRole('heading', { name: 'Merkez 1' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sonuçları küçült' })).toHaveAttribute('aria-expanded', 'true');
   });
-  it.each(['Hizmetlere dön', 'Merkezler penceresini kapat'])('closes the result window before showing services with %s', (label) => {
+  it.each(['Hizmetlere dön', 'Merkezler penceresini kapat'])('closes the result window, clears the map filter and returns to services with %s', (label) => {
     const { manager } = setup();
+    setKentRehberiMapFilter({ label: 'EGO Genel Müdürlüğü', iconKeys: ['ego_metro'] });
+    expect(getKentRehberiMapFilterSnapshot().iconKeys).not.toBeNull();
+
     fireEvent.click(screen.getByRole('button', { name: label }));
+
     expect(manager.HideWindow).toHaveBeenCalledExactlyOnceWith('service-window');
     expect(manager.ShowWindow).toHaveBeenCalledExactlyOnceWith('sidebar');
     expect(manager.HideWindow.mock.invocationCallOrder[0]).toBeLessThan(manager.ShowWindow.mock.invocationCallOrder[0]!);
+    expect(getKentRehberiMapFilterSnapshot().iconKeys).toBeNull();
   });
 
   it('does not wait for logging before querying', async () => {
