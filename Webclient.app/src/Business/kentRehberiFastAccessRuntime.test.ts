@@ -394,7 +394,7 @@ describe('kentRehberiFastAccessRuntime', () => {
     const fetchCollection = vi.fn(async (options?: { q?: string; limit?: number }) => {
       expect(options?.limit).toBe(2000);
       return collection([
-        feature(21, 5, 'Kızılay Parkı'),
+        feature(21, 5, 'Kızılay Parkı', { ilce: 'Altındağ' }),
         feature(22, 5, 'Çankaya Meydanı', { mahalle: 'Söğütözü' }),
       ]);
     });

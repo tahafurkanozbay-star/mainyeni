@@ -397,7 +397,7 @@ const immutableHit = (
   record,
   score,
   distanceMeters,
-  reasons: Object.freeze([...reasons]),
+  reasons: Object.freeze(Array.from(reasons)),
 });
 
 const createDatasetSnapshot = (
@@ -535,7 +535,7 @@ export class DataSearchRuntime {
     }
     const key = normalizeDatasetKey(datasetKeyInput);
     let removed = 0;
-    for (const cacheKey of [...this.cache.keys()]) {
+    for (const cacheKey of this.cache.keys()) {
       if (cacheKey.startsWith(`${key}|`)) {
         this.cache.delete(cacheKey);
         removed += 1;

@@ -9,7 +9,7 @@ import {
   planFeatureRendering,
 } from './featureBudget';
 import type { FeatureRenderPlan } from './featureBudget';
-import type { Dictionary, IconRecord, IconResolveOptions, PictureMarkerOptions } from './contracts';
+import type { IconRecord, IconResolveOptions, PictureMarkerOptions } from './contracts';
 
 export const GIS_VIEW_MODE = Object.freeze({
   MAP_2D: '2d',

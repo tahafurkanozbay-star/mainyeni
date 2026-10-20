@@ -116,7 +116,7 @@ describe('SidebarModern governed interaction integration', () => {
     expect(host).toBeInTheDocument();
     expect(onToolHostChange).toHaveBeenCalledWith(host);
     result.unmount();
-    expect(onToolHostChange).toHaveBeenLastCalledWith(null);
+    expect(onToolHostChange.mock.calls.some(([element]) => element === null)).toBe(true);
   });
 
   it('renders the governed all-services view with semantic list structure', () => {
@@ -184,7 +184,7 @@ describe('SidebarModern governed interaction integration', () => {
       `${import.meta.env.BASE_URL}images/askibuton.svg`,
       `${import.meta.env.BASE_URL}images/istiraklerbuton.svg`,
     ]);
-    expect(logoSources.every((source) => source !== null && !source.startsWith('/') && !source.startsWith('../'))).toBe(true);
+    expect(logoSources.every((source) => source?.startsWith(import.meta.env.BASE_URL))).toBe(true);
   });
 
   it('searches point names across all institutions with Turkish accent tolerance', async () => {

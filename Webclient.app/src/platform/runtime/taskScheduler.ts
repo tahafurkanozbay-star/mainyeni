@@ -414,6 +414,8 @@ export const createTaskScheduler = (options: TaskSchedulerOptions): RuntimeTaskS
   const cancel = (idOrKey: string, reason: unknown = abortError()): number => {
     if (!idOrKey) return 0;
     let cancelled = 0;
+    // Removing queued tasks during cancellation requires a stable snapshot.
+    // oxlint-disable-next-line unicorn/no-useless-spread
     for (const task of [...queue]) {
       if (task.id === idOrKey || task.key === idOrKey) {
         if (removeFromQueue(task)) {
@@ -435,6 +437,8 @@ export const createTaskScheduler = (options: TaskSchedulerOptions): RuntimeTaskS
 
   const cancelAll = (reason: unknown = abortError('Runtime scheduler cancelled all tasks.')): number => {
     let cancelled = 0;
+    // Removing queued tasks during cancellation requires a stable snapshot.
+    // oxlint-disable-next-line unicorn/no-useless-spread
     for (const task of [...queue]) {
       if (removeFromQueue(task)) {
         task.controller.abort(reason);

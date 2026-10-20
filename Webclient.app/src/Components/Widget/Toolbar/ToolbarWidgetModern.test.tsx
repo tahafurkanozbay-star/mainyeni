@@ -44,6 +44,14 @@ const createWindowManager = (): WindowManagerStub => ({
   ShowWindow: vi.fn(),
 });
 
+const toolbarStatus = (): HTMLElement => {
+  const status = document.querySelector<HTMLElement>(
+    '.toolbarwidget-notice__message[role="status"], .toolbarwidget-status[role="status"]',
+  );
+  if (!status) throw new Error('Toolbar status region was not rendered.');
+  return status;
+};
+
 const installGeolocationHarness = (): GeolocationHarness => {
   let successCallback: PositionCallback | undefined;
   let errorCallback: PositionErrorCallback | undefined;
@@ -174,7 +182,7 @@ describe('ToolbarWidgetModern', () => {
     fireEvent.click(locationButton);
     await waitFor(() => expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1));
     expect(screen.getByRole('button', { name: 'Konum bulunuyor' }).getAttribute('aria-busy')).toBe('true');
-    expect(screen.getByRole('status').textContent).toBe('Konumunuz bulunuyor.');
+    expect(toolbarStatus().textContent).toBe('Konumunuz bulunuyor.');
 
     await waitFor(() => expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1));
     geolocation.resolve(32.82, 39.93);
@@ -188,7 +196,7 @@ describe('ToolbarWidgetModern', () => {
         expect.anything(),
         18,
       );
-      expect(screen.getByRole('status').textContent).toBe('Konumunuz haritada gösterildi.');
+      expect(toolbarStatus().textContent).toBe('Konumunuz haritada gösterildi.');
     });
   });
 
@@ -216,7 +224,7 @@ describe('ToolbarWidgetModern', () => {
     geolocation.reject();
 
     await waitFor(() => {
-      expect(screen.getByRole('status').textContent).toBe(
+      expect(toolbarStatus().textContent).toBe(
         'Kesin konum alınamadı. Konum iznini ve cihaz ayarlarını kontrol edip yeniden deneyin.',
       );
     });
@@ -281,7 +289,7 @@ describe('ToolbarWidgetModern', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Konum Bul' }));
     await waitFor(() => expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1));
     geolocation.resolve(32.82, 39.93);
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Konumunuz haritada gösterildi.'));
+    await waitFor(() => expect(toolbarStatus()).toHaveTextContent('Konumunuz haritada gösterildi.'));
   });
 
   it('offers visible cancellation and ignores the late browser position', async () => {
@@ -289,13 +297,13 @@ describe('ToolbarWidgetModern', () => {
     render(<ToolbarWidgetModern windowManager={createWindowManager()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Konum Bul' }));
     await waitFor(() => expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole('status').closest('.toolbarwidget-notice')).toHaveAttribute('data-visible', 'true');
+    expect(toolbarStatus().closest('.toolbarwidget-notice')).toHaveAttribute('data-visible', 'true');
     fireEvent.click(screen.getByRole('button', { name: 'İptal et' }));
     await act(async () => { geolocation.resolve(32.82, 39.93); });
     expect(GisGraphicsHelper.CreatePoint).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Konum Bul' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Konum Bul' })).toHaveFocus();
-    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(toolbarStatus()).toBeEmptyDOMElement();
   });
 
   it('retires a pending position before returning home', async () => {
@@ -306,7 +314,7 @@ describe('ToolbarWidgetModern', () => {
     await waitFor(() => expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole('button', { name: 'Başlangıç görünümüne dön' }));
     await waitFor(() => expect(map.goTo).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(toolbarStatus()).toBeEmptyDOMElement();
     await act(async () => { geolocation.resolve(32.82, 39.93); });
     expect(GisGraphicsHelper.CreatePoint).not.toHaveBeenCalled();
     expect(map.goTo).toHaveBeenCalledTimes(1);
@@ -364,7 +372,7 @@ describe('ToolbarWidgetModern', () => {
       await waitFor(() => expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(call));
       geolocation.resolve(32.82, 39.93);
       await waitFor(() => expect(GisGraphicsHelper.AddGraphics).toHaveBeenCalledTimes(call));
-      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Konumunuz haritada gösterildi.'));
+      await waitFor(() => expect(toolbarStatus()).toHaveTextContent('Konumunuz haritada gösterildi.'));
     }
     expect(MapManager.AddGraphics).not.toHaveBeenCalled();
     expect(GisGraphicsHelper.RemoveGraphics).toHaveBeenCalledWith(map.view, [first]);
@@ -379,8 +387,8 @@ describe('ToolbarWidgetModern', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Konum Bul' }));
     await waitFor(() => expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1)); geolocation.resolve(32.82, 39.93);
     await waitFor(() => expect(GisGraphicsHelper.ZoomToGeometry).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole('status')).toHaveTextContent('Konumunuz bulunuyor.');
-    await act(async () => { finish(); }); expect(screen.getByRole('status')).toHaveTextContent('Konumunuz haritada gösterildi.');
+    expect(toolbarStatus()).toHaveTextContent('Konumunuz bulunuyor.');
+    await act(async () => { finish(); }); expect(toolbarStatus()).toHaveTextContent('Konumunuz haritada gösterildi.');
   });
 
   it.each([false, true])('cancels only its own captured SDK animation (newer animation: %s)', async newer => {
@@ -404,7 +412,7 @@ describe('ToolbarWidgetModern', () => {
     vi.useFakeTimers(); fireEvent.click(screen.getByRole('button', { name: 'Konum Bul' }));
     await act(async () => { await vi.advanceTimersByTimeAsync(25_001); });
     expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('status')).toHaveTextContent('Kesin konum alınamadı.');
+    expect(toolbarStatus()).toHaveTextContent('Kesin konum alınamadı.');
     expect(GisGraphicsHelper.CreatePoint).not.toHaveBeenCalled();
     expect(screen.queryByText(/Bu nokta cihazınızın konumu değildir/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Yeniden dene' })).toBeEnabled();
@@ -419,9 +427,9 @@ describe('ToolbarWidgetModern', () => {
     fireEvent.click(home); fireEvent.click(home);
     await act(async () => { await vi.advanceTimersByTimeAsync(15_001); });
     expect(map.goTo).toHaveBeenCalledTimes(1); expect(home).toBeEnabled();
-    expect(screen.getByRole('status')).toHaveTextContent('Başlangıç görünümü gösterilemedi.');
+    expect(toolbarStatus()).toHaveTextContent('Başlangıç görünümü gösterilemedi.');
     fireEvent.click(screen.getByRole('button', { name: 'Mesajı kapat' }));
-    await act(async () => { finish(); }); expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    await act(async () => { finish(); }); expect(toolbarStatus()).toBeEmptyDOMElement();
   });
 
   it('reports home failure without reflecting upstream details', async () => {
@@ -429,7 +437,7 @@ describe('ToolbarWidgetModern', () => {
     vi.mocked(MapManager.GetMapView).mockReturnValue(map.view as never);
     render(<ToolbarWidgetModern windowManager={createWindowManager()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Başlangıç görünümüne dön' }));
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Başlangıç görünümü gösterilemedi.'));
+    await waitFor(() => expect(toolbarStatus()).toHaveTextContent('Başlangıç görünümü gösterilemedi.'));
     expect(screen.queryByText('private coordinate and token data')).toBeNull();
   });
 
@@ -448,8 +456,8 @@ describe('ToolbarWidgetModern', () => {
     const home = screen.getByRole('button', { name: 'Başlangıç görünümüne dön' });
     fireEvent.click(home);
     await waitFor(() => expect(map.goTo).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole('status')).toBeEmptyDOMElement();
-    expect(screen.getByRole('status').closest('.toolbarwidget-notice')).toHaveAttribute('data-visible', 'false');
+    expect(toolbarStatus()).toBeEmptyDOMElement();
+    expect(toolbarStatus().closest('.toolbarwidget-notice')).toHaveAttribute('data-visible', 'false');
     expect(home).toBeEnabled();
   });
 
@@ -459,7 +467,7 @@ describe('ToolbarWidgetModern', () => {
     render(<ToolbarWidgetModern windowManager={createWindowManager()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Konum Bul' }));
     await waitFor(() => expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1)); geolocation.resolve(32.82, 39.93);
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Konum gösterimi durduruldu.'));
+    await waitFor(() => expect(toolbarStatus()).toHaveTextContent('Konum gösterimi durduruldu.'));
     expect(GisGraphicsHelper.CreatePoint).toHaveBeenCalledTimes(1); expect(GisGraphicsHelper.RemoveGraphics).toHaveBeenCalledTimes(1);
   });
   it('presents a neutral home interruption instead of a false error', async () => {
@@ -467,8 +475,8 @@ describe('ToolbarWidgetModern', () => {
     vi.mocked(MapManager.GetMapView).mockReturnValue(map.view as never);
     render(<ToolbarWidgetModern windowManager={createWindowManager()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Başlangıç görünümüne dön' }));
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Görünüm değiştirme durduruldu.'));
-    expect(screen.getByRole('status').closest('.toolbarwidget-notice')).toHaveAttribute('data-tone', 'info');
+    await waitFor(() => expect(toolbarStatus()).toHaveTextContent('Görünüm değiştirme durduruldu.'));
+    expect(toolbarStatus().closest('.toolbarwidget-notice')).toHaveAttribute('data-tone', 'info');
     expect(screen.queryByRole('button', { name: 'Yeniden dene' })).toBeNull();
   });
 
@@ -478,7 +486,7 @@ describe('ToolbarWidgetModern', () => {
     await waitFor(() => expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1));
     expect(screen.getByRole('button', { name: 'İptal et' })).toHaveFocus();
     if (outcome === 'success') geolocation.resolve(32.82, 39.93); else geolocation.reject();
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(outcome === 'success' ? 'Konumunuz haritada gösterildi.' : 'Kesin konum alınamadı.'));
+    await waitFor(() => expect(toolbarStatus()).toHaveTextContent(outcome === 'success' ? 'Konumunuz haritada gösterildi.' : 'Kesin konum alınamadı.'));
     expect(screen.getByRole('button', { name: outcome === 'success' ? 'Mesajı kapat' : 'Yeniden dene' })).toHaveFocus();
   });
   it('preserves focus deliberately moved outside the notice before completion', async () => {
@@ -487,7 +495,7 @@ describe('ToolbarWidgetModern', () => {
     await waitFor(() => expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1));
     const other = screen.getByRole('button', { name: 'Ölçüm Aracı' }); await act(async () => { other.focus(); });
     geolocation.resolve(32.82, 39.93);
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Konumunuz haritada gösterildi.'));
+    await waitFor(() => expect(toolbarStatus()).toHaveTextContent('Konumunuz haritada gösterildi.'));
     expect(other).toHaveFocus();
   });
 

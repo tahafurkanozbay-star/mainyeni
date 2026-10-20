@@ -203,8 +203,12 @@ describe('real map workspace admission and recovery', () => {
     expect(canvasHost?.contains(status as Node)).toBe(false);
   });
   it('opens point identification from a native right-click on the visible map', async () => {
-    const { manager } = setup();
-    const showWindow = vi.spyOn(manager, 'ShowWindow');
+    const manager = {
+      ...createWindowManager(),
+      ShowWindow: vi.fn(),
+    };
+    render(<MapComponent windowManager={manager} />);
+    const showWindow = manager.ShowWindow;
     await screen.findByText('Araçlar hazır');
 
     const mapHost = document.querySelector('.experience-mapview-host');

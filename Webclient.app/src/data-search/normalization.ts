@@ -14,6 +14,7 @@ export const DEFAULT_LOCALE = 'tr-TR';
 export const DEFAULT_MAX_RECORDS = 100_000;
 export const HARD_MAX_RECORDS = 1_000_000;
 
+// oxlint-disable-next-line no-control-regex -- Input normalization intentionally strips control characters.
 const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/g;
 const COMBINING_MARKS = /[\u0300-\u036f]/g;
 const NON_SEARCH_CHARACTERS = /[^a-z0-9]+/g;
@@ -120,7 +121,7 @@ export const normalizeUrl = (value: unknown): string => {
       return `${parsed.pathname}${parsed.search}${parsed.hash}`;
     }
     return parsed.toString();
-  } catch (_error) {
+  } catch {
     return '';
   }
 };

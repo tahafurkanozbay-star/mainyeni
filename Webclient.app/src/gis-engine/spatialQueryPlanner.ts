@@ -327,6 +327,7 @@ const normalizeWhere = (value: unknown): string => {
       code: 'WHERE_TOO_LONG',
     });
   }
+  // oxlint-disable-next-line no-control-regex -- SQL clauses must not contain control characters.
   if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(where)) {
     throw new SpatialQueryPlannerError('ArcGIS where clause contains control characters.', {
       code: 'INVALID_WHERE',
