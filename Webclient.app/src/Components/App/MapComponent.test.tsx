@@ -59,10 +59,10 @@ beforeEach(() => {
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 describe('free OpenStreetMap 3D readiness', () => {
-  it('keeps the 2D OpenStreetMap basemap without requiring Esri World Elevation credentials', async () => {
+  it('does not request a 2D basemap while the initial 3D scene is being prepared', async () => {
     setup();
     await screen.findByText('Araçlar hazır');
-    expect(runtime.mapOptions[0]).toMatchObject({ basemap: 'osm' });
+    expect(runtime.mapOptions[0]).toMatchObject({ basemap: null });
     expect(runtime.mapOptions[0]).not.toHaveProperty('ground');
   });
 });
