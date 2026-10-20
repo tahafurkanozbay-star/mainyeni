@@ -129,21 +129,27 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       ]);
       if (disposed || signal.aborted || !mapDiv.current) return;
       accessorWatchRef.current = watchUtils.watch;
-      // Start without a 2D basemap. The initial view is intentionally hidden while
-      // the local 3D scene is prepared, so loading 2D OSM tiles here only duplicates
-      // work before SceneView becomes active. 2D installs its free basemap on demand.
-      // ArcGIS 5.x marks a MapView with neither operational nor basemap layers
-      // as "empty-map" and our readiness guard correctly rejects that state.
-      // Add one invisible, local-only layer so startup can complete without
-      // downloading 2D tiles before the initial 3D SceneView is ready.
+      // Avoid downloading a 2D basemap before the initial 3D scene. A visible,
+      // empty GraphicsLayer gives ArcGIS a local operational layer during startup;
+      // it draws no features and does not make any network requests.
       const startupReadinessLayer = new StartupGraphicsLayerCtor({
         title: 'Startup readiness (no network)',
-        visible: false,
+        visible: true,
         listMode: 'hide',
       });
       const map = new MapCtor({ basemap: null, layers: [startupReadinessLayer] });
       view = new MapViewCtor(createMapViewOptions({ container: mapDiv.current, map, configuration: mapConfig, viewportWidth: window.innerWidth }));
-      await waitForArcgisView(view, { signal, accessorWatch: watchUtils.watch });
+      try {
+        await waitForArcgisView(view, { signal, accessorWatch: watchUtils.watch });
+      } catch (readinessError) {
+        // A browser/SDK combination can still reject a no-basemap startup map.
+        // Recover only when startup has no basemap and the view is still alive;
+        // the free OSM fallback is therefore loaded only on the failure path.
+        const startupMap = view.map as { basemap?: unknown } | null | undefined;
+        if (disposed || signal.aborted || !startupMap || startupMap.basemap) throw readinessError;
+        startupMap.basemap = 'osm';
+        await waitForArcgisView(view, { signal, accessorWatch: watchUtils.watch });
+      }
       if (disposed || signal.aborted) return;
       bridge = createViewStateBridge({ mode: '2d' }, { onListenerError: (error: unknown) => DebugHelper.Log(error) });
       MapManager.SetViewStateBridge?.(bridge as never);
