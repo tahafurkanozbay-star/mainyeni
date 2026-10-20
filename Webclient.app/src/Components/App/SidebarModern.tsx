@@ -1,5 +1,6 @@
 import React, {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useMemo,
@@ -125,6 +126,10 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
   { id, windowManager, onToolHostChange },
   ref,
 ) {
+  const toolHostRef = useCallback((element: HTMLDivElement | null): void => {
+    onToolHostChange?.(element);
+  }, [onToolHostChange]);
+
   const preferenceStore = useMemo(() => createSidebarPreferenceStore({
     storage: resolveLocalStorage(),
     validItemIds: ITEM_IDS,
@@ -483,7 +488,7 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
 
       {/* Query tools portal into this slot so results reuse Keşfet's existing panel
           instead of creating a second floating panel over the category navigation. */}
-      <div className="kr-sidebar__tool-slot" ref={onToolHostChange} />
+      <div className="kr-sidebar__tool-slot" ref={toolHostRef} />
 
       <section id="kr-sidebar-services" className="kr-sidebar__panel" aria-labelledby="kr-sidebar-panel-title">
         <div className="kr-sidebar__discovery">

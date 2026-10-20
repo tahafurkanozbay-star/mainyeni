@@ -261,8 +261,8 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
     }
     this.coordinator = options.coordinator ?? createRequestCoordinator(options.coordinatorOptions);
     this.ownsCoordinator = !options.coordinator;
-    this.queryLimits = Object.freeze({ ...(options.queryLimits ?? {}) });
-    this.geometryBudget = Object.freeze({ ...(options.geometryBudget ?? {}) });
+    this.queryLimits = Object.freeze({ ...options.queryLimits });
+    this.geometryBudget = Object.freeze({ ...options.geometryBudget });
     this.cacheTtlMs = positiveInteger(options.cacheTtlMs, 15_000, 600_000);
     this.maxRetries = positiveInteger(options.maxRetries, 2, 5);
     this.retryBaseDelayMs = positiveInteger(options.retryBaseDelayMs, 250, 10_000);

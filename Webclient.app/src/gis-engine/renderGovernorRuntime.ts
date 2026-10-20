@@ -267,7 +267,7 @@ const choosePriority = (input: GisLayerRenderInput, visible: boolean, view: GisV
 export const createRenderGovernor = (configuration: GisRenderGovernorConfiguration = {}) => {
   const clock = typeof configuration.now === 'function' ? configuration.now : () => Date.now();
   const settings = normalizeSettings(configuration.settings);
-  const device = Object.freeze({ ...(configuration.device || {}) });
+  const device = Object.freeze({ ...configuration.device });
   let tier: GisQualityTier = configuration.initialTier || detectInitialTier(device);
   if (!TIER_ORDER.includes(tier)) tier = 'balanced';
   let view = normalizeView({ kind: '2d', stationary: true, interacting: false });
@@ -322,7 +322,7 @@ export const createRenderGovernor = (configuration: GisRenderGovernorConfigurati
 
   const emit = (reason: string): GisRenderGovernorSnapshot => {
     const state = snapshot();
-    for (const listener of [...listeners]) {
+    for (const listener of Array.from(listeners)) {
       try { listener(state, reason); } catch (error) { configuration.onListenerError?.(error); }
     }
     try { configuration.onChange?.(state, reason); } catch (error) { configuration.onListenerError?.(error); }

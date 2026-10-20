@@ -77,7 +77,7 @@ export function focusElement(element: HTMLElement | null | undefined, preventScr
     if (!element || typeof element.focus !== "function") return false;
     try {
         element.focus({ preventScroll });
-    } catch (_) {
+    } catch {
         element.focus();
     }
     return typeof document === "undefined" || document.activeElement === element;
@@ -287,7 +287,7 @@ function query(matchMedia: MatchMediaLike | undefined, expression: string): bool
     if (!matchMedia) return false;
     try {
         return Boolean(matchMedia(expression).matches);
-    } catch (_) {
+    } catch {
         return false;
     }
 }

@@ -320,6 +320,16 @@ const requireField = (
   return resolved;
 };
 
+const containsForbiddenWhereControlCharacters = (value: string): boolean => {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x08 || code === 0x0B || code === 0x0C || (code >= 0x0E && code <= 0x1F)) {
+      return true;
+    }
+  }
+  return false;
+};
+
 const normalizeWhere = (value: unknown): string => {
   const where = String(value ?? '1=1').trim() || '1=1';
   if (where.length > 8192) {
@@ -327,7 +337,7 @@ const normalizeWhere = (value: unknown): string => {
       code: 'WHERE_TOO_LONG',
     });
   }
-  if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(where)) {
+  if (containsForbiddenWhereControlCharacters(where)) {
     throw new SpatialQueryPlannerError('ArcGIS where clause contains control characters.', {
       code: 'INVALID_WHERE',
     });

@@ -190,7 +190,7 @@ export const createLayerLifecycleCoordinator = (dependencies: Readonly<{
       timestamp: now(),
       ...details,
     });
-    for (const listener of [...listeners]) {
+    for (const listener of Array.from(listeners)) {
       try {
         listener(event);
       } catch (error) {

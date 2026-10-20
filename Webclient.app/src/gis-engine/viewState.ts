@@ -151,7 +151,7 @@ export const parseViewState = (value: unknown): ViewState => {
   if (!value) return createViewState();
   try {
     return createViewState(JSON.parse(String(value)) as ViewStateInput);
-  } catch (_) {
+  } catch {
     return createViewState();
   }
 };
