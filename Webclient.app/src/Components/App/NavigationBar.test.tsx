@@ -77,7 +77,7 @@ describe('NavigationBar', () => {
     expect(onAddressSearch).toHaveBeenCalledTimes(1);
     expect(onAddressSearch.mock.calls[0]?.[0]).toBe('Kızılay');
     expect(onAddressSearch.mock.calls[0]?.[1]).toBeInstanceOf(AbortSignal);
-    const firstChoice = await screen.findByRole('option', { name: /Kızılay.*Çankaya.*Türkiye/i });
+    const firstChoice = await screen.findByRole('option', { name: /Kızılay, Çankaya.*Türkiye/i });
     expect(screen.getByRole('listbox', { name: 'Adres arama sonuçları' })).toBeInTheDocument();
     await user.click(firstChoice);
 
