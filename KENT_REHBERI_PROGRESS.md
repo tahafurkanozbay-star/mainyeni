@@ -2,6 +2,13 @@
 
 > Bu dosya kısa ve güncel başlangıç kaydıdır. Eski, ayrıntılı durum kayıtlarının tam kopyaları [`progress/archive/`](./progress/archive/) altındadır. Yapısal düzenleme öncesindeki eksiksiz kayıt [`KENT_REHBERI_PROGRESS_ARCHIVE_MAIN_THROUGH_20261019_PRE_STRUCTURE_HYGIENE.md`](./progress/archive/KENT_REHBERI_PROGRESS_ARCHIVE_MAIN_THROUGH_20261019_PRE_STRUCTURE_HYGIENE.md) dosyasında korunur.
 
+## 2026-10-20 — Keşfet paneli, kayıt merkezli yakınlaşma ve alt uyarı
+
+- Önceki hizalama CSS'i gerçek ekranda kazanan `kentrehberi-public-map-workspace.css` kuralından daha düşük öncelikli kaldığı için etkisizdi. Etkin kural düzeltildi: Keşfet paneli solda `0` konumunda, Mainbar'ın alt sınırına hizalı ve masaüstünde 600px; tablet/telefon için duyarlı genişlik kullanır.
+- Nokta geometrilerinde `GisGraphicsHelper.ZoomToGeometry` artık doğrulanmış WGS84 / GeoJSON koordinatlarını doğrudan `center: [longitude, latitude]` olarak verir; genel/geçersiz geometri için eski target davranışı korunur. Nokta arama popup'ı etkin 3B görünümle doğrulanır; gizli 2B görünüm nedeniyle atlanmaz.
+- Sol alt veri uyarısı tek satıra alındı; beyaz fon doğal metin genişliğine göre büyür ve dar ekranda yazı boyutu küçülür. Panel yerleşimi, 3B popup ve koordinat merkezleme regresyon testleri eklendi.
+- Güncel taban `293edf3e20605b70785d33db1f37d5d1b8e4a8f5`; PR [#583](https://github.com/tahafurkanozbay-star/mainyeni/pull/583). Tam merge/CI durumu ve merge commit'i, PR son exact-head doğrulamasından sonra kaydedilmelidir. Canlı IIS/üretim tarayıcı doğrulaması yapılmadı.
+
 ## 2026-10-20 — Hizmet penceresi başlığındaki yinelenen kontroller kaldırıldı
 
 - Hizmet sonuç penceresinin başlığındaki yukarı okla küçült/büyüt ve X ile kapat düğmeleri kaldırıldı; mevcut `Hizmetlere dön` düğmesi tek dönüş kontrolü olarak bırakıldı.
