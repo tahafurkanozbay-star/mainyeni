@@ -16,8 +16,10 @@ const runtime = vi.hoisted(() => ({
   goToCalls: [] as Array<Record<string, unknown>>,
   navigationProps: null as Record<string, unknown> | null,
   create: vi.fn(),
+  waitForView: vi.fn(),
 }));
 vi.mock('../../gis-engine/arcgisModuleRuntime', () => ({ loadArcgisModules: runtime.load }));
+vi.mock('../../gis-engine/viewReadiness', () => ({ waitForArcgisView: runtime.waitForView }));
 vi.mock('../../Store/Managers/MapManager', () => ({ default: {
   GetMapConfiguration: () => ({}), SetViewStateBridge: vi.fn(), SetViewPerformanceMonitor: vi.fn(),
   ClearViewPerformanceMonitor: vi.fn(), ClearViewStateBridge: vi.fn(),
@@ -66,6 +68,7 @@ beforeEach(() => {
   runtime.navigationProps = null;
   Store.dispatch({ type: MapReducer_ActionTypes.SetMapView, payload: null });
   runtime.create.mockImplementation(() => ({ ready: true, readyState: 'ready' }));
+  runtime.waitForView.mockResolvedValue(undefined);
   runtime.load.mockImplementation(async (moduleIds?: string[]) => {
     if (moduleIds?.[0] === 'esri/layers/GraphicsLayer') {
       class GraphicsLayer {
@@ -83,7 +86,11 @@ beforeEach(() => {
       class Map {
         add = vi.fn((layer: unknown) => { runtime.addedLayers.push(layer); });
         remove = vi.fn();
-        constructor(options: unknown) { runtime.mapOptions.push(options); }
+        basemap: unknown;
+        constructor(options: { basemap?: unknown }) {
+          this.basemap = options.basemap;
+          runtime.mapOptions.push(options);
+        }
       },
       class MapView {
         constructor(options: { map: unknown; container: HTMLElement }) {
@@ -123,6 +130,17 @@ describe('free OpenStreetMap 3D readiness', () => {
       }],
     });
     expect(runtime.mapOptions[0]).not.toHaveProperty('ground');
+  });
+
+  it('falls back to OSM only if the no-basemap view cannot become ready', async () => {
+    runtime.waitForView.mockRejectedValueOnce(new Error('empty-map'));
+
+    setup();
+    await screen.findByText('Araçlar hazır');
+
+    expect(runtime.mapOptions[0]).toMatchObject({ basemap: null });
+    expect((runtime.views[0]?.map as { basemap?: unknown }).basemap).toBe('osm');
+    expect(runtime.waitForView).toHaveBeenCalledTimes(2);
   });
 });
 
