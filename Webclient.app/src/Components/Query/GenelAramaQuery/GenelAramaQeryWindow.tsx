@@ -308,10 +308,10 @@ export const GenelAramaQeryWindow = forwardRef<
       const itemDetails = await getItemDetails(item);
       if (!itemDetails?.geometry) throw new Error('Kayıt için harita konumu bulunamadı.');
 
-      const mapView = MapManager.GetMapView();
+      const mapView = MapManager.GetActiveMapView?.() ?? MapManager.GetMapView();
       if (!mapView) throw new Error('Harita görünümü hazır değil.');
 
-      GisGraphicsHelper.ZoomToGeometry(mapView, itemDetails.geometry, 18);
+      await Promise.resolve(GisGraphicsHelper.ZoomToGeometry(mapView, itemDetails.geometry, 18));
       if (isSmallViewport()) windowManager.ToggleMinimiseWindow(id);
     } catch (error) {
       const message = normalizeErrorMessage(error, 'Kayıt konumu gösterilemedi.');
