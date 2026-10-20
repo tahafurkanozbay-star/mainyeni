@@ -97,7 +97,9 @@ describe('map experience layout collision contract', () => {
     expect(application).toContain('<ExperienceWorkspace externalMapModeControl />');
     expect(toolbarComponent).toContain('leadingContent={<MapModeExperienceControl embedded />}');
     expect(toolbarComponent).toContain('toolbarwidget--with-map-mode');
-    expect(toolbarCss).toContain('--toolbar-width: 100px;');
+    expect(toolbarCss).toContain('--toolbar-width: 68px;');
+    expect(toolbarCss).toContain('box-sizing: border-box;');
+    expect(modeCss).toContain('.map-mode-experience--embedded .map-mode-experience__toggle');
     expect(modeCss).toContain('.map-mode-experience--embedded');
   });
 
