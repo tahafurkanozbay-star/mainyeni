@@ -2,6 +2,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { publishKentRehberiPoiSearchIndex } from '../../data-services/kentRehberiPoiSearchIndex';
+import { getKentRehberiMapFilterSnapshot, setKentRehberiMapFilter } from '../../shell/kentRehberiMapFilter';
 import { MapManager } from '../../Store/Managers/MapManager';
 import type { ManagedWindowHandle, WindowManagerLike } from '../../experience/contracts';
 import { SidebarModern } from './SidebarModern';
@@ -63,6 +64,7 @@ beforeEach(() => {
   clearPoiIndex?.();
   clearPoiIndex = null;
   window.localStorage.clear();
+  setKentRehberiMapFilter(null);
   vi.mocked(MapManager.GetMapView).mockReset();
   vi.mocked(MapManager.GetMapView).mockReturnValue(null);
   vi.mocked(MapManager.GetActiveMapView).mockReset();
@@ -72,6 +74,7 @@ beforeEach(() => {
 afterEach(() => {
   clearPoiIndex?.();
   clearPoiIndex = null;
+  setKentRehberiMapFilter(null);
 });
 
 const seedPoiIndex = (records: Parameters<typeof publishKentRehberiPoiSearchIndex>[0] = [
@@ -139,6 +142,39 @@ describe('SidebarModern governed interaction integration', () => {
     const groups = within(nav).getAllByRole('button');
     expect(groups.filter((button) => button.tabIndex === 0)).toHaveLength(1);
     expect(groups[0]).toHaveAttribute('title', 'Ankara Büyükşehir Belediyesi');
+  });
+
+  it('filters points by institution and restores all points from the main menu', async () => {
+    const user = userEvent.setup();
+    renderSidebar();
+
+    expect(getKentRehberiMapFilterSnapshot().iconKeys).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'EGO Genel Müdürlüğü' }));
+
+    const selected = getKentRehberiMapFilterSnapshot();
+    expect(selected.label).toBe('EGO Genel Müdürlüğü');
+    expect(selected.iconKeys).not.toBeNull();
+    expect(selected.iconKeys?.length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Ana menüye dön; tüm noktaları göster' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Ana menüye dön; tüm noktaları göster' }));
+    expect(getKentRehberiMapFilterSnapshot().iconKeys).toBeNull();
+    expect(screen.getByRole('list', { name: 'Tüm kent servisleri hizmet listesi' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ana menüye dön; tüm noktaları göster' })).not.toBeInTheDocument();
+  });
+
+  it('filters points by selected service and restores all points from the main menu', async () => {
+    const user = userEvent.setup();
+    renderSidebar();
+
+    await user.click(serviceButton('Parklar'));
+    const selected = getKentRehberiMapFilterSnapshot();
+    expect(selected.label).toBe('Parklar');
+    expect(selected.iconKeys).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Ana menüye dön; tüm noktaları göster' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Ana menüye dön; tüm noktaları göster' }));
+    expect(getKentRehberiMapFilterSnapshot().iconKeys).toBeNull();
   });
 
   it('resolves institution logos relative to the configured app base path', () => {

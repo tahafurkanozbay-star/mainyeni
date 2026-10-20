@@ -10,6 +10,13 @@ import React, {
 } from 'react';
 import { DebugHelper } from '../../Toolbox/DebugHelper';
 import { MapManager } from '../../Store/Managers/MapManager';
+import { normalizeIconKey } from '../../gis-engine/iconResolver';
+import iconRegistryEntries from '../../gis-engine/iconRegistry.json';
+import {
+  getKentRehberiMapFilterSnapshot,
+  setKentRehberiMapFilter,
+  subscribeKentRehberiMapFilter,
+} from '../../shell/kentRehberiMapFilter';
 import {
   getKentRehberiPoiSearchSnapshot,
   searchKentRehberiPoiPoints,
@@ -50,6 +57,41 @@ const ITEMS = SIDEBAR_ITEMS as readonly SidebarItem[];
 const MAX_RECENT_SERVICES = 6;
 const GROUP_IDS = Object.freeze(GROUPS.map((group) => group.id));
 const ITEM_IDS = Object.freeze(ITEMS.map((item) => item.windowId));
+
+interface SidebarIconRegistryEntry {
+  readonly id?: unknown;
+  readonly type?: unknown;
+  readonly aliases?: unknown;
+}
+
+const sidebarIconAliases = Object.freeze(
+  (iconRegistryEntries as readonly SidebarIconRegistryEntry[])
+    .flatMap((entry) => {
+      const id = typeof entry.id === 'string' ? entry.id.trim() : '';
+      if (!id) return [];
+      const aliases = [...new Set([entry.id, entry.type, ...(Array.isArray(entry.aliases) ? entry.aliases : [])]
+        .filter((alias): alias is string => typeof alias === 'string' && Boolean(alias.trim()))
+        .map(normalizeIconKey)
+        .filter((alias) => alias.length >= 4))];
+      return aliases.map((alias) => Object.freeze({ id, alias }));
+    })
+    .sort((left, right) => right.alias.length - left.alias.length),
+);
+
+const resolveSidebarIconKey = (item: SidebarItem): string => {
+  const title = normalizeIconKey([item.iconType, item.serviceKey].join(' '));
+  const match = sidebarIconAliases.find(({ alias }) => (
+    title === alias
+    || title.startsWith(`${alias} `)
+    || title.endsWith(` ${alias}`)
+    || title.includes(` ${alias} `)
+  ));
+  return match?.id ?? 'default';
+};
+
+const iconKeysForItems = (items: readonly SidebarItem[]): readonly string[] => Object.freeze(
+  [...new Set(items.map(resolveSidebarIconKey).filter((key) => key !== 'default'))],
+);
 
 const ServiceSearchGlyph = (): ReactNode => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -105,6 +147,12 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
     navigationModel.subscribe,
     navigationModel.getSnapshot,
     navigationModel.getSnapshot,
+  );
+
+  const mapFilter = useSyncExternalStore(
+    subscribeKentRehberiMapFilter,
+    getKentRehberiMapFilterSnapshot,
+    getKentRehberiMapFilterSnapshot,
   );
 
   const pointSearchSnapshot = useSyncExternalStore(
@@ -186,12 +234,26 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
   };
 
   const openWindow = (windowId: string): void => {
+    const selectedItem = ITEMS.find((item) => item.windowId === windowId);
+    if (selectedItem) {
+      setKentRehberiMapFilter({
+        label: selectedItem.label,
+        iconKeys: [resolveSidebarIconKey(selectedItem)].filter((key) => key !== 'default'),
+      });
+    }
     navigationModel.recordRecent(windowId);
     preferenceStore.saveRecents(navigationModel.getSnapshot().recentIds);
 
     // Keep the existing Keşfet panel open when a service is selected. The selected
     // service view must not collapse the category/subcategory navigation surface.
     windowManager.ShowWindow(windowId);
+  };
+
+  const returnToMainMenu = (): void => {
+    navigationModel.setGroup(null);
+    navigationModel.setView('all');
+    navigationModel.clearQuery();
+    setKentRehberiMapFilter(null);
   };
 
   const toggleFavorite = (windowId: string): void => {
@@ -358,6 +420,18 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
           <span>ŞEHİR SERVİSLERİ</span>
           <strong>Keşfet</strong>
         </div>
+        {mapFilter.iconKeys !== null ? (
+          <button
+            type="button"
+            className="kr-sidebar__home-button"
+            onClick={returnToMainMenu}
+            aria-label="Ana menüye dön; tüm noktaları göster"
+            title="Ana menüye dön"
+          >
+            <span aria-hidden="true">←</span>
+            <span>Ana menü</span>
+          </button>
+        ) : null}
         <button
           type="button"
           ref={sidebarToggleRef}
@@ -384,7 +458,19 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
             }}
             type="button"
             className={`kr-sidebar__group ns-btn${group.id} ${navigation.activeGroupId === group.id ? 'active' : ''}`}
-            onClick={() => navigationModel.setGroup(group.id)}
+            onClick={() => {
+              navigationModel.setGroup(group.id);
+              const selectedGroupId = navigationModel.getSnapshot().activeGroupId;
+              if (selectedGroupId === null) {
+                setKentRehberiMapFilter(null);
+                return;
+              }
+              const selectedGroup = GROUPS.find((candidate) => candidate.id === selectedGroupId);
+              setKentRehberiMapFilter({
+                label: selectedGroup?.label ?? selectedGroupId,
+                iconKeys: iconKeysForItems(ITEMS.filter((item) => item.group === selectedGroupId)),
+              });
+            }}
             onKeyDown={(event) => handleGroupKeyDown(event, group.id)}
             aria-pressed={navigation.activeGroupId === group.id}
             aria-controls="kr-sidebar-services"
