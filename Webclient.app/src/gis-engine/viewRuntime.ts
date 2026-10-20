@@ -2,7 +2,7 @@ import { watchArcgisProperty, type ArcgisAccessorWatch } from './arcgisReactiveR
 import { createViewState, switchViewMode, updateCamera } from './viewState';
 import type { ViewCameraInput, ViewMode, ViewState, ViewStateBridge, ViewStateInput } from './contracts';
 
-const DEFAULT_CENTER: [number, number] = [34, 39];
+const DEFAULT_CENTER: [number, number] = [32.8597, 39.9334];
 const DEFAULT_MIN_ZOOM = 1;
 const DEFAULT_MAX_ZOOM = 22;
 const ABSOLUTE_MAX_ZOOM = 24;
