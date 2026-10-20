@@ -13,6 +13,12 @@ const application = readFileSync(resolve(webclientRoot, 'src', 'App.tsx'), 'utf8
 const toolbarComponent = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Widget', 'Toolbar', 'ToolbarWidgetModern.tsx'), 'utf8');
 const toolbarCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Widget', 'Toolbar', 'ToolbarWidget.css'), 'utf8');
 const navigationCss = read('NavigationBar.css');
+const sidebarModernCss = read('SidebarModern.css');
+const attributionCss = read('OpenStreetMap3DAttribution.css');
+const mapModeBridge = read('ExperienceMapModeBridge.tsx');
+const shellCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-shell.css'), 'utf8');
+const uiCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-ui.css'), 'utf8');
+const disclaimerCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-data-disclaimer.css'), 'utf8');
 
 const mobileModeBlock = (): string => {
   const mediaStart = modeCss.indexOf('@media (max-width: 45rem)');
@@ -23,6 +29,42 @@ const mobileModeBlock = (): string => {
 };
 
 describe('map experience layout collision contract', () => {
+  it('anchors Keşfet to the left edge and bounds it between the header and viewport bottom', () => {
+    expect(mapCss).toMatch(
+      /\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{[\s\S]*?inset-inline-start:\s*0;[\s\S]*?inset-block-end:\s*0;[\s\S]*?height:\s*auto;/u,
+    );
+    expect(mapCss).toMatch(
+      /@media \(max-width: 680px\)[\s\S]*?\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{[\s\S]*?top:\s*58px;[\s\S]*?max-width:\s*100dvw;/u,
+    );
+  });
+
+  it('uses translucent frosted surfaces on Keşfet, query windows, and the shell', () => {
+    expect(sidebarModernCss).toContain('background: color-mix(in srgb, var(--exp-surface, #fff) 84%, transparent);');
+    expect(uiCss).toContain('background: color-mix(in srgb, var(--exp-surface) 84%, transparent);');
+    expect(shellCss).toContain('background: color-mix(in srgb, var(--exp-surface) 84%, transparent);');
+    expect(navigationCss).toContain('backdrop-filter:blur(12px);');
+  });
+
+  it('keeps the bottom disclaimer on one full-width line, including compact screens', () => {
+    expect(disclaimerCss).toContain('inline-size: 100dvw;');
+    expect(disclaimerCss).toMatch(
+      /\.experience-data-disclaimer__copy\s*\{[\s\S]*?flex-wrap:\s*nowrap;[\s\S]*?white-space:\s*nowrap;/u,
+    );
+    expect(disclaimerCss).toMatch(
+      /@media \(max-width: 40rem\)[\s\S]*?\.experience-data-disclaimer__copy\s*\{[\s\S]*?flex-wrap:\s*nowrap;[\s\S]*?white-space:\s*nowrap;/u,
+    );
+    expect(disclaimerCss).toContain('.experience-data-disclaimer__icon {\\n    display: none;');
+  });
+
+  it('removes the decorative lower-right map badge while preserving OSM credit', () => {
+    expect(attributionCss).toContain('top: calc(var(--mainbar-height, 60px) + 8px);');
+    expect(attributionCss).toContain('bottom: auto;');
+    expect(attributionCss).toContain('background: transparent;');
+    expect(mapModeBridge).toContain('© OpenStreetMap contributors');
+    expect(mapModeBridge).not.toContain('3B bina verisi:');
+  });
+
+
   it('mounts service query results inside the existing Keşfet panel instead of as map siblings', () => {
     const sidebarComponent = read('SidebarModern.tsx');
     const sidebarCss = read('SidebarModern.css');
