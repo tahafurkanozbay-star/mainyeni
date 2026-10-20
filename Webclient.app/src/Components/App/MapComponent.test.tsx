@@ -100,15 +100,28 @@ beforeEach(() => {
         }
       },
       { watch: () => ({ remove: runtime.remove }), whenTrue: () => ({ remove: runtime.remove }), whenFalse: () => ({ remove: runtime.remove }) },
+      class StartupGraphicsLayer {
+        readonly options: unknown;
+        constructor(options: unknown) { this.options = options; }
+      },
     ];
   });
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 describe('free OpenStreetMap 3D readiness', () => {
-  it('does not request a 2D basemap while the initial 3D scene is being prepared', async () => {
+  it('avoids 2D tiles without creating an ArcGIS empty-map readiness deadlock', async () => {
     setup();
     await screen.findByText('Araçlar hazır');
-    expect(runtime.mapOptions[0]).toMatchObject({ basemap: null });
+    expect(runtime.mapOptions[0]).toMatchObject({
+      basemap: null,
+      layers: [{
+        options: {
+          title: 'Startup readiness (no network)',
+          visible: false,
+          listMode: 'hide',
+        },
+      }],
+    });
     expect(runtime.mapOptions[0]).not.toHaveProperty('ground');
   });
 });
