@@ -62,7 +62,8 @@ const StatusItem = ({ label, value, tone = 'neutral' }: StatusItemProps): ReactN
   </span>
 );
 
-const ExperienceSkipLinks = (): ReactNode => {
+const ExperienceSkipLinks = ({ externalModeControl = false }: { readonly externalModeControl?: boolean } = {}): ReactNode => {
+  const modeControlTarget = externalModeControl ? '#toolbar-widget' : '#experience-workspace-controls';
   const focusTarget = useCallback((event: MouseEvent<HTMLAnchorElement>, selector: string): void => {
     event.preventDefault();
     focusExperienceTarget(selector);
@@ -77,8 +78,8 @@ const ExperienceSkipLinks = (): ReactNode => {
         Araç paneline geç
       </a>
       <a
-        href="#experience-workspace-controls"
-        onClick={(event) => focusTarget(event, '#experience-workspace-controls')}
+        href={modeControlTarget}
+        onClick={(event) => focusTarget(event, modeControlTarget)}
       >
         Görünüm kontrollerine geç
       </a>
@@ -357,9 +358,11 @@ const ExperienceSettingsDialog = ({
 
 export interface ExperienceWorkspaceProps {
   readonly mapModeControl?: ReactNode;
+  /** The 2B/3B switcher is mounted inside the persistent right toolbar. */
+  readonly externalMapModeControl?: boolean;
 }
 
-export const ExperienceWorkspace = ({ mapModeControl }: ExperienceWorkspaceProps = {}): ReactNode => {
+export const ExperienceWorkspace = ({ mapModeControl, externalMapModeControl = false }: ExperienceWorkspaceProps = {}): ReactNode => {
   const preferences = useExperiencePreferences();
   const viewport = useExperienceViewport();
   const online = useExperienceConnectivity();
@@ -433,12 +436,12 @@ export const ExperienceWorkspace = ({ mapModeControl }: ExperienceWorkspaceProps
   }, []);
 
   const statuses = useMemo(() => workspaceStatusDescriptors(presentation)
-    .filter((status) => status.key !== 'connectivity' && (!mapModeControl || status.key !== 'view')),
-  [mapModeControl, presentation]);
+    .filter((status) => status.key !== 'connectivity' && (!(mapModeControl || externalMapModeControl) || status.key !== 'view')),
+  [externalMapModeControl, mapModeControl, presentation]);
 
   return (
     <>
-      <ExperienceSkipLinks />
+      <ExperienceSkipLinks externalModeControl={externalMapModeControl} />
       {mapModeControl ? (
         <div
           id="experience-workspace-controls"
@@ -459,6 +462,10 @@ export const ExperienceWorkspace = ({ mapModeControl }: ExperienceWorkspaceProps
             </p>
           ) : null}
         </div>
+      ) : externalMapModeControl ? (
+        <span className="experience-sr-only" role="status" aria-label="Çalışma alanı durumu">
+          {online ? 'Bağlantı normal' : 'Bağlantı kesildi'}
+        </span>
       ) : (
         <aside
           id="experience-workspace-controls"

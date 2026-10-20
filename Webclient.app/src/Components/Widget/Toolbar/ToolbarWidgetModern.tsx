@@ -14,6 +14,7 @@ import { runtimeDiagnostics } from '../../../platform/runtime/runtimeDiagnostics
 import { watchArcgisProperty, type ArcgisAccessorWatch } from '../../../gis-engine/arcgisReactiveRuntime';
 import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
 import type { WindowManagerLike } from '../../../experience/contracts';
+import { MapModeExperienceControl } from '../../App/MapModeExperienceControl';
 import {
   ExperienceToolbar,
   type ExperienceToolbarItem,
@@ -295,8 +296,7 @@ export const ToolbarWidgetModern = ({
     }
   };
 
-  const toolbarItems: readonly ExperienceToolbarItem[] = [
-    ...snapshot.actions.map((action, index) => {
+  const toolbarItems: readonly ExperienceToolbarItem[] = snapshot.actions.map((action, index) => {
       const isGroupStart = index === 0 || snapshot.actions[index - 1]?.group !== action.group;
       return {
         id: action.id,
@@ -311,8 +311,7 @@ export const ToolbarWidgetModern = ({
           activateToolbarAction(action.id);
         },
       };
-    }),
-  ];
+    });
   const announcement = homePhase === 'idle'
     ? snapshot.announcement
     : HOME_MESSAGES[homePhase];
@@ -341,11 +340,12 @@ export const ToolbarWidgetModern = ({
       </p>
       <ExperienceToolbar
         id={toolbarId}
-        className="toolbarwidget toolbarwidget--modern"
+        className="toolbarwidget toolbarwidget--modern toolbarwidget--with-map-mode"
         label="Harita araçları"
         describedBy={helpId}
         orientation="vertical"
         tooltipPlacement="left"
+        leadingContent={<MapModeExperienceControl embedded />}
         items={toolbarItems}
       />
       <div id={`${toolbarId}-notice`} className="toolbarwidget-notice" data-visible={Boolean(announcement)} data-tone={failure ? 'danger' : 'info'}>

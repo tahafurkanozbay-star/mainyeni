@@ -310,3 +310,72 @@ html[data-experience-motion='reduced'] .map-mode-experience__status-dot,
   white-space: nowrap !important;
   border: 0 !important;
 }
+ 
+/* Compact layout when the mode switcher is embedded in the persistent right toolbar. */
+.map-mode-experience--embedded {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  min-inline-size: 0;
+  inline-size: 100%;
+  max-inline-size: none;
+  gap: 4px;
+  padding: 0 0 4px;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  contain: initial;
+}
+
+.map-mode-experience--embedded .map-mode-experience__header {
+  display: none;
+}
+
+.map-mode-experience--embedded .map-mode-experience__switcher {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+}
+
+.map-mode-experience--embedded .map-mode-experience__mode {
+  min-inline-size: 0;
+  min-block-size: 44px;
+  padding: 4px 2px;
+  border-radius: 8px;
+}
+
+.map-mode-experience--embedded .map-mode-experience__mode > small {
+  font-size: 0.58rem;
+  line-height: 1.15;
+}
+
+.map-mode-experience--embedded .map-mode-experience__recovery {
+  padding-top: 4px;
+}
+
+.map-mode-experience--embedded .map-mode-experience__retry {
+  inline-size: 100%;
+  min-inline-size: 0;
+  padding-inline: 4px;
+  font-size: 0.64rem;
+  overflow-wrap: anywhere;
+}
+
+@media (pointer: coarse) {
+  .map-mode-experience--embedded .map-mode-experience__mode {
+    min-block-size: 48px;
+  }
+}
+
+@media (forced-colors: active) {
+  .map-mode-experience--embedded {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+}

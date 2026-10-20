@@ -48,6 +48,8 @@ export interface ExperienceToolbarProps {
   readonly describedBy?: string;
   /** Portal hints escape scrolling toolbars; the native button keeps its label. */
   readonly tooltipPlacement?: 'left' | 'right' | 'top' | 'bottom';
+  /** Optional compact control rendered before the standard toolbar actions. */
+  readonly leadingContent?: ReactNode;
 }
 
 const toRovingItems = (
@@ -83,6 +85,7 @@ export function ExperienceToolbar({
   className = '',
   describedBy,
   tooltipPlacement,
+  leadingContent,
 }: ExperienceToolbarProps): ReactNode {
   const rootRef = useRef<HTMLDivElement>(null);
   const tooltipId = useId();
@@ -127,6 +130,7 @@ export function ExperienceToolbar({
       dir={direction}
       onKeyDown={handleKeyDown}
     >
+      {leadingContent ? <div className="experience-toolbar__leading-content">{leadingContent}</div> : null}
       {items.map((item, index) => {
         if (item.hidden) return null;
         const disabled = Boolean(item.disabled || item.busy);

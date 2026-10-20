@@ -121,7 +121,11 @@ describe('ToolbarWidgetModern', () => {
     expect(toolbar.id).toBe('map-toolbar');
     expect(toolbar.getAttribute('aria-orientation')).toBe('vertical');
     expect(toolbar.getAttribute('aria-describedby')).toBe('map-toolbar-instructions');
+    expect(toolbar.querySelectorAll('[data-roving-focus-id]')).toHaveLength(4);
     expect(within(toolbar).getAllByRole('button')).toHaveLength(4);
+    expect(within(toolbar).getAllByRole('radio')).toHaveLength(2);
+    expect(within(toolbar).getByRole('radiogroup', { name: '2B veya 3B görünüm seç' })).toBeInTheDocument();
+    expect(toolbar.querySelector('.map-mode-experience--embedded')).toBeInTheDocument();
     expect(screen.getAllByRole('separator')).toHaveLength(2);
     expect(screen.getByRole('button', { name: 'Altlık Haritalar' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Başlangıç görünümüne dön' })).toBeTruthy();
@@ -131,8 +135,10 @@ describe('ToolbarWidgetModern', () => {
   it('keeps a single tab stop and supports vertical roving focus', () => {
     render(<ToolbarWidgetModern windowManager={createWindowManager()} />);
     const toolbar = screen.getByRole('toolbar', { name: 'Harita araçları' });
-    const buttons = screen.getAllByRole('button') as HTMLButtonElement[];
+    const buttons = [...toolbar.querySelectorAll<HTMLButtonElement>('[data-roving-focus-id]')];
     expect(buttons.filter((button) => button.tabIndex === 0)).toHaveLength(1);
+    expect(screen.getByRole('radio', { name: '2B harita görünümüne geç' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: '3B sahne görünümüne geç' })).toHaveAttribute('aria-checked', 'false');
     const first = screen.getByRole('button', { name: 'Altlık Haritalar' });
     const second = screen.getByRole('button', { name: 'Konum Bul' });
     first.focus();
