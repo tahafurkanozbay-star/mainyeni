@@ -291,10 +291,21 @@ export function MapModeExperienceControl({
             <button
               type="button"
               className="map-mode-experience__retry"
+              aria-label={snapshot.requestedMode === '3d' ? '3B görünümü yeniden dene' : '2B görünümü yeniden dene'}
+              title={snapshot.requestedMode === '3d' ? '3B görünümü yeniden dene' : '2B görünümü yeniden dene'}
               onClick={() => retryRequestedMode(model)}
             >
-              {snapshot.requestedMode === '3d' ? '3B görünümü yeniden dene' : '2B görünümü yeniden dene'}
+              {embedded ? <span aria-hidden="true">↻</span> : snapshot.requestedMode === '3d' ? '3B görünümü yeniden dene' : '2B görünümü yeniden dene'}
             </button>
+          ) : embedded ? (
+            <span
+              className="map-mode-experience__limit"
+              role="img"
+              aria-label="Görünüm geçişi için yeniden deneme sınırına ulaşıldı."
+              title="Görünüm geçişi için yeniden deneme sınırına ulaşıldı."
+            >
+              !
+            </span>
           ) : (
             <span className="map-mode-experience__limit">Görünüm geçişi için yeniden deneme sınırına ulaşıldı.</span>
           )}
