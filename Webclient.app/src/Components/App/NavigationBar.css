@@ -7,7 +7,7 @@ html,body,#root,#app-shell{margin:0!important;padding:0!important;}
 .mainbar-logo img{max-height:46px;max-width:70px;width:auto;object-fit:contain;margin:0;}
 .mainbar-text{display:flex;align-items:center;min-height:38px;padding-left:16px;margin-left:3px;border-left:1px solid var(--exp-border);font-family:var(--exp-font-sans,'Segoe UI',sans-serif);font-size:21px;font-weight:760;letter-spacing:-.02em;color:var(--exp-text);}
 .mainbar>a{text-decoration:none;color:inherit;}
-.ns-input{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(540px,45vw);margin:0;}
+.ns-input{position:absolute;left:calc(50% - 20px);top:50%;transform:translate(-50%,-50%);width:min(540px,45vw);margin:0;}
 .ns-input-group{position:relative;width:100%;height:42px;display:block;}
 .ns-input-group input{width:100%;height:42px;padding:0 46px 0 14px;border:1px solid var(--exp-border);border-radius:12px;background:var(--exp-surface-2);color:var(--exp-text);font-size:13px;transition:border-color .12s ease,background .12s ease,box-shadow .12s ease;}
 .ns-input-group input:hover{border-color:var(--exp-border-strong);}
