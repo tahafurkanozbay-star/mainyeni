@@ -158,6 +158,8 @@ export interface KentRehberiMapLike {
 export interface KentRehberiGeoJsonLayerLike {
   readonly id?: string;
   readonly title?: string;
+  /** Client-side visibility filter shared between MapView and SceneView. */
+  definitionExpression?: string | null;
   load?: (options?: { readonly signal?: AbortSignal }) => Promise<unknown>;
   cancelLoad?: () => void;
   destroy?: () => void;
