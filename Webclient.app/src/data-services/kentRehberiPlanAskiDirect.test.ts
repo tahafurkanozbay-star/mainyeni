@@ -43,7 +43,7 @@ const mockTypes = (
     expect(init?.method).toBe('GET');
     expect(init?.credentials).toBe('omit');
     expect(init?.redirect).toBe('error');
-    expect(init?.cache).toBe('no-store');
+    expect(init?.cache).toBe('default');
     return makeResponse(byType[Number(new URL(url).searchParams.get('tur'))] ?? []);
   }) as typeof fetch;
   return { requests, fetchImpl };
@@ -78,6 +78,15 @@ describe('direct PlanASKI browser transport', () => {
     expect(requests).toEqual([
       'https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur=13',
     ]);
+  });
+
+  it('reuses a validated category response without a second network request', async () => {
+    const { requests, fetchImpl } = mockTypes({ 13: [row(13, 201)] });
+    const first = await fetchPlanAskiGeoJsonDirect({ tur: 13, limit: 10, fetchImpl });
+    const second = await fetchPlanAskiGeoJsonDirect({ tur: 13, limit: 10, fetchImpl });
+    expect(first.features.map((feature) => feature.id)).toEqual([201]);
+    expect(second.features.map((feature) => feature.id)).toEqual([201]);
+    expect(requests).toHaveLength(1);
   });
 
   it('fetches all 43 types for catalog and supports exact category matching', async () => {

@@ -79,6 +79,7 @@ interface ExperienceMapModeBridgeProps {
   mapView: ArcGisMapViewLike;
   modeRef?: MutableRefObject<ExperienceMapMode>;
   accessorWatch?: ArcgisAccessorWatch | undefined;
+  onInitialModeResolved?: () => void;
 }
 
 interface SceneHandle {
@@ -182,6 +183,7 @@ export function ExperienceMapModeBridge({
   mapView,
   modeRef,
   accessorWatch,
+  onInitialModeResolved,
 }: ExperienceMapModeBridgeProps) {
   const sceneHostRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<SceneHandle | null>(null);
@@ -203,6 +205,12 @@ export function ExperienceMapModeBridge({
   const [sceneHostActive, setSceneHostActive] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
   const [sceneUi, setSceneUi] = useState<SceneUiState>(INITIAL_UI_STATE);
+  const initialModeResolvedRef = useRef(false);
+  const settleInitialMode = useCallback(() => {
+    if (initialModeResolvedRef.current) return;
+    initialModeResolvedRef.current = true;
+    onInitialModeResolved?.();
+  }, [onInitialModeResolved]);
 
   const setMode = useCallback((mode: ExperienceMapMode) => {
     activeModeRef.current = mode;
@@ -562,17 +570,16 @@ export function ExperienceMapModeBridge({
     window.addEventListener(EXPERIENCE_COMMAND_EVENT, onCommand as EventListener);
     document.addEventListener('visibilitychange', onVisibilityChange, { passive: true });
 
-    // Make first-load 3D activation explicit and deterministic. Previously this
-    // depended on another component observing a transient 2D runtime event and
-    // dispatching a second command; if that hand-off was missed, the SceneView
-    // stayed hidden and the map appeared blank in the requested 3D experience.
-    void queueTransition('3d');
+    // Make first-load 3D activation explicit and deterministic. The parent keeps
+    // the 2D canvas visually suppressed until this initial attempt finishes, so
+    // visitors never see the page flash through a temporary 2D state.
+    void queueTransition('3d').finally(settleInitialMode);
 
     return () => {
       window.removeEventListener(EXPERIENCE_COMMAND_EVENT, onCommand as EventListener);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [executeActiveSceneCommand, mapView, modeRef, queueTransition]);
+  }, [executeActiveSceneCommand, mapView, modeRef, queueTransition, settleInitialMode]);
 
   useEffect(() => () => {
     disposedRef.current = true;

@@ -115,6 +115,19 @@
   pointer-events: none;
 }
 
+/* The default experience is 3D. Keep the 2D renderer from flashing on first
+ * paint while its SceneView is being created; the scene host remains measurable
+ * and displays its neutral loading background until startup settles. */
+.esri-map[data-initial-mode-resolved="false"] .experience-mapview-host {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.esri-map[data-initial-mode-resolved="false"] .experience-scene-host {
+  opacity: 1;
+  pointer-events: none;
+}
+
 .experience-scene-host[data-scene-ready="false"] {
   background:
     radial-gradient(circle at 50% 42%, rgb(21 94 239 / 9%), transparent 32%),

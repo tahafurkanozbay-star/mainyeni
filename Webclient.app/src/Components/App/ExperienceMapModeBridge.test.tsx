@@ -243,9 +243,10 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
     };
     window.addEventListener(EXPERIENCE_MAP_MODE_EVENT, onModeChanged);
 
+    const onInitialModeResolved = vi.fn();
     const { container, unmount } = render(
       <div id="esri-map-container">
-        <ExperienceMapModeBridge mapView={mapView} />
+        <ExperienceMapModeBridge mapView={mapView} onInitialModeResolved={onInitialModeResolved} />
       </div>,
     );
 
@@ -259,6 +260,7 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
       expect(host).not.toBeNull();
       expect(harness.views[0]?.container).toBe(host);
       await waitFor(() => expect(host).toHaveClass('is-active'));
+      expect(onInitialModeResolved).toHaveBeenCalledTimes(1);
 
       await act(async () => { dispatchMode('2d'); });
       await waitFor(() => expect(changedModes.filter((mode) => mode === '2d')).toHaveLength(1));

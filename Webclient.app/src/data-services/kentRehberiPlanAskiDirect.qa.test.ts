@@ -37,7 +37,7 @@ function singleTypeFetch(tur: number, entries: readonly unknown[]): typeof fetch
     expect(init?.method).toBe('GET');
     expect(init?.mode).toBe('cors');
     expect(init?.credentials).toBe('omit');
-    expect(init?.cache).toBe('no-store');
+    expect(init?.cache).toBe('default');
     expect(init?.redirect).toBe('error');
     expect(init?.headers).toEqual({ Accept: 'application/json' });
     return jsonResponse(entries);

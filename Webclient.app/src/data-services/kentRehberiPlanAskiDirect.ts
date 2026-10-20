@@ -34,6 +34,9 @@ export const takePlanAskiPoiSearchIndex = (
   return index;
 };
 const TYPE_CATALOG_CACHE_TTL_MS = 5 * 60 * 1000;
+const CATEGORY_RESPONSE_CACHE_TTL_MS = TYPE_CATALOG_CACHE_TTL_MS;
+const MAX_CATEGORY_RESPONSE_CACHE_BYTES = 32 * 1024 * 1024;
+const MAX_CATEGORY_RESPONSE_CACHE_ENTRIES = MAX_TYPE - MIN_TYPE + 1;
 const MAX_IN_FLIGHT = 4;
 
 interface TypeCatalogCacheEntry {
@@ -44,6 +47,69 @@ interface TypeCatalogCacheEntry {
 // Keep only the small sample catalog, not all point records. This lets a
 // follow-up POI query reuse the startup sweep without retaining a large dataset.
 const typeCatalogCache = new WeakMap<typeof fetch, TypeCatalogCacheEntry>();
+
+interface CategoryResponseCacheEntry {
+  readonly expiresAt: number;
+  readonly body: string;
+  /** Conservative UTF-16 string storage estimate; prevents unbounded retention. */
+  readonly weight: number;
+}
+
+interface CategoryResponseCache {
+  bytes: number;
+  readonly entries: Map<number, CategoryResponseCacheEntry>;
+}
+
+// Cache is scoped by fetch implementation (native fetch in production; isolated
+// mocks in tests), expires quickly, and is bounded by both bytes and categories.
+const categoryResponseCache = new WeakMap<typeof fetch, CategoryResponseCache>();
+
+const readCachedCategoryResponse = (fetchImpl: typeof fetch, tur: number): string | null => {
+  const cache = categoryResponseCache.get(fetchImpl);
+  const entry = cache?.entries.get(tur);
+  if (!cache || !entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    cache.entries.delete(tur);
+    cache.bytes = Math.max(0, cache.bytes - entry.weight);
+    return null;
+  }
+  // Map insertion order is the LRU queue: move recently used entries to the end.
+  cache.entries.delete(tur);
+  cache.entries.set(tur, entry);
+  return entry.body;
+};
+
+const cacheCategoryResponse = (fetchImpl: typeof fetch, tur: number, body: string): void => {
+  const weight = body.length * 2;
+  if (weight <= 0 || weight > MAX_CATEGORY_RESPONSE_CACHE_BYTES) return;
+  let cache = categoryResponseCache.get(fetchImpl);
+  if (!cache) {
+    cache = { bytes: 0, entries: new Map<number, CategoryResponseCacheEntry>() };
+    categoryResponseCache.set(fetchImpl, cache);
+  }
+  const prior = cache.entries.get(tur);
+  if (prior) {
+    cache.bytes = Math.max(0, cache.bytes - prior.weight);
+    cache.entries.delete(tur);
+  }
+  while (
+    cache.entries.size >= MAX_CATEGORY_RESPONSE_CACHE_ENTRIES
+    || cache.bytes + weight > MAX_CATEGORY_RESPONSE_CACHE_BYTES
+  ) {
+    const oldest = cache.entries.keys().next().value;
+    if (oldest === undefined) break;
+    const removed = cache.entries.get(oldest);
+    cache.entries.delete(oldest);
+    if (removed) cache.bytes = Math.max(0, cache.bytes - removed.weight);
+  }
+  cache.entries.set(tur, {
+    expiresAt: Date.now() + CATEGORY_RESPONSE_CACHE_TTL_MS,
+    body,
+    weight,
+  });
+  cache.bytes += weight;
+  categoryResponseCache.set(fetchImpl, cache);
+};
 
 type RecordValue = Readonly<Record<string, unknown>>;
 
@@ -225,31 +291,38 @@ const fetchType = async (
 ): Promise<readonly KentRehberiGeoJsonFeature[]> => {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   if (typeof fetchImpl !== 'function') throw new Error('Fetch API is unavailable.');
-  const response = await fetchImpl(SOURCE + '?tur=' + String(sourceType(tur)), {
-    method: 'GET',
-    mode: 'cors',
-    credentials: 'omit',
-    cache: 'no-store',
-    redirect: 'error',
-    headers: { Accept: 'application/json' },
-    ...(options.signal ? { signal: options.signal } : {}),
-  });
-  if (!response.ok) throw new Error('PlanASKI category request failed.');
-  const contentType = response.headers.get('content-type')?.toLowerCase().trim() ?? '';
-  if (!/^application\/json(?:\s*;|$)/u.test(contentType)) {
-    throw new TypeError('PlanASKI returned an unexpected content type.');
-  }
-  const headerLength = response.headers.get('content-length');
-  if (headerLength !== null) {
-    if (!/^\d+$/u.test(headerLength.trim())) {
-      throw new TypeError('PlanASKI returned an invalid content length.');
+  options.signal?.throwIfAborted();
+  const cachedBody = readCachedCategoryResponse(fetchImpl, tur);
+  let body: string;
+  if (cachedBody !== null) {
+    body = cachedBody;
+  } else {
+    const response = await fetchImpl(SOURCE + '?tur=' + String(sourceType(tur)), {
+      method: 'GET',
+      mode: 'cors',
+      credentials: 'omit',
+      cache: 'default',
+      redirect: 'error',
+      headers: { Accept: 'application/json' },
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+    if (!response.ok) throw new Error('PlanASKI category request failed.');
+    const contentType = response.headers.get('content-type')?.toLowerCase().trim() ?? '';
+    if (!/^application\/json(?:\s*;|$)/u.test(contentType)) {
+      throw new TypeError('PlanASKI returned an unexpected content type.');
     }
-    const statedBytes = Number(headerLength);
-    if (!Number.isSafeInteger(statedBytes) || statedBytes > MAX_BYTES_PER_TYPE) {
-      throw new RangeError('PlanASKI category response exceeded its size budget.');
+    const headerLength = response.headers.get('content-length');
+    if (headerLength !== null) {
+      if (!/^\d+$/u.test(headerLength.trim())) {
+        throw new TypeError('PlanASKI returned an invalid content length.');
+      }
+      const statedBytes = Number(headerLength);
+      if (!Number.isSafeInteger(statedBytes) || statedBytes > MAX_BYTES_PER_TYPE) {
+        throw new RangeError('PlanASKI category response exceeded its size budget.');
+      }
     }
+      body = await readBudgetedJsonText(response, options.signal);
   }
-  const body = await readBudgetedJsonText(response, options.signal);
   let parsed: unknown;
   try {
     parsed = JSON.parse(body) as unknown;
@@ -260,13 +333,17 @@ const fetchType = async (
     throw new TypeError('PlanASKI category response is not a bounded array.');
   }
   const seen = new Set<number>();
-  return parsed.map((row) => {
+  const features = parsed.map((row) => {
     const feature = parseFeature(row, tur);
     const id = feature.properties.objectid as number;
     if (seen.has(id)) throw new TypeError('PlanASKI contains a repeated objectid.');
     seen.add(id);
     return feature;
   });
+  options.signal?.throwIfAborted();
+  // Only cache complete, validated success responses; errors never poison cache.
+  if (cachedBody === null) cacheCategoryResponse(fetchImpl, tur, body);
+  return features;
 };
 
 const fetchCategories = async (
