@@ -23,6 +23,7 @@ import {
 } from '../../../data-services/kentRehberiGeoJsonLayer';
 import { SharedGISIcon } from '../../Common/SharedGISIcon';
 import { createManagedWindowFocusLifecycle } from './ManagedWindowFocus';
+import { setKentRehberiMapFilter } from '../../../shell/kentRehberiMapFilter';
 import { ServiceWindowActions } from './ServiceWindowActions';
 import {
   createLatestRequestGate,
@@ -596,6 +597,9 @@ export function createManagedFastAccessQueryWindow({
       const initialExtent = initialExtentRef.current;
       const mapView = mapViewRef.current;
       resetSurface();
+      // Returning with the existing X closes the filtered service view and
+      // restores every Kent Rehberi point without another data request.
+      setKentRehberiMapFilter(null);
       windowManager.HideWindow?.(id);
       windowManager.ShowWindow?.('sidebar');
       if (initialExtent && mapView?.goTo) {
