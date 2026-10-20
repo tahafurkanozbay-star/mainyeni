@@ -42,10 +42,9 @@ export function NavigationBar({ id, onAddressSearch }: NavigationBarProps) {
     setFeedback({ phase: 'loading', message: 'Adres aranıyor…' });
 
     try {
-      const address = await onAddressSearch(query, controller.signal);
+      await onAddressSearch(query, controller.signal);
       if (controller.signal.aborted || requestId !== searchSequenceRef.current) return;
       // Navigasyon araması sessiz tamamlanır; yalnızca hata durumunda bildirim gösterilir.
-      void address;
       setFeedback(EMPTY_FEEDBACK);
     } catch (error) {
       if (controller.signal.aborted || requestId !== searchSequenceRef.current) return;
