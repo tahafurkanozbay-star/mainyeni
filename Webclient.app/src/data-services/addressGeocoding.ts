@@ -151,6 +151,155 @@ const readBoundedJson = async (response: Response, signal: AbortSignal): Promise
   }
 };
 
+interface InFlightAddressRequest {
+  readonly controller: AbortController;
+  promise: Promise<readonly AddressGeocodingResult[]>;
+  consumers: number;
+  settled: boolean;
+}
+
+const inFlightAddressRequests = new WeakMap<
+  typeof fetch,
+  Map<string, InFlightAddressRequest>
+>();
+
+const removeInFlightAddressRequest = (
+  fetchImpl: typeof fetch,
+  cacheKey: string,
+  entry: InFlightAddressRequest,
+): void => {
+  const requests = inFlightAddressRequests.get(fetchImpl);
+  if (requests?.get(cacheKey) !== entry) return;
+  requests.delete(cacheKey);
+  if (requests.size === 0) inFlightAddressRequests.delete(fetchImpl);
+};
+
+const loadAddressCandidates = async (
+  query: string,
+  fetchImpl: typeof fetch,
+  controller: AbortController,
+): Promise<readonly AddressGeocodingResult[]> => {
+  const signal = controller.signal;
+  await reserveRequestSlot(signal);
+  throwIfAborted(signal);
+
+  const url = new URL(GEOCODER_URL);
+  url.searchParams.set('q', query);
+  url.searchParams.set('format', 'jsonv2');
+  url.searchParams.set('addressdetails', '1');
+  url.searchParams.set('limit', '5');
+  url.searchParams.set('countrycodes', 'tr');
+  url.searchParams.set('accept-language', 'tr');
+  url.searchParams.set('viewbox', ANKARA_VIEWBOX);
+  url.searchParams.set('bounded', '1');
+
+  const timeout = setTimeout(() => {
+    if (!signal.aborted) {
+      controller.abort(new DOMException('Adres arama zaman aşımına uğradı.', 'TimeoutError'));
+    }
+  }, REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetchImpl(url.toString(), {
+      method: 'GET',
+      mode: 'cors',
+      credentials: 'omit',
+      cache: 'no-store',
+      redirect: 'error',
+      referrerPolicy: 'strict-origin-when-cross-origin',
+      headers: { Accept: 'application/json' },
+      signal,
+    });
+    if (!response.ok) throw new Error('Adres arama hizmetine ulaşılamadı.');
+    const parsed = await readBoundedJson(response, signal);
+    if (!Array.isArray(parsed)) throw new TypeError('Adres arama servisi geçersiz sonuçlar döndürdü.');
+
+    const seen = new Set<string>();
+    const candidates: AddressGeocodingResult[] = [];
+    for (const item of parsed.slice(0, 5)) {
+      const candidate = normalizeRecord(item);
+      if (!candidate) continue;
+      const fingerprint = String(candidate.latitude.toFixed(5)) + ','
+        + String(candidate.longitude.toFixed(5)) + ':'
+        + candidate.displayName.toLocaleLowerCase('tr-TR');
+      if (seen.has(fingerprint)) continue;
+      seen.add(fingerprint);
+      candidates.push(candidate);
+    }
+    if (candidates.length === 0) {
+      throw new Error('Adres bulunamadı. Daha açık bir adres veya mahalle adı deneyin.');
+    }
+
+    const frozenCandidates = Object.freeze(candidates.slice());
+    resultCache.set(query.toLocaleLowerCase('tr-TR'), {
+      expiresAt: Date.now() + CACHE_TTL_MS,
+      value: frozenCandidates,
+    });
+    while (resultCache.size > MAX_CACHE_ENTRIES) {
+      const oldest = resultCache.keys().next().value;
+      if (oldest === undefined) break;
+      resultCache.delete(oldest);
+    }
+    return frozenCandidates;
+  } catch (error) {
+    if (signal.aborted && signal.reason instanceof DOMException
+      && signal.reason.name === 'TimeoutError') {
+      throw new Error('Adres araması zaman aşımına uğradı. Yeniden deneyin.');
+    }
+    if (signal.aborted) throw signal.reason ?? error;
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const consumeInFlightAddressRequest = (
+  entry: InFlightAddressRequest,
+  fetchImpl: typeof fetch,
+  cacheKey: string,
+  signal?: AbortSignal,
+): Promise<readonly AddressGeocodingResult[]> => {
+  throwIfAborted(signal);
+  entry.consumers += 1;
+
+  return new Promise<readonly AddressGeocodingResult[]>((resolve, reject) => {
+    let finished = false;
+    const cleanup = (): void => signal?.removeEventListener('abort', onAbort);
+    const release = (): void => {
+      entry.consumers = Math.max(0, entry.consumers - 1);
+      if (entry.consumers !== 0 || entry.settled) return;
+
+      // A new caller can retry immediately instead of joining an abandoned request.
+      removeInFlightAddressRequest(fetchImpl, cacheKey, entry);
+      entry.controller.abort(new DOMException(
+        'No active address-search consumers remain.',
+        'AbortError',
+      ));
+    };
+    const finish = (complete: () => void): void => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      release();
+      complete();
+    };
+    const onAbort = (): void => finish(() => {
+      reject(signal?.reason ?? new DOMException('Adres araması iptal edildi.', 'AbortError'));
+    });
+
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+
+    entry.promise.then(
+      (value) => finish(() => resolve(value)),
+      (error: unknown) => finish(() => reject(error)),
+    );
+  });
+};
+
 export const searchAddressCandidates = async (
   rawQuery: string,
   options: AddressGeocodingOptions = {},
@@ -167,79 +316,35 @@ export const searchAddressCandidates = async (
   }
   if (cached) resultCache.delete(cacheKey);
 
-  await reserveRequestSlot(options.signal);
-  throwIfAborted(options.signal);
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  if (typeof fetchImpl !== 'function') throw new Error('Tarayıcı ağ isteği desteklenmiyor.');
 
-  const url = new URL(GEOCODER_URL);
-  url.searchParams.set('q', query);
-  url.searchParams.set('format', 'jsonv2');
-  url.searchParams.set('addressdetails', '1');
-  url.searchParams.set('limit', '5');
-  url.searchParams.set('countrycodes', 'tr');
-  url.searchParams.set('accept-language', 'tr');
-  url.searchParams.set('viewbox', ANKARA_VIEWBOX);
-  url.searchParams.set('bounded', '1');
-
-  const controller = new AbortController();
-  const onAbort = (): void => controller.abort(
-    options.signal?.reason ?? new DOMException('Adres araması iptal edildi.', 'AbortError'),
-  );
-  options.signal?.addEventListener('abort', onAbort, { once: true });
-  if (options.signal?.aborted) onAbort();
-  const timeout = setTimeout(() => {
-    controller.abort(new DOMException('Adres arama zaman aşımına uğradı.', 'TimeoutError'));
-  }, REQUEST_TIMEOUT_MS);
-
-  try {
-    const fetchImpl = options.fetchImpl ?? globalThis.fetch;
-    if (typeof fetchImpl !== 'function') throw new Error('Tarayıcı ağ isteği desteklenmiyor.');
-    const response = await fetchImpl(url.toString(), {
-      method: 'GET',
-      mode: 'cors',
-      credentials: 'omit',
-      cache: 'no-store',
-      redirect: 'error',
-      referrerPolicy: 'strict-origin-when-cross-origin',
-      headers: { Accept: 'application/json' },
-      signal: controller.signal,
-    });
-    if (!response.ok) throw new Error('Adres arama hizmetine ulaşılamadı.');
-    const parsed = await readBoundedJson(response, controller.signal);
-    if (!Array.isArray(parsed)) throw new TypeError('Adres arama servisi geçersiz sonuçlar döndürdü.');
-
-    const seen = new Set<string>();
-    const candidates: AddressGeocodingResult[] = [];
-    for (const item of parsed.slice(0, 5)) {
-      const candidate = normalizeRecord(item);
-      if (!candidate) continue;
-      const fingerprint = `${candidate.latitude.toFixed(5)},${candidate.longitude.toFixed(5)}:${candidate.displayName.toLocaleLowerCase('tr-TR')}`;
-      if (seen.has(fingerprint)) continue;
-      seen.add(fingerprint);
-      candidates.push(candidate);
-    }
-    if (candidates.length === 0) {
-      throw new Error('Adres bulunamadı. Daha açık bir adres veya mahalle adı deneyin.');
-    }
-
-    const frozenCandidates = Object.freeze(candidates.slice());
-    resultCache.set(cacheKey, { expiresAt: Date.now() + CACHE_TTL_MS, value: frozenCandidates });
-    while (resultCache.size > MAX_CACHE_ENTRIES) {
-      const oldest = resultCache.keys().next().value;
-      if (oldest === undefined) break;
-      resultCache.delete(oldest);
-    }
-    return frozenCandidates;
-  } catch (error) {
-    if (options.signal?.aborted) throw options.signal.reason ?? error;
-    if (controller.signal.aborted && controller.signal.reason instanceof DOMException
-      && controller.signal.reason.name === 'TimeoutError') {
-      throw new Error('Adres araması zaman aşımına uğradı. Yeniden deneyin.');
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-    options.signal?.removeEventListener('abort', onAbort);
+  let requests = inFlightAddressRequests.get(fetchImpl);
+  if (!requests) {
+    requests = new Map<string, InFlightAddressRequest>();
+    inFlightAddressRequests.set(fetchImpl, requests);
   }
+
+  let entry = requests.get(cacheKey);
+  if (!entry) {
+    const controller = new AbortController();
+    entry = {
+      controller,
+      promise: Promise.resolve([]),
+      consumers: 0,
+      settled: false,
+    };
+    requests.set(cacheKey, entry);
+    const currentEntry = entry;
+    currentEntry.promise = loadAddressCandidates(query, fetchImpl, controller);
+    const settle = (): void => {
+      currentEntry.settled = true;
+      removeInFlightAddressRequest(fetchImpl, cacheKey, currentEntry);
+    };
+    void currentEntry.promise.then(settle, settle);
+  }
+
+  return consumeInFlightAddressRequest(entry, fetchImpl, cacheKey, options.signal);
 };
 
 /** Backward-compatible convenience API for callers that only need the best match. */
