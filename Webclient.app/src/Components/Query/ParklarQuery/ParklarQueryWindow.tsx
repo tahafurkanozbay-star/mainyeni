@@ -482,7 +482,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
 
       try {
         const itemDetails = await getItemDetailsById(item);
-        const view = mapViewRef.current;
+        const view = (MapManager.GetActiveMapView?.() ?? mapViewRef.current) as MapViewLike | null;
         if (!view || !itemDetails.geometry) {
           throw new Error('Konum bilgisi bulunamadı.');
         }
