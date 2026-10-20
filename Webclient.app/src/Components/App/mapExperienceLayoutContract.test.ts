@@ -19,6 +19,7 @@ const mapModeBridge = read('ExperienceMapModeBridge.tsx');
 const legacySidebarCss = read('Sidebar.css');
 const shellCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-shell.css'), 'utf8');
 const uiCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-ui.css'), 'utf8');
+const workspaceCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-workspace.css'), 'utf8');
 const disclaimerCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-data-disclaimer.css'), 'utf8');
 
 const mobileModeBlock = (): string => {
@@ -37,6 +38,15 @@ describe('map experience layout collision contract', () => {
     expect(mapCss).toMatch(
       /@media \(max-width: 680px\)[\s\S]*?\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{[\s\S]*?top:\s*58px;[\s\S]*?max-width:\s*100dvw;/u,
     );
+  });
+
+  it('does not suppress focus outlines on search inputs or the settings dialog', () => {
+    expect(uiCss).not.toMatch(/\\.ns-input-group input:focus\\s*\\{[^}]*outline:\\s*0;/u);
+    expect(uiCss).not.toMatch(/\\.input-group input\\s*\\{[^}]*outline:\\s*0;/u);
+    expect(uiCss).toMatch(/\\.ns-input-group input:focus-visible\\s*\\{[^}]*outline:\\s*2px solid/u);
+    expect(uiCss).toMatch(/\\.input-group input:focus-visible\\s*\\{[^}]*outline:\\s*2px solid/u);
+    expect(workspaceCss).not.toMatch(/\\.experience-settings:focus\\s*\\{[^}]*outline:\\s*none;/u);
+    expect(workspaceCss).toMatch(/\\.experience-settings:focus-visible\\s*\\{[^}]*outline:\\s*3px solid/u);
   });
 
   it('keeps a visible keyboard focus indicator on legacy sidebar buttons', () => {
