@@ -528,7 +528,7 @@ export function createManagedFastAccessQueryWindow({
           geometry = getFeatureGeometry(detail);
         }
         if (!geometry) {
-          throw new Error('Seçilen kaydın konumu doğrulanamadı.');
+          throw new Error('Konum gösterilemedi.');
         }
 
         const activeView = getMapView() ?? mapViewRef.current;

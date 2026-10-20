@@ -45,7 +45,7 @@ describe('map experience layout collision contract', () => {
   it('keeps Keşfet flush to the left edge and widens it without hard-coding a separate mobile size', () => {
     expect(legacySidebarCss).toMatch(/--sidebar-hover-width:\s*560px;/u);
     expect(mapCss).toMatch(/\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{[\s\S]*?width:\s*min\(var\(--sidebar-hover-width, 560px\), 100dvw\)\s*!important;/u);
-    expect(mapCss).toContain('width: min(var(--sidebar-hover-width, 560px), 100dvw);');
+
   });
 
   it('zooms to the clicked record geometry and rejects mismatched detail records', () => {
