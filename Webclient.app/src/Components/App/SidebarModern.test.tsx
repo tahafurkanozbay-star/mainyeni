@@ -256,7 +256,7 @@ describe('SidebarModern governed interaction integration', () => {
     expect(inactiveGoTo).not.toHaveBeenCalled();
     await waitFor(() => expect(activePopupOpen).toHaveBeenCalledTimes(1));
     expect(inactivePopupOpen).not.toHaveBeenCalled();
-  });;
+  });
 
   it('clears search with the explicit clear button', async () => {
     const user = userEvent.setup();
