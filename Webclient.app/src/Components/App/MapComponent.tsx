@@ -301,15 +301,13 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
         latitude: result.latitude,
         spatialReference: { wkid: 4326 },
       },
-      // A native ArcGIS path marker avoids runtime image URLs and keeps the pin self-contained.
+      // Reuse the deployed local pin asset so the marker works in both 2D and 3D views.
       symbol: {
-        type: 'simple-marker',
-        style: 'path',
-        path: 'M18 1C8.6 1 1 8.5 1 17.7 1 29.9 18 43 18 43s17-13.1 17-25.3C35 8.5 27.4 1 18 1Z',
-        color: '#c62828',
-        size: 36,
-        yoffset: 17,
-        outline: { color: '#ffffff', width: 2 },
+        type: 'picture-marker',
+        url: 'images/icons/map/pictureMarker.png',
+        width: '40px',
+        height: '40px',
+        yoffset: 20,
       },
       attributes: { address: result.displayName },
     });
