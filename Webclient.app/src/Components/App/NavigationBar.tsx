@@ -18,7 +18,7 @@ type SearchFeedback = Readonly<{
 
 const EMPTY_FEEDBACK: SearchFeedback = Object.freeze({ phase: 'idle', message: '' });
 
-export function NavigationBar({ id, onAddressSearch }: NavigationBarProps) {
+export function NavigationBar({ id, onAddressSearch, onAddressSelect }: NavigationBarProps) {
   const searchModel = useMemo(() => new NavigationSearchModel(), []);
   const search = useSyncExternalStore(searchModel.subscribe, searchModel.getSnapshot, searchModel.getSnapshot);
   const { theme, toggleTheme } = useExperienceTheme();
