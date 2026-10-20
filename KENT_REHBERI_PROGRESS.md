@@ -8,7 +8,7 @@
 - Kent Rehberi overview katmanı ilk açılışta filtresizdir; tüm noktalar görünür kalır. Keşfet kurum ve hizmet seçimleri yüklü katmana istemci taraflı `definitionExpression` uygular; başka bir PlanASKI isteği veya katmanı yeniden yükleme gerekmez.
 - Filtre etkin olduğunda `Ana menü` kontrolü görünür. Ana menüye dönüş kurum/görünüm/arama durumunu sıfırlar ve filtreyi kaldırarak tüm noktaları gösterir. Aynı kuruma ikinci kez tıklanınca alt kategori panelinin açık kalması korunur.
 - Regresyon testleri: güvenli filtre ifadesi ve kategori anahtarları; yüklü katmanda filtre uygulama/temizleme; kurum/hizmet seçimi ve ana menüye dönüş.
-- PR/CI/merge sonucu henüz yoktur. Canlı IIS tarayıcısı doğrulanmış değildir.
+- [PR #573](https://github.com/tahafurkanozbay-star/mainyeni/pull/573) 20 Ekim 2026 tarihinde birleştirildi; merge commit: `6562ea30858fe25fcfd7b79dbd57c193947d78e7`. Exact-head CI kontrollerinin tümü başarılı: Webclient Quality (tam Vitest regresyon kapısı, üretim derlemesi ve bütünlük/bütçe kontrolleri dahil), Release QA, Typed Source Boundary, Platform Architecture Audit ve Platform Dependency Governance. Canlı IIS/üretim tarayıcısında doğrulama yapılmadı.
 
 ## 2026-10-19 — Trafik eklentisi kaldırıldı
 
