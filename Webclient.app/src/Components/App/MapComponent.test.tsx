@@ -49,8 +49,11 @@ const deferred = () => {
   const promise = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 };
-const setup = (strict = false) => {
-  const manager = createWindowManager();
+const setup = (
+  strict = false,
+  managerOverride?: Partial<ReturnType<typeof createWindowManager>>,
+) => {
+  const manager = { ...createWindowManager(), ...managerOverride };
   const component = <MapComponent windowManager={manager} />;
   const result = render(strict ? <StrictMode>{component}</StrictMode> : component);
   return { ...result, manager };
@@ -203,8 +206,8 @@ describe('real map workspace admission and recovery', () => {
     expect(canvasHost?.contains(status as Node)).toBe(false);
   });
   it('opens point identification from a native right-click on the visible map', async () => {
-    const { manager } = setup();
-    const showWindow = vi.spyOn(manager, 'ShowWindow');
+    const showWindow = vi.fn();
+    setup(false, { ShowWindow: showWindow });
     await screen.findByText('Araçlar hazır');
 
     const mapHost = document.querySelector('.experience-mapview-host');
