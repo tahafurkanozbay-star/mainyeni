@@ -87,7 +87,7 @@ describe('viewRuntime', () => {
   test('normalizes initial center from the existing map configuration contract', () => {
     expect(normalizeInitialCenter({ Centerx: '32.85', Centery: 39.93 })).toEqual([32.85, 39.93]);
     expect(normalizeInitialCenter({ center: [31, 40] })).toEqual([31, 40]);
-    expect(normalizeInitialCenter({ center: ['x', 40] })).toEqual([34, 39]);
+    expect(normalizeInitialCenter({ center: ['x', 40] })).toEqual([32.8597, 39.9334]);
   });
 
   test('uses mobile bottom padding without desktop sidebar offset', () => {
