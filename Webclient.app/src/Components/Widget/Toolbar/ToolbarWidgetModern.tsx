@@ -296,8 +296,7 @@ export const ToolbarWidgetModern = ({
     }
   };
 
-  const toolbarItems: readonly ExperienceToolbarItem[] = [
-    ...snapshot.actions.map((action, index) => {
+  const toolbarItems: readonly ExperienceToolbarItem[] = snapshot.actions.map((action, index) => {
       const isGroupStart = index === 0 || snapshot.actions[index - 1]?.group !== action.group;
       return {
         id: action.id,
@@ -312,8 +311,7 @@ export const ToolbarWidgetModern = ({
           activateToolbarAction(action.id);
         },
       };
-    }),
-  ];
+    });
   const announcement = homePhase === 'idle'
     ? snapshot.announcement
     : HOME_MESSAGES[homePhase];
