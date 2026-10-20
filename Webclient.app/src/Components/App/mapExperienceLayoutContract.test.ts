@@ -17,6 +17,9 @@ const sidebarModernCss = read('SidebarModern.css');
 const attributionCss = read('OpenStreetMap3DAttribution.css');
 const mapModeBridge = read('ExperienceMapModeBridge.tsx');
 const legacySidebarCss = read('Sidebar.css');
+const fastAccessQuery = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Query', '_Common', 'ManagedFastAccessQueryWindow.tsx'), 'utf8');
+const parkQuery = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Query', 'ParklarQuery', 'ParklarQueryWindow.tsx'), 'utf8');
+const generalSearchQuery = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Query', 'GenelAramaQuery', 'GenelAramaQeryWindow.tsx'), 'utf8');
 const shellCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-shell.css'), 'utf8');
 const uiCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-ui.css'), 'utf8');
 const workspaceCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-workspace.css'), 'utf8');
@@ -38,6 +41,20 @@ describe('map experience layout collision contract', () => {
     expect(mapCss).toMatch(
       /@media \(max-width: 680px\)[\s\S]*?\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{[\s\S]*?top:\s*58px;[\s\S]*?max-width:\s*100dvw;/u,
     );
+  });
+
+  it('keeps Keşfet flush to the left edge and widens it without hard-coding a separate mobile size', () => {
+    expect(legacySidebarCss).toMatch(/--sidebar-hover-width:\s*520px;/u);
+    expect(mapCss).toMatch(/\.esri-map > \.sidebar-container\.kr-sidebar--governed\\s\*\\{[\\s\\S]*?width:\\s*min\\(var\\(--sidebar-hover-width, 520px\\), 100dvw\\);[\\s\\S]*?inset-inline-start:\\s*0;/u);
+    expect(mapCss).toContain('width: min(var(--sidebar-hover-width, 520px), 100dvw);');
+  });
+
+  it('uses the currently visible map view for Haritada göster zoom actions', () => {
+    expect(fastAccessQuery).toContain('MapManager.GetActiveMapView?.() ?? MapManager.GetMapView()');
+    expect(fastAccessQuery).toContain('const activeView = getMapView() ?? mapViewRef.current;');
+    expect(parkQuery).toContain('MapManager.GetActiveMapView?.() ?? mapViewRef.current');
+    expect(generalSearchQuery).toContain('MapManager.GetActiveMapView?.() ?? MapManager.GetMapView()');
+    expect(generalSearchQuery).toContain('await Promise.resolve(GisGraphicsHelper.ZoomToGeometry(mapView, itemDetails.geometry, 18));');
   });
 
   it('does not suppress focus outlines on search inputs or the settings dialog', () => {
