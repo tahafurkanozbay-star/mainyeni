@@ -414,8 +414,9 @@ export const createTaskScheduler = (options: TaskSchedulerOptions): RuntimeTaskS
   const cancel = (idOrKey: string, reason: unknown = abortError()): number => {
     if (!idOrKey) return 0;
     let cancelled = 0;
-    for (const task of [...queue]) {
-      if (task.id === idOrKey || task.key === idOrKey) {
+    for (let index = queue.length - 1; index >= 0; index -= 1) {
+      const task = queue[index];
+      if (task && (task.id === idOrKey || task.key === idOrKey)) {
         if (removeFromQueue(task)) {
           task.controller.abort(reason);
           settleQueuedCancellation(task, reason);
@@ -435,8 +436,9 @@ export const createTaskScheduler = (options: TaskSchedulerOptions): RuntimeTaskS
 
   const cancelAll = (reason: unknown = abortError('Runtime scheduler cancelled all tasks.')): number => {
     let cancelled = 0;
-    for (const task of [...queue]) {
-      if (removeFromQueue(task)) {
+    for (let index = queue.length - 1; index >= 0; index -= 1) {
+      const task = queue[index];
+      if (task && removeFromQueue(task)) {
         task.controller.abort(reason);
         settleQueuedCancellation(task, reason);
         cancelled += 1;

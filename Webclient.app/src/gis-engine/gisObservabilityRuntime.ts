@@ -109,7 +109,7 @@ const DEFAULT_SETTINGS: Required<GisObservabilitySettings> = Object.freeze({
 const SECRET_KEY_PATTERN = /(?:token|secret|password|passwd|authorization|cookie|api[-_]?key|credential|bearer|session)/i;
 const SENSITIVE_LOCATION_KEY_PATTERN = /(?:latitude|longitude|\blat\b|\blon\b|\blng\b|coordinate|geometry|extent|address|query|where|objectids?)/i;
 const URL_PATTERN = /\bhttps?:\/\/[^\s]+/gi;
-const BEARER_PATTERN = /\bbearer\s+[a-z0-9._~+\/-]+=*/gi;
+const BEARER_PATTERN = /\bbearer\s+[a-z0-9._~+/-]+=*/gi;
 const LONG_TOKEN_PATTERN = /\b[a-zA-Z0-9_-]{32,}\b/g;
 
 const normalizeSettings = (input: GisObservabilitySettings = {}): Required<GisObservabilitySettings> => {
@@ -211,7 +211,7 @@ export const createGisObservabilityRuntime = (configuration: GisObservabilityCon
   let destroyed = false;
 
   const notify = (event: GisDiagnosticEvent): void => {
-    for (const listener of [...listeners]) {
+    for (const listener of Array.from(listeners)) {
       try { listener(event); } catch (error) { configuration.onListenerError?.(error, event); }
     }
     try { configuration.onEvent?.(event); } catch (error) { configuration.onListenerError?.(error, event); }
@@ -290,7 +290,7 @@ export const createGisObservabilityRuntime = (configuration: GisObservabilityCon
       startedAt: clock(),
       serviceId: input.serviceId == null ? null : normalizeIdentifier(input.serviceId, 'serviceId'),
       layerId: input.layerId == null ? null : normalizeIdentifier(input.layerId, 'layerId'),
-      fields: Object.freeze({ ...(input.fields || {}) }),
+      fields: Object.freeze({ ...input.fields }),
       completed: false,
     };
     activeTraces.set(traceId, trace);

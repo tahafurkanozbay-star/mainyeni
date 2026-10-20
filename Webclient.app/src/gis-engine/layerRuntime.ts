@@ -50,7 +50,7 @@ export const createLayerDescriptor = (config: LayerDescriptorInput = {}): LayerD
   parentId: config.parentId == null ? null : String(config.parentId),
   children: uniqueIds(Array.isArray(config.children) ? config.children : []),
   iconKey: String(config.iconKey ?? config.category ?? config.type ?? 'default'),
-  metadata: { ...(config.metadata || {}) },
+  metadata: { ...config.metadata },
   runtime: {
     ...DEFAULT_LAYER_RUNTIME,
     visible: config.visible !== false,

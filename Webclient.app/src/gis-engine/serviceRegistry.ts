@@ -128,8 +128,8 @@ const normalizeService = (service: GisServiceInput = {}): RegisteredGisService =
   enabled: service.enabled !== false,
   timeoutMs: normalizeTimeout(service.timeoutMs),
   retries: normalizeRetries(service.retries),
-  headers: { ...(service.headers || {}) },
-  metadata: { ...(service.metadata || {}) },
+  headers: { ...service.headers },
+  metadata: { ...service.metadata },
 });
 
 const initialHealth = (): GisServiceHealth => ({

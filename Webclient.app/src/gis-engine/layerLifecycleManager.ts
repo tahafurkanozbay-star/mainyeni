@@ -206,7 +206,7 @@ export class LayerLifecycleManager {
       layer: options.layer,
       role: normalizeRole(options.role),
       removeLayerOnDispose: options.removeLayerOnDispose !== false,
-      metadata: Object.freeze({ ...(options.metadata ?? {}) }),
+      metadata: Object.freeze({ ...options.metadata }),
       attachedMaps: new Set<MapLike>(),
     });
     return options.layer;

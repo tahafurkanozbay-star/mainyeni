@@ -166,7 +166,7 @@ export const joinApplicationPath = (
       return segment.replace(/^\/+|\/+$/g, '');
     })
     .filter(Boolean);
-  return normalizeApplicationPath(`${cleanBase}/${cleanSegments.join('/')}` || '/');
+  return normalizeApplicationPath(`${cleanBase}/${cleanSegments.join('/')}`);
 };
 
 export const withApplicationQuery = (
