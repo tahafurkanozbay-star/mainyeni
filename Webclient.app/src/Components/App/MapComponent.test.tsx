@@ -6,7 +6,17 @@ import { MapReducer_ActionTypes } from '../../Store/Reducers/MapReducer';
 import { createWindowManager } from '../../Store/Managers/WindowManager';
 import { MapComponent } from './MapComponent';
 
-const runtime = vi.hoisted(() => ({ load: vi.fn(), destroy: vi.fn(), remove: vi.fn(), views: [] as Array<Record<string, unknown>>, mapOptions: [] as unknown[], clickEvents: [] as Array<Record<string, unknown>>, create: vi.fn() }));
+const runtime = vi.hoisted(() => ({
+  load: vi.fn(), destroy: vi.fn(), remove: vi.fn(),
+  views: [] as Array<Record<string, unknown>>,
+  mapOptions: [] as unknown[],
+  clickEvents: [] as Array<Record<string, unknown>>,
+  addedLayers: [] as unknown[],
+  graphics: [] as Array<Record<string, unknown>>,
+  goToCalls: [] as Array<Record<string, unknown>>,
+  navigationProps: null as Record<string, unknown> | null,
+  create: vi.fn(),
+}));
 vi.mock('../../gis-engine/arcgisModuleRuntime', () => ({ loadArcgisModules: runtime.load }));
 vi.mock('../../Store/Managers/MapManager', () => ({ default: {
   GetMapConfiguration: () => ({}), SetViewStateBridge: vi.fn(), SetViewPerformanceMonitor: vi.fn(),
@@ -21,7 +31,10 @@ vi.mock('../../gis-engine/viewRuntime', () => ({
   bindMapViewState: () => vi.fn(), createMapViewOptions: (options: unknown) => options,
   createResponsivePadding: () => ({}), createViewPerformanceMonitor: () => ({ dispose: vi.fn() }),
 }));
-vi.mock('./NavigationBar', () => ({ NavigationBar: () => <header>Harita menüsü</header> }));
+vi.mock('./NavigationBar', () => ({ NavigationBar: (props: Record<string, unknown>) => {
+  runtime.navigationProps = props;
+  return <header>Harita menüsü</header>;
+} }));
 vi.mock('./SidebarModern', () => ({ SidebarModern: () => <aside>Hizmetler hazır</aside> }));
 vi.mock('../Widget/Toolbar/ToolbarWidgetModern', () => ({ ToolbarWidgetModern: () => <div>Araçlar hazır</div> }));
 vi.mock('./ExperienceMapModeBridge', () => ({ ExperienceMapModeBridge: () => null }));
@@ -43,19 +56,52 @@ const setup = (strict = false) => {
   return { ...result, manager };
 };
 beforeEach(() => {
-  vi.clearAllMocks(); runtime.views.length = 0; runtime.mapOptions.length = 0; runtime.clickEvents.length = 0;
+  vi.clearAllMocks();
+  runtime.views.length = 0;
+  runtime.mapOptions.length = 0;
+  runtime.clickEvents.length = 0;
+  runtime.addedLayers.length = 0;
+  runtime.graphics.length = 0;
+  runtime.goToCalls.length = 0;
+  runtime.navigationProps = null;
   Store.dispatch({ type: MapReducer_ActionTypes.SetMapView, payload: null });
   runtime.create.mockImplementation(() => ({ ready: true, readyState: 'ready' }));
-  runtime.load.mockImplementation(async () => [
-    class Map { add = vi.fn(); constructor(options: unknown) { runtime.mapOptions.push(options); } },
-    class MapView {
-      constructor(options: { map: unknown; container: HTMLElement }) {
-        const view = { map: options.map, container: options.container, popup: {}, destroy: runtime.destroy, toMap: vi.fn(({ x, y }: { x: number; y: number }) => ({ x, y, longitude: -77, latitude: 38 })), ...runtime.create() };
-        runtime.views.push(view); return view;
+  runtime.load.mockImplementation(async (moduleIds?: string[]) => {
+    if (moduleIds?.[0] === 'esri/layers/GraphicsLayer') {
+      class GraphicsLayer {
+        readonly options: unknown;
+        constructor(options: unknown) { this.options = options; }
+        add = vi.fn();
+        removeAll = vi.fn();
       }
-    },
-    { watch: () => ({ remove: runtime.remove }), whenTrue: () => ({ remove: runtime.remove }), whenFalse: () => ({ remove: runtime.remove }) },
-  ]);
+      class Graphic {
+        constructor(options: Record<string, unknown>) { runtime.graphics.push(options); }
+      }
+      return [GraphicsLayer, Graphic];
+    }
+    return [
+      class Map {
+        add = vi.fn((layer: unknown) => { runtime.addedLayers.push(layer); });
+        remove = vi.fn();
+        constructor(options: unknown) { runtime.mapOptions.push(options); }
+      },
+      class MapView {
+        constructor(options: { map: unknown; container: HTMLElement }) {
+          const view = {
+            map: options.map,
+            container: options.container,
+            popup: {},
+            destroy: runtime.destroy,
+            toMap: vi.fn(({ x, y }: { x: number; y: number }) => ({ x, y, longitude: -77, latitude: 38 })),
+            goTo: vi.fn((target: unknown, options?: unknown) => { runtime.goToCalls.push({ target, options }); }),
+            ...runtime.create(),
+          };
+          runtime.views.push(view); return view;
+        }
+      },
+      { watch: () => ({ remove: runtime.remove }), whenTrue: () => ({ remove: runtime.remove }), whenFalse: () => ({ remove: runtime.remove }) },
+    ];
+  });
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 describe('free OpenStreetMap 3D readiness', () => {
@@ -64,6 +110,45 @@ describe('free OpenStreetMap 3D readiness', () => {
     await screen.findByText('Araçlar hazır');
     expect(runtime.mapOptions[0]).toMatchObject({ basemap: null });
     expect(runtime.mapOptions[0]).not.toHaveProperty('ground');
+  });
+});
+
+describe('global address search map selection', () => {
+  it('adds a pin to the active map and zooms to the selected address', async () => {
+    setup();
+    await screen.findByText('Araçlar hazır');
+    const navigation = runtime.navigationProps as {
+      onAddressSelect: (result: {
+        displayName: string;
+        latitude: number;
+        longitude: number;
+        zoom: number;
+      }, signal: AbortSignal) => Promise<void>;
+    };
+    const result = {
+      displayName: 'Kızılay Meydanı, Çankaya, Ankara, Türkiye',
+      latitude: 39.9209,
+      longitude: 32.8542,
+      zoom: 17,
+      attribution: '© OpenStreetMap katkıcıları' as const,
+      attributionUrl: 'https://www.openstreetmap.org/copyright' as const,
+    };
+
+    await act(async () => {
+      await navigation.onAddressSelect(result, new AbortController().signal);
+    });
+
+    expect(runtime.addedLayers).toHaveLength(1);
+    expect(runtime.graphics).toHaveLength(1);
+    expect(runtime.graphics[0]).toMatchObject({
+      geometry: { type: 'point', longitude: 32.8542, latitude: 39.9209 },
+      symbol: { type: 'picture-marker', url: 'images/icons/map/pictureMarker.png', width: '40px', height: '40px' },
+      attributes: { address: 'Kızılay Meydanı, Çankaya, Ankara, Türkiye' },
+    });
+    expect(runtime.goToCalls).toContainEqual({
+      target: { center: [32.8542, 39.9209], zoom: 17 },
+      options: { duration: 650 },
+    });
   });
 });
 

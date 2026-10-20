@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { geocodeAddress } from './addressGeocoding';
+import { geocodeAddress, searchAddressCandidates } from './addressGeocoding';
 
 describe('geocodeAddress', () => {
   it('uses an Ankara-bounded Turkish address query and returns a zoomed map target', async () => {
@@ -34,6 +34,43 @@ describe('geocodeAddress', () => {
       attribution: '© OpenStreetMap katkıcıları',
       attributionUrl: 'https://www.openstreetmap.org/copyright',
     });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns multiple distinct address options so the user can choose the exact match', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response(JSON.stringify([
+      {
+        display_name: 'Kızılay, Çankaya, Ankara, Türkiye',
+        lat: '39.9208',
+        lon: '32.8541',
+        addresstype: 'neighbourhood',
+        type: 'administrative',
+      },
+      {
+        display_name: 'Kızılay Meydanı, Çankaya, Ankara, Türkiye',
+        lat: '39.9209',
+        lon: '32.8542',
+        addresstype: 'square',
+        type: 'place',
+      },
+      {
+        display_name: 'Geçersiz adres adayı',
+        lat: 'NaN',
+        lon: '32.8542',
+      },
+    ]), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    const results = await searchAddressCandidates('Kızılay seçenek testi', { fetchImpl });
+
+    expect(results).toHaveLength(2);
+    expect(results.map((result) => result.displayName)).toEqual([
+      'Kızılay, Çankaya, Ankara, Türkiye',
+      'Kızılay Meydanı, Çankaya, Ankara, Türkiye',
+    ]);
+    expect(results[0]).toMatchObject({ latitude: 39.9208, longitude: 32.8541, zoom: 15 });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 

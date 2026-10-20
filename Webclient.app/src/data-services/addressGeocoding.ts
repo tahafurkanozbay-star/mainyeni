@@ -31,7 +31,7 @@ export interface AddressGeocodingOptions {
 
 interface CachedResult {
   readonly expiresAt: number;
-  readonly value: AddressGeocodingResult;
+  readonly value: readonly AddressGeocodingResult[];
 }
 
 const resultCache = new Map<string, CachedResult>();
@@ -151,10 +151,10 @@ const readBoundedJson = async (response: Response, signal: AbortSignal): Promise
   }
 };
 
-export const geocodeAddress = async (
+export const searchAddressCandidates = async (
   rawQuery: string,
   options: AddressGeocodingOptions = {},
-): Promise<AddressGeocodingResult> => {
+): Promise<readonly AddressGeocodingResult[]> => {
   const query = normalizeQuery(rawQuery);
   const cacheKey = query.toLocaleLowerCase('tr-TR');
   throwIfAborted(options.signal);
@@ -207,18 +207,28 @@ export const geocodeAddress = async (
     const parsed = await readBoundedJson(response, controller.signal);
     if (!Array.isArray(parsed)) throw new TypeError('Adres arama servisi geçersiz sonuçlar döndürdü.');
 
-    const candidate = parsed.slice(0, 5)
-      .map(normalizeRecord)
-      .find((item): item is AddressGeocodingResult => item !== null);
-    if (!candidate) throw new Error('Adres bulunamadı. Daha açık bir adres veya mahalle adı deneyin.');
+    const seen = new Set<string>();
+    const candidates: AddressGeocodingResult[] = [];
+    for (const item of parsed.slice(0, 5)) {
+      const candidate = normalizeRecord(item);
+      if (!candidate) continue;
+      const fingerprint = `${candidate.latitude.toFixed(5)},${candidate.longitude.toFixed(5)}:${candidate.displayName.toLocaleLowerCase('tr-TR')}`;
+      if (seen.has(fingerprint)) continue;
+      seen.add(fingerprint);
+      candidates.push(candidate);
+    }
+    if (candidates.length === 0) {
+      throw new Error('Adres bulunamadı. Daha açık bir adres veya mahalle adı deneyin.');
+    }
 
-    resultCache.set(cacheKey, { expiresAt: Date.now() + CACHE_TTL_MS, value: candidate });
+    const frozenCandidates = Object.freeze(candidates.slice());
+    resultCache.set(cacheKey, { expiresAt: Date.now() + CACHE_TTL_MS, value: frozenCandidates });
     while (resultCache.size > MAX_CACHE_ENTRIES) {
       const oldest = resultCache.keys().next().value;
       if (oldest === undefined) break;
       resultCache.delete(oldest);
     }
-    return candidate;
+    return frozenCandidates;
   } catch (error) {
     if (options.signal?.aborted) throw options.signal.reason ?? error;
     if (controller.signal.aborted && controller.signal.reason instanceof DOMException
@@ -230,6 +240,17 @@ export const geocodeAddress = async (
     clearTimeout(timeout);
     options.signal?.removeEventListener('abort', onAbort);
   }
+};
+
+/** Backward-compatible convenience API for callers that only need the best match. */
+export const geocodeAddress = async (
+  rawQuery: string,
+  options: AddressGeocodingOptions = {},
+): Promise<AddressGeocodingResult> => {
+  const candidates = await searchAddressCandidates(rawQuery, options);
+  const candidate = candidates[0];
+  if (!candidate) throw new Error('Adres bulunamadı. Daha açık bir adres veya mahalle adı deneyin.');
+  return candidate;
 };
 
 export const ADDRESS_GEOCODING_POLICY = Object.freeze({

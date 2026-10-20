@@ -28,7 +28,8 @@ import {
 import type { ExperienceMapMode } from '../../experience/experienceRuntime';
 import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
 import type { KentRehberiMapLike } from '../../data-services/kentRehberiGeoJsonLayer';
-import { geocodeAddress } from '../../data-services/addressGeocoding';
+import { searchAddressCandidates } from '../../data-services/addressGeocoding';
+import type { AddressGeocodingResult } from '../../data-services/addressGeocoding';
 import { KentRehberiDataLayer } from './KentRehberiDataLayer';
 import './MapComponent.css';
 import '../Widget/_shared/ExperienceWidgetModernization.css';
@@ -40,6 +41,17 @@ interface PopupLike {
   selectedFeature?: { geometry?: unknown } | null;
   on?: (eventName: string, callback: (event: { action?: { id?: string } }) => void) => RemovableHandle;
 }
+interface SearchGraphicsLayerLike {
+  add?: (graphic: unknown) => void;
+  removeAll?: () => void;
+  destroy?: () => void;
+}
+interface SearchMapLike {
+  add?: (layer: SearchGraphicsLayerLike) => void;
+  remove?: (layer: SearchGraphicsLayerLike) => void;
+}
+type ArcgisGraphicsLayerConstructor = new (options: unknown) => SearchGraphicsLayerLike;
+type ArcgisGraphicConstructor = new (options: unknown) => unknown;
 interface MapViewLike {
   readonly ready?: boolean;
   readonly readyState?: string;
@@ -72,6 +84,8 @@ const safeRemove = (handle: RemovableHandle | null | undefined): void => {
 
 export const MapComponent = ({ windowManager }: MapComponentProps) => {
   const mapDiv = useRef<HTMLDivElement | null>(null);
+  const searchMarkerLayerRef = useRef<SearchGraphicsLayerLike | null>(null);
+  const searchMarkerMapRef = useRef<SearchMapLike | null>(null);
   const accessorWatchRef = useRef<ArcgisAccessorWatch | null>(null);
   const activeViewModeRef = useRef<ExperienceMapMode>('2d');
   const accessibilityModelRef = useRef<MapWorkspaceAccessibilityModel | null>(null);
@@ -182,6 +196,14 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       if (cleaned) return;
       cleaned = true;
       activeViewModeRef.current = '2d'; accessorWatchRef.current = null;
+      try {
+        const markerLayer = searchMarkerLayerRef.current;
+        const markerMap = searchMarkerMapRef.current;
+        if (markerLayer && markerMap?.remove) markerMap.remove(markerLayer);
+        else markerLayer?.removeAll?.();
+      } catch (error) { DebugHelper.Log(error); }
+      searchMarkerLayerRef.current = null;
+      searchMarkerMapRef.current = null;
       unbindViewState(); performanceMonitor?.dispose?.(); MapManager.ClearViewPerformanceMonitor?.(performanceMonitor);
       MapManager.ClearViewStateBridge?.(bridge as never); bridge?.destroy?.(); handles.forEach(safeRemove); windowManager.SetMapUpdating(false);
       Store.dispatch({ type: MapReducer_ActionTypes.SetMapView, payload: null });
@@ -213,8 +235,26 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
     setMapGeneration((generation) => generation + 1);
   }, [recoveryModel]);
 
-  const searchAddress = useCallback(async (query: string, signal: AbortSignal): Promise<string> => {
+  const searchAddress = useCallback(async (
+    query: string,
+    signal: AbortSignal,
+  ): Promise<readonly AddressGeocodingResult[]> => {
     if (signal.aborted) throw signal.reason ?? new DOMException('Adres araması iptal edildi.', 'AbortError');
+    const view = (
+      MapManager.GetActiveMapView?.() ?? MapManager.GetMapView()
+    ) as MapViewLike | null;
+    if (!view || view.destroyed || typeof view.goTo !== 'function') {
+      throw new Error('Harita henüz hazır değil. Birkaç saniye sonra yeniden deneyin.');
+    }
+    return searchAddressCandidates(query, { signal });
+  }, []);
+
+  const selectAddress = useCallback(async (
+    result: AddressGeocodingResult,
+    signal: AbortSignal,
+  ): Promise<void> => {
+    if (signal.aborted) throw signal.reason ?? new DOMException('Adres seçimi iptal edildi.', 'AbortError');
+
     const getActiveNavigationView = (): MapViewLike | null => (
       (MapManager.GetActiveMapView?.() ?? MapManager.GetMapView()) as MapViewLike | null
     );
@@ -222,17 +262,66 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
     if (!view || view.destroyed || typeof view.goTo !== 'function') {
       throw new Error('Harita henüz hazır değil. Birkaç saniye sonra yeniden deneyin.');
     }
-    const result = await geocodeAddress(query, { signal });
-    if (signal.aborted) throw signal.reason ?? new DOMException('Adres araması iptal edildi.', 'AbortError');
+    const activeMap = view.map as SearchMapLike | null;
+    if (!activeMap || typeof activeMap.add !== 'function') {
+      throw new Error('Mevcut haritaya konum işaretçisi eklenemedi.');
+    }
+
+    const [GraphicsLayerCtor, GraphicCtor] = await loadArcgisModules<[
+      ArcgisGraphicsLayerConstructor,
+      ArcgisGraphicConstructor,
+    ]>(['esri/layers/GraphicsLayer', 'esri/Graphic']);
+    if (signal.aborted) throw signal.reason ?? new DOMException('Adres seçimi iptal edildi.', 'AbortError');
     if (view !== getActiveNavigationView() || view.destroyed) {
       throw new DOMException('Harita görünümü değişti.', 'AbortError');
     }
-    await view.goTo({ center: [result.longitude, result.latitude], zoom: result.zoom }, { duration: 650 });
-    if (signal.aborted) throw signal.reason ?? new DOMException('Adres araması iptal edildi.', 'AbortError');
+
+    let markerLayer = searchMarkerLayerRef.current;
+    if (!markerLayer || searchMarkerMapRef.current !== activeMap) {
+      if (markerLayer && searchMarkerMapRef.current?.remove) {
+        searchMarkerMapRef.current.remove(markerLayer);
+      }
+      markerLayer = new GraphicsLayerCtor({
+        title: 'Adres arama işaretçisi',
+        listMode: 'hide',
+      });
+      activeMap.add(markerLayer);
+      searchMarkerLayerRef.current = markerLayer;
+      searchMarkerMapRef.current = activeMap;
+    }
+
+    if (typeof markerLayer.removeAll !== 'function' || typeof markerLayer.add !== 'function') {
+      throw new Error('Konum işaretçisi harita katmanı kullanılamıyor.');
+    }
+    markerLayer.removeAll();
+
+    const marker = new GraphicCtor({
+      geometry: {
+        type: 'point',
+        longitude: result.longitude,
+        latitude: result.latitude,
+        spatialReference: { wkid: 4326 },
+      },
+      // Reuse the deployed local pin asset so the marker works in both 2D and 3D views.
+      symbol: {
+        type: 'picture-marker',
+        url: 'images/icons/map/pictureMarker.png',
+        width: '40px',
+        height: '40px',
+        yoffset: 20,
+      },
+      attributes: { address: result.displayName },
+    });
+    markerLayer.add(marker);
+
+    await view.goTo(
+      { center: [result.longitude, result.latitude], zoom: result.zoom },
+      { duration: 650 },
+    );
+    if (signal.aborted) throw signal.reason ?? new DOMException('Adres seçimi iptal edildi.', 'AbortError');
     if (view !== getActiveNavigationView() || view.destroyed) {
       throw new DOMException('Harita görünümü değişti.', 'AbortError');
     }
-    return result.displayName;
   }, []);
 
   const modelsMountedRef = useRef(false);
@@ -256,7 +345,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       {mapView && <>
         <KentRehberiDataLayer map={mapView.map as KentRehberiMapLike} />
         <ExperienceMapModeBridge mapView={mapView as never} modeRef={activeViewModeRef} accessorWatch={accessorWatchRef.current ?? undefined} onInitialModeResolved={markInitialModeResolved} />
-        <NavigationBar id="mainbar" onAddressSearch={searchAddress} />
+        <NavigationBar id="mainbar" onAddressSearch={searchAddress} onAddressSelect={selectAddress} />
         <LegacySidebar id="sidebar" windowManager={windowManager} ref={sidebarRef} onToolHostChange={setSidebarToolHost} />
         <ModernToolbarWidget
           id="toolbar-widget"

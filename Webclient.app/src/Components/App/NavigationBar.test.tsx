@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NavigationBar } from './NavigationBar';
+import type { AddressGeocodingResult } from '../../data-services/addressGeocoding';
 
 const themeMocks = vi.hoisted(() => ({
   theme: 'light' as 'light' | 'dark',
@@ -17,9 +18,33 @@ vi.mock('../Common/ExperienceDesignSystem', () => ({
   }),
 }));
 
-const createAddressSearch = () => vi.fn(async (query: string, _signal: AbortSignal) => (
-  query + ', Çankaya, Ankara'
-));
+const createAddressResult = (
+  displayName = 'Kızılay, Çankaya, Ankara, Türkiye',
+  latitude = 39.9208,
+  longitude = 32.8541,
+): AddressGeocodingResult => Object.freeze({
+  displayName,
+  latitude,
+  longitude,
+  zoom: 16,
+  attribution: '© OpenStreetMap katkıcıları',
+  attributionUrl: 'https://www.openstreetmap.org/copyright',
+});
+
+const createAddressSearch = () => vi.fn(async (query: string, _signal: AbortSignal) => ([
+  createAddressResult(query + ', Çankaya, Ankara, Türkiye'),
+  createAddressResult('Kızılay Meydanı, Çankaya, Ankara, Türkiye', 39.9209, 32.8542),
+]));
+
+const createAddressSelect = () => vi.fn(async (
+  _result: AddressGeocodingResult,
+  _signal: AbortSignal,
+) => undefined);
+
+const renderNavigationBar = (
+  onAddressSearch = createAddressSearch(),
+  onAddressSelect = createAddressSelect(),
+) => render(<NavigationBar onAddressSearch={onAddressSearch} onAddressSelect={onAddressSelect} />);
 
 const getSearchInput = (): HTMLInputElement => screen.getByRole('searchbox', {
   name: /adres.*cadde.*mahalle.*yer ara/i,
@@ -32,7 +57,7 @@ describe('NavigationBar', () => {
   });
 
   it('uses Kent Rehberi branding in the header', () => {
-    render(<NavigationBar onAddressSearch={createAddressSearch()} />);
+    renderNavigationBar();
     const homeLink = screen.getByRole('link', { name: 'KENT REHBERİ ana sayfası' });
 
     expect(homeLink).toHaveAttribute('href', './');
@@ -40,10 +65,11 @@ describe('NavigationBar', () => {
     expect(homeLink).toHaveTextContent('KENT REHBERİ');
   });
 
-  it('searches the current map without showing a success message or Google Maps redirect', async () => {
+  it('shows address choices for the current map and pins a clicked choice without a success message or redirect', async () => {
     const user = userEvent.setup();
     const onAddressSearch = createAddressSearch();
-    render(<NavigationBar onAddressSearch={onAddressSearch} />);
+    const onAddressSelect = createAddressSelect();
+    renderNavigationBar(onAddressSearch, onAddressSelect);
 
     await user.type(getSearchInput(), '  Kızılay  ');
     await user.click(screen.getByRole('button', { name: 'Adres aramasını başlat' }));
@@ -51,9 +77,16 @@ describe('NavigationBar', () => {
     expect(onAddressSearch).toHaveBeenCalledTimes(1);
     expect(onAddressSearch.mock.calls[0]?.[0]).toBe('Kızılay');
     expect(onAddressSearch.mock.calls[0]?.[1]).toBeInstanceOf(AbortSignal);
+    const firstChoice = await screen.findByRole('option', { name: /Kızılay, Çankaya.*Türkiye/i });
+    expect(screen.getByRole('listbox', { name: 'Adres arama sonuçları' })).toBeInTheDocument();
+    await user.click(firstChoice);
+
+    expect(onAddressSelect).toHaveBeenCalledTimes(1);
+    expect(onAddressSelect.mock.calls[0]?.[0]).toMatchObject({ displayName: expect.stringContaining('Kızılay') });
+    expect(onAddressSelect.mock.calls[0]?.[1]).toBeInstanceOf(AbortSignal);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Adres aramasını başlat' })).toBeEnabled());
     expect(screen.queryByText(/Haritada bulundu/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Adres aranıyor/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('listbox', { name: 'Adres arama sonuçları' })).not.toBeInTheDocument();
     expect(document.querySelector('.kr-address-search-feedback--success')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Google Haritalar/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/Kategori\s+\d+/i)).not.toBeInTheDocument();
@@ -65,7 +98,7 @@ describe('NavigationBar', () => {
     const onAddressSearch = vi.fn(async () => {
       throw new Error('Adres bulunamadı. Daha açık bir adres deneyin.');
     });
-    render(<NavigationBar onAddressSearch={onAddressSearch} />);
+    renderNavigationBar(onAddressSearch);
 
     await user.type(getSearchInput(), 'Bilinmeyen yer');
     await user.click(screen.getByRole('button', { name: 'Adres aramasını başlat' }));
@@ -77,7 +110,7 @@ describe('NavigationBar', () => {
   it('does not submit whitespace-only input', async () => {
     const user = userEvent.setup();
     const onAddressSearch = createAddressSearch();
-    render(<NavigationBar onAddressSearch={onAddressSearch} />);
+    renderNavigationBar(onAddressSearch);
 
     await user.type(getSearchInput(), '   ');
     expect(screen.getByRole('button', { name: 'Adres aramasını başlat' })).toBeDisabled();
@@ -86,7 +119,7 @@ describe('NavigationBar', () => {
 
   it('clears search and releases focus with Escape', async () => {
     const user = userEvent.setup();
-    render(<NavigationBar onAddressSearch={createAddressSearch()} />);
+    renderNavigationBar();
     const search = getSearchInput();
 
     await user.type(search, 'Ankara');
@@ -97,7 +130,7 @@ describe('NavigationBar', () => {
   });
 
   it('preserves search text and focus when Escape belongs to an active IME composition', () => {
-    render(<NavigationBar onAddressSearch={createAddressSearch()} />);
+    renderNavigationBar();
     const search = getSearchInput();
     search.focus();
     fireEvent.change(search, { target: { value: 'Ankara' } });
@@ -111,7 +144,7 @@ describe('NavigationBar', () => {
 
   it('does not wire slash as a global shortcut or steal it from another text field', async () => {
     const user = userEvent.setup();
-    render(<NavigationBar onAddressSearch={createAddressSearch()} />);
+    renderNavigationBar();
     const search = getSearchInput();
     const other = document.createElement('input');
     other.setAttribute('aria-label', 'Yardımcı alan');
@@ -129,7 +162,7 @@ describe('NavigationBar', () => {
   });
 
   it('exposes CBS Başkent as a safe external link', () => {
-    const { container } = render(<NavigationBar onAddressSearch={createAddressSearch()} />);
+    const { container } = renderNavigationBar();
     const cbsLink = container.querySelector<HTMLAnchorElement>('a.kr-header-portal');
 
     expect(cbsLink).not.toBeNull();
@@ -140,7 +173,7 @@ describe('NavigationBar', () => {
   });
 
   it('places the accessible theme toggle in the top navigation with a clear action icon', () => {
-    render(<NavigationBar onAddressSearch={createAddressSearch()} />);
+    renderNavigationBar();
 
     const themeButton = screen.getByRole('button', { name: 'Karanlık temaya geç' });
     expect(themeButton.querySelector('svg')).not.toBeNull();
