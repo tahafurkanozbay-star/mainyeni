@@ -16,9 +16,9 @@ Tarayıcı tarafında özel `/api` proxy'si veya kimlik bilgisi iletimi yoktur. 
 
 - `Webclient.app/` — yayımlanan web uygulaması, UI, ArcGIS motoru, PlanASKI taşıması, testler ve Vite/TypeScript yapılandırmaları.
 - `Operations/` — statik IIS paketini üreten ve yayımlayan PowerShell betikleri.
-- `docs/` — mimari, veri kaynağı ve dağıtım belgeleri.
+- `docs/` — etkin mimari, veri kaynağı ve dağıtım belgeleri; tarihsel denetimler `docs/archive/` altında.
+- `progress/` — eski tarihli kayıtların bağlantı dosyaları; tam kopyalar `progress/archive/` altındadır. Güncel durum için kökteki `KENT_REHBERI_PROGRESS.md` dosyasını kullan.
 - `archive/` — derleme/deploy dışındaki eski kaynak ve prototiplerin geri alınabilir arşivi.
-- `progress/` — kısa güncel görev/devam kaydı; ayrıntılı eski kayıtlar `progress/archive/` altındadır.
 - `_docs/` — derlemeye girmeyen tarihsel görsel referansı; canlı uygulama varlıkları `Webclient.app/public/` altındadır.
 - `database/archive/` — kaldırılan API mimarisine ait tarihsel SQL referansı; aktif yayın girdisi değildir.
 - `quality/` ve `tools/` — sürüm kalite denetimleri, mimari sözleşmeler ve CI araçları.
