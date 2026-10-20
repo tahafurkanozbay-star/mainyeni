@@ -8,6 +8,7 @@ import {
 import {
   fetchPlanAskiFeatureDirect,
   fetchPlanAskiGeoJsonDirect,
+  fetchPlanAskiSvgOverviewDirect,
   fetchPlanAskiTypeCatalogDirect,
 } from './kentRehberiPlanAskiDirect';
 
@@ -87,6 +88,28 @@ describe('direct PlanASKI browser transport', () => {
     expect(first.features.map((feature) => feature.id)).toEqual([201]);
     expect(second.features.map((feature) => feature.id)).toEqual([201]);
     expect(requests).toHaveLength(1);
+  });
+
+  it('shares one in-flight request between concurrent queries for the same category', async () => {
+    const { requests, fetchImpl } = mockTypes({ 13: [row(13, 201)] });
+    const [first, second] = await Promise.all([
+      fetchPlanAskiGeoJsonDirect({ tur: 13, limit: 10, fetchImpl }),
+      fetchPlanAskiGeoJsonDirect({ tur: 13, limit: 10, fetchImpl }),
+    ]);
+    expect(first.features.map((feature) => feature.id)).toEqual([201]);
+    expect(second.features.map((feature) => feature.id)).toEqual([201]);
+    expect(requests).toHaveLength(1);
+  });
+
+  it('shares the 43 startup category requests with a concurrent catalog read', async () => {
+    const { requests, fetchImpl } = mockTypes({ 13: [row(13, 202)] });
+    const [overview, catalog] = await Promise.all([
+      fetchPlanAskiSvgOverviewDirect({ fetchImpl }, () => 'test-icon'),
+      fetchPlanAskiTypeCatalogDirect({ fetchImpl }),
+    ]);
+    expect(overview.features.map((feature) => feature.id)).toEqual([202]);
+    expect(catalog.types[13]?.count).toBe(1);
+    expect(requests).toHaveLength(43);
   });
 
   it('fetches all 43 types for catalog and supports exact category matching', async () => {
