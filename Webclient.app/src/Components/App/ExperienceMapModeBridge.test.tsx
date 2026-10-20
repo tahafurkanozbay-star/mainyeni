@@ -257,6 +257,15 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
       expect(harness.bridge?.getState().basemapId).toBe('openstreetmap-3d');
       expect(harness.views).toHaveLength(1);
       const host = container.querySelector('.experience-scene-host');
+      expect(harness.createSceneView).toHaveBeenCalledWith(
+        host,
+        expect.objectContaining({
+          camera: expect.objectContaining({
+            position: { longitude: 32.85, latitude: 39.93, z: 8_000 },
+            tilt: 48,
+          }),
+        }),
+      );
       expect(host).not.toBeNull();
       expect(harness.views[0]?.container).toBe(host);
       await waitFor(() => expect(host).toHaveClass('is-active'));
