@@ -5,11 +5,11 @@
   --kr-query-max-width: min(560px, 46vw);
 }
 #root { isolation: isolate; }
-.common-query-window { min-width: min(420px, calc(100vw - 24px)); max-width: 44vw; max-height: calc(100vh - var(--kr-header-height) - 24px); color: var(--exp-text); background: var(--exp-surface); border: 1px solid var(--exp-border); border-radius: 14px; box-shadow: var(--exp-shadow-md); overflow: hidden; }
-.common-query-window-header { min-height: 54px; display: flex; align-items: center; gap: 8px; padding: 9px 12px; color: var(--exp-text); background: var(--exp-surface); border-bottom: 1px solid var(--exp-border); }
+.common-query-window { min-width: min(420px, calc(100vw - 24px)); max-width: 44vw; max-height: calc(100vh - var(--kr-header-height) - 24px); color: var(--exp-text); background: color-mix(in srgb, var(--exp-surface) 84%, transparent); border: 1px solid color-mix(in srgb, var(--exp-border) 80%, transparent); border-radius: 14px; box-shadow: var(--exp-shadow-md); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); overflow: hidden; }
+.common-query-window-header { min-height: 54px; display: flex; align-items: center; gap: 8px; padding: 9px 12px; color: var(--exp-text); background: color-mix(in srgb, var(--exp-surface) 80%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--exp-border) 80%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
 .common-query-window-header > span { font-size: 14px; font-weight: 720; color: var(--exp-text); }
 .common-query-window-header-icon { width: 34px; height: 34px; margin: 0; padding: 6px; border: 1px solid var(--exp-border); border-radius: 8px; background: var(--exp-surface-2); }
-.common-query-window-body { padding: 12px; background: var(--exp-surface); color: var(--exp-text); }
+.common-query-window-body { padding: 12px; background: color-mix(in srgb, var(--exp-surface) 76%, transparent); color: var(--exp-text); }
 .common-query-window-body::-webkit-scrollbar { width: 8px; }
 .common-query-window-right { right: calc(var(--toolbar-width) + 14px); }
 .ns-input-group input { min-height: 42px; }
