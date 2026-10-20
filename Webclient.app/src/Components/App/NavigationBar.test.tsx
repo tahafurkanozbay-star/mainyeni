@@ -51,7 +51,7 @@ describe('NavigationBar', () => {
     expect(onAddressSearch).toHaveBeenCalledTimes(1);
     expect(onAddressSearch.mock.calls[0]?.[0]).toBe('Kızılay');
     expect(onAddressSearch.mock.calls[0]?.[1]).toBeInstanceOf(AbortSignal);
-    expect(await screen.findByText('Bulundu: Kızılay, Çankaya, Ankara')).toBeInTheDocument();
+    expect(await screen.findByText('Haritada bulundu: Kızılay, Çankaya, Ankara')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Google Haritalar/i })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '© OpenStreetMap katkıcıları' })).toHaveAttribute(
       'href',
