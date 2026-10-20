@@ -68,6 +68,21 @@ const transactionDone = (transaction: IDBTransaction): Promise<void> => new Prom
 export class IndexedDbPlanAskiCategoryCacheStore implements PlanAskiCategoryCacheStore {
   readonly #databaseName: string;
   #databasePromise: Promise<IDBDatabase | null> | undefined;
+  #failures = 0;
+  #lastFailure: string | undefined;
+
+  snapshot(): Readonly<{ failures: number; lastFailure?: string }> {
+    return Object.freeze({
+      failures: this.#failures,
+      ...(this.#lastFailure === undefined ? {} : { lastFailure: this.#lastFailure }),
+    });
+  }
+
+  #recordFailure(operation: string, error: unknown): void {
+    this.#failures += 1;
+    const name = error instanceof Error && error.name ? error.name : 'UnknownError';
+    this.#lastFailure = operation + ':' + name.slice(0, 80);
+  }
 
   constructor(databaseName = CACHE_DB_NAME) {
     const normalized = databaseName.trim();
@@ -83,7 +98,8 @@ export class IndexedDbPlanAskiCategoryCacheStore implements PlanAskiCategoryCach
       const transaction = database.transaction(CACHE_STORE_NAME, 'readonly');
       const result: unknown = await requestResult(transaction.objectStore(CACHE_STORE_NAME).get(tur));
       return result ?? null;
-    } catch {
+    } catch (error) {
+      this.#recordFailure('read', error);
       return null;
     }
   }
@@ -113,9 +129,9 @@ export class IndexedDbPlanAskiCategoryCacheStore implements PlanAskiCategoryCach
         if (bytes + entry.byteSize <= MAX_CACHE_BYTES) store.put(entry);
       };
       await transactionDone(transaction);
-    } catch {
-      // Quota, private browsing, a blocked database, or structured-clone failures
-      // must not prevent a valid live PlanASKI response from reaching the map.
+    } catch (error) {
+      // Record storage pressure without interrupting the live network response.
+      this.#recordFailure('write', error);
     }
   }
 
@@ -127,8 +143,9 @@ export class IndexedDbPlanAskiCategoryCacheStore implements PlanAskiCategoryCach
       const transaction = database.transaction(CACHE_STORE_NAME, 'readwrite');
       transaction.objectStore(CACHE_STORE_NAME).delete(tur);
       await transactionDone(transaction);
-    } catch {
-      // Persistent cache invalidation is best effort; callers still validate every body.
+    } catch (error) {
+      // Invalid snapshots are still rejected on read; retain a safe diagnostic for failed cleanup.
+      this.#recordFailure('delete', error);
     }
   }
 
@@ -160,7 +177,8 @@ export class IndexedDbPlanAskiCategoryCacheStore implements PlanAskiCategoryCach
         };
         request.onerror = () => finish(null);
         request.onblocked = () => finish(null);
-      } catch {
+      } catch (error) {
+        this.#recordFailure('open', error);
         finish(null);
       }
     });
@@ -186,6 +204,32 @@ export class PlanAskiPersistentCategoryCache {
   readonly #staleIfErrorMs: number;
   readonly #maxEntryBytes: number;
   readonly #clock: () => number;
+  #readFailures = 0;
+  #writeFailures = 0;
+  #deleteFailures = 0;
+  #lastFailure: string | undefined;
+
+  snapshot(): Readonly<{
+    readFailures: number;
+    writeFailures: number;
+    deleteFailures: number;
+    lastFailure?: string;
+  }> {
+    return Object.freeze({
+      readFailures: this.#readFailures,
+      writeFailures: this.#writeFailures,
+      deleteFailures: this.#deleteFailures,
+      ...(this.#lastFailure === undefined ? {} : { lastFailure: this.#lastFailure }),
+    });
+  }
+
+  #recordFailure(operation: 'read' | 'write' | 'delete', error: unknown): void {
+    if (operation === 'read') this.#readFailures += 1;
+    else if (operation === 'write') this.#writeFailures += 1;
+    else this.#deleteFailures += 1;
+    const name = error instanceof Error && error.name ? error.name : 'UnknownError';
+    this.#lastFailure = operation + ':' + name.slice(0, 80);
+  }
 
   constructor(options: PlanAskiCategoryCacheOptions = {}) {
     this.#store = options.store ?? new IndexedDbPlanAskiCategoryCacheStore();
@@ -215,7 +259,8 @@ export class PlanAskiPersistentCategoryCache {
     let candidate: unknown;
     try {
       candidate = await this.#store.get(tur);
-    } catch {
+    } catch (error) {
+      this.#recordFailure('read', error);
       return null;
     }
     if (candidate === null || candidate === undefined) return null;
@@ -247,8 +292,8 @@ export class PlanAskiPersistentCategoryCache {
         storedAt: this.#clock(),
         byteSize,
       }));
-    } catch {
-      // Keep persistence optional; callers still use the current validated response.
+    } catch (error) {
+      this.#recordFailure('write', error);
     }
   }
 
@@ -266,8 +311,8 @@ export class PlanAskiPersistentCategoryCache {
   async #safeDelete(tur: number): Promise<void> {
     try {
       await this.#store.delete(tur);
-    } catch {
-      // Invalid or expired disk entries are never trusted, even if deletion fails.
+    } catch (error) {
+      this.#recordFailure('delete', error);
     }
   }
 }
