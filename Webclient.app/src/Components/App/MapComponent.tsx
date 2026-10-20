@@ -119,15 +119,29 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
 
     const initializeMap = async (signal: AbortSignal): Promise<void> => {
       const mapConfig = MapManager.GetMapConfiguration?.() ?? {};
-      const [MapCtor, MapViewCtor, watchUtils] = await loadArcgisModules<[ArcgisMapConstructor, ArcgisMapViewConstructor, WatchUtilsLike]>([
-        'esri/Map', 'esri/views/MapView', 'esri/core/watchUtils',
+      const [MapCtor, MapViewCtor, watchUtils, StartupGraphicsLayerCtor] = await loadArcgisModules<[
+        ArcgisMapConstructor,
+        ArcgisMapViewConstructor,
+        WatchUtilsLike,
+        ArcgisGraphicsLayerConstructor,
+      ]>([
+        'esri/Map', 'esri/views/MapView', 'esri/core/watchUtils', 'esri/layers/GraphicsLayer',
       ]);
       if (disposed || signal.aborted || !mapDiv.current) return;
       accessorWatchRef.current = watchUtils.watch;
       // Start without a 2D basemap. The initial view is intentionally hidden while
       // the local 3D scene is prepared, so loading 2D OSM tiles here only duplicates
       // work before SceneView becomes active. 2D installs its free basemap on demand.
-      const map = new MapCtor({ basemap: null });
+      // ArcGIS 5.x marks a MapView with neither operational nor basemap layers
+      // as "empty-map" and our readiness guard correctly rejects that state.
+      // Add one invisible, local-only layer so startup can complete without
+      // downloading 2D tiles before the initial 3D SceneView is ready.
+      const startupReadinessLayer = new StartupGraphicsLayerCtor({
+        title: 'Startup readiness (no network)',
+        visible: false,
+        listMode: 'hide',
+      });
+      const map = new MapCtor({ basemap: null, layers: [startupReadinessLayer] });
       view = new MapViewCtor(createMapViewOptions({ container: mapDiv.current, map, configuration: mapConfig, viewportWidth: window.innerWidth }));
       await waitForArcgisView(view, { signal, accessorWatch: watchUtils.watch });
       if (disposed || signal.aborted) return;
