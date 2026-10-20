@@ -5,6 +5,7 @@ import {
 } from './tooling/sourceTransforms.ts';
 
 export default defineConfig({
+  base: './',
   plugins: [legacyJestCompatibilityPlugin(), react({ include: /\.[jt]sx?$/ })],
   test: {
     globals: true,
