@@ -3,9 +3,9 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ManagedWindowHandle } from '../../../experience/contracts';
 import { GlobalIdentifyWidget } from './GlobalIdentifyWidget';
-const runtime = vi.hoisted(() => ({ run: vi.fn(), cancel: vi.fn(), getView: vi.fn(), getClick: vi.fn() }));
+const runtime = vi.hoisted(() => ({ run: vi.fn(), cancel: vi.fn(), getView: vi.fn(), getActiveView: vi.fn(), getClick: vi.fn() }));
 vi.mock('../../../gis-engine/identifyRuntime', () => ({ createIdentifySession: () => ({ run: runtime.run, cancel: runtime.cancel }) }));
-vi.mock('../../../Store/Managers/MapManager', () => ({ default: { GetMapView: runtime.getView, GetMapClickEvent: runtime.getClick } }));
+vi.mock('../../../Store/Managers/MapManager', () => ({ default: { GetMapView: runtime.getView, GetActiveMapView: runtime.getActiveView, GetMapClickEvent: runtime.getClick } }));
 vi.mock('../../../Toolbox/GisGraphicsHelper', () => ({ GisGraphicsHelper: { RemoveGraphics: vi.fn() } }));
 const manager = () => ({ IsVisible: () => true, IsMinimized: () => false, ShowWindow: vi.fn(), RegisterWindow: vi.fn(), UnregisterWindow: vi.fn(), HideWindow: vi.fn(), ToggleMinimiseWindow: vi.fn(), ShowMessage: vi.fn() });
 const deferred = () => {
@@ -17,8 +17,17 @@ const setup = () => {
   const ref = createRef<ManagedWindowHandle>(); const windowManager = manager();
   return { ...render(<GlobalIdentifyWidget id="identify-test" ref={ref} windowManager={windowManager} />), ref, windowManager };
 };
-beforeEach(() => { vi.clearAllMocks(); runtime.getView.mockReturnValue({ id: 'view' }); runtime.getClick.mockReturnValue({ mapPoint: { x: 32.85, y: 39.92 } }); });
+beforeEach(() => { vi.clearAllMocks(); runtime.getView.mockReturnValue({ id: 'view' }); runtime.getActiveView.mockReturnValue(null); runtime.getClick.mockReturnValue({ mapPoint: { x: 32.85, y: 39.92 } }); });
 describe('identify result ownership', () => {
+  it('uses the currently visible scene view instead of the hidden base map view', async () => {
+    const sceneView = { id: 'active-scene-view' };
+    runtime.getActiveView.mockReturnValue(sceneView);
+    runtime.run.mockResolvedValue({ groups: [] });
+    const { ref } = setup();
+    await act(async () => { ref.current?.OnShow?.(); });
+    expect(runtime.run).toHaveBeenCalledWith(sceneView, expect.anything(), expect.objectContaining({ returnGeometry: true }));
+  });
+
   it('opens its own surface without activating another window', async () => {
     runtime.run.mockResolvedValue({ groups: [] }); const { ref, windowManager } = setup();
     await act(async () => { ref.current?.OnShow?.(); });
