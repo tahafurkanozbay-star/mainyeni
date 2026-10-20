@@ -216,8 +216,12 @@ textarea:focus-visible,
 .ns-input-group input:focus {
   border-color: var(--exp-accent);
   background: var(--exp-surface);
-  outline: 0;
   box-shadow: var(--exp-focus);
+}
+
+.ns-input-group input:focus-visible {
+  outline: 2px solid var(--exp-accent);
+  outline-offset: 2px;
 }
 
 .ns-input-group img {
@@ -370,10 +374,14 @@ textarea:focus-visible,
   color: var(--exp-text);
   background: var(--exp-surface-2);
   border: 1px solid var(--exp-border);
-  outline: 0;
   border-radius: 10px;
   min-height: 38px;
   transition: border-color var(--exp-transition-fast), box-shadow var(--exp-transition-fast);
+}
+
+.input-group input:focus-visible {
+  outline: 2px solid var(--exp-accent);
+  outline-offset: 2px;
 }
 
 .input-group input:hover { border-color: var(--exp-border-strong); }
