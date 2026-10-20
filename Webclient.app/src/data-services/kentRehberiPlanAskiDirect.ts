@@ -321,7 +321,7 @@ const fetchType = async (
         throw new RangeError('PlanASKI category response exceeded its size budget.');
       }
     }
-      body = await readBudgetedJsonText(response, options.signal);
+    body = await readBudgetedJsonText(response, options.signal);
   }
   let parsed: unknown;
   try {
