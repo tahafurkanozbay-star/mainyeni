@@ -5,11 +5,10 @@ const css = (relativePath: string): string =>
   readFileSync(new URL(relativePath, import.meta.url), 'utf8');
 
 const ruleBlock = (sheet: string, marker: string, nextMarker: string): string => {
-  const normalizedSheet = sheet.replaceAll('\r\n', '\n');
-  const start = normalizedSheet.indexOf(marker);
-  const end = normalizedSheet.indexOf(nextMarker, start + marker.length);
+  const start = sheet.indexOf(marker);
+  const end = sheet.indexOf(nextMarker, start + marker.length);
   if (start < 0 || end < 0) throw new Error('Missing responsive UI stylesheet section.');
-  return normalizedSheet.slice(start, end);
+  return sheet.slice(start, end);
 };
 
 const zIndexFor = (sheet: string, selector: string): number => {
@@ -83,7 +82,7 @@ describe('map tool, bottom dock and fixed panel collision contracts', () => {
     const minimize = ruleBlock(
       tools,
       '.common-query-window-tool-minimise-button {',
-      '.common-query-window-tool-close-button {',
+      '}\n\n.common-query-window-tool-close-button {',
     );
     expect(minimize).toContain('display: block;');
     expect(minimize).toContain('inline-size: 1.35rem;');

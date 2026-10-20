@@ -190,9 +190,7 @@ export const createLayerLifecycleCoordinator = (dependencies: Readonly<{
       timestamp: now(),
       ...details,
     });
-    // Snapshot listeners so subscription changes do not skip notifications.
-    // oxlint-disable-next-line unicorn/no-useless-spread
-    for (const listener of [...listeners]) {
+    for (const listener of Array.from(listeners)) {
       try {
         listener(event);
       } catch (error) {

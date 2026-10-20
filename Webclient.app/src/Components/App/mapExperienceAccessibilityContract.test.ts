@@ -13,11 +13,9 @@ const modeModel = read('mapModeExperienceModel.ts');
 const recoveryModel = read('mapWorkspaceRecoveryModel.ts');
 const focusModel = read('mapModeFocusModel.ts');
 const mapComponent = read('MapComponent.tsx');
-const toolbarComponent = readFileSync(
-  resolve(webclientRoot, 'src', 'Components', 'Widget', 'Toolbar', 'ToolbarWidgetModern.tsx'),
-  'utf8',
-);
 const application = readFileSync(resolve(webclientRoot, 'src', 'App.tsx'), 'utf8');
+const workspace = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'ExperienceWorkspace.tsx'), 'utf8');
+const toolbarComponent = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Widget', 'Toolbar', 'ToolbarWidgetModern.tsx'), 'utf8');
 
 const NEW_EXPERIENCE_SOURCES = [
   modeCss,
@@ -169,9 +167,10 @@ describe('map experience accessibility and network contracts', () => {
 
   it('keeps one governed mode control in the shared workspace', () => {
     expect(application).toContain('<ExperienceWorkspace externalMapModeControl />');
+    expect(workspace).toContain('readonly externalMapModeControl?: boolean;');
+    expect(toolbarComponent).toContain('leadingContent={<MapModeExperienceControl embedded />}');
     expect(application).not.toContain('ExperienceMapModeGovernedOverlay');
-    expect(mapComponent).toContain('<ModernToolbarWidget');
-    expect(toolbarComponent).toContain('<MapModeExperienceControl');
+    expect(mapComponent).not.toContain('<MapModeExperienceControl />');
   });
 
   it('keeps the recovery surface mounted before map-view-dependent widgets', () => {

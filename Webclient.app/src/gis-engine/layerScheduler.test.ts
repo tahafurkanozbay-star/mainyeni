@@ -574,6 +574,10 @@ describe('layer load scheduler', () => {
     await expect(scheduler.schedule({ id: 'parks' }, () => Promise.resolve('layer')))
       .resolves.toBe('layer');
     expect(events).toEqual(['enqueued', 'started', 'completed']);
+    expect(scheduler.snapshot()).toMatchObject({
+      observerErrors: 1,
+      lastObserverErrorName: 'Error',
+    });
     expect(runtimeDiagnostics.snapshot().events.some((event) => (
       !previousDiagnosticIds.has(event.id)
       && event.details.source === 'gis.layer-scheduler.observer'

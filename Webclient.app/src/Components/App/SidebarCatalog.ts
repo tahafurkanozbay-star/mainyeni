@@ -15,7 +15,22 @@ export interface SidebarItem {
   readonly serviceKey: string;
 }
 
-const sidebarLogo = (fileName: string): string => `${import.meta.env.BASE_URL}images/${fileName}`;
+const sidebarAssetBase = (configuredBase: string): string => {
+  const base = configuredBase.trim();
+  if (
+    !base
+    || base.startsWith('/')
+    || base.startsWith('../')
+    || /^[a-z][a-z\d+.-]*:/iu.test(base)
+  ) {
+    return './';
+  }
+  const relativeBase = base.startsWith('./') ? base : `./${base.replace(/^\.\//u, '')}`;
+  return relativeBase.endsWith('/') ? relativeBase : `${relativeBase}/`;
+};
+
+const sidebarLogo = (fileName: string): string =>
+  `${sidebarAssetBase(import.meta.env.BASE_URL)}images/${fileName}`;
 
 export const SIDEBAR_GROUPS: readonly SidebarGroup[] = Object.freeze([
   { id: 'ABB', shortLabel: 'ABB', label: 'Ankara Büyükşehir Belediyesi', logo: sidebarLogo('abbbuton.svg') },

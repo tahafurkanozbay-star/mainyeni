@@ -1,6 +1,6 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 import { mkdtempSync } from 'node:fs';
 import {
   describeModuleResolutionAmbiguity,
@@ -14,6 +14,10 @@ import {
 } from './moduleResolutionGuard';
 
 const fixture = (): string => mkdtempSync(join(tmpdir(), 'kent-module-resolution-'));
+
+const normalizePathForAssertion = (value: string): string => value
+  .replaceAll('\\', '/')
+  .replace(/^[A-Za-z]:/u, '');
 
 const write = (root: string, relativePath: string, content = 'export {};'): string => {
   const target = join(root, relativePath);
@@ -45,22 +49,21 @@ describe('module resolution guard', () => {
   });
 
   test('builds direct and index candidates deterministically', () => {
-    const base = resolve('/workspace/Webclient.app/src', 'runtime').replaceAll('\\', '/');
     const candidates = moduleCandidatePaths(
       './runtime',
       '/workspace/Webclient.app/src/app.ts',
       ['.ts', '.js'],
     );
     expect(candidates.map((candidate) => [
-      candidate.path.replaceAll('\\', '/'),
+      normalizePathForAssertion(candidate.path),
       candidate.extension,
       candidate.indexModule,
       candidate.typed,
     ])).toEqual([
-      [`${base}.ts`, '.ts', false, true],
-      [`${base}.js`, '.js', false, false],
-      [`${base}/index.ts`, '.ts', true, true],
-      [`${base}/index.js`, '.js', true, false],
+      ['/workspace/Webclient.app/src/runtime.ts', '.ts', false, true],
+      ['/workspace/Webclient.app/src/runtime.js', '.js', false, false],
+      ['/workspace/Webclient.app/src/runtime/index.ts', '.ts', true, true],
+      ['/workspace/Webclient.app/src/runtime/index.js', '.js', true, false],
     ]);
   });
 

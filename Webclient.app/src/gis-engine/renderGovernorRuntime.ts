@@ -322,9 +322,7 @@ export const createRenderGovernor = (configuration: GisRenderGovernorConfigurati
 
   const emit = (reason: string): GisRenderGovernorSnapshot => {
     const state = snapshot();
-    // Snapshot listeners so subscription changes do not skip notifications.
-    // oxlint-disable-next-line unicorn/no-useless-spread
-    for (const listener of [...listeners]) {
+    for (const listener of Array.from(listeners)) {
       try { listener(state, reason); } catch (error) { configuration.onListenerError?.(error); }
     }
     try { configuration.onChange?.(state, reason); } catch (error) { configuration.onListenerError?.(error); }

@@ -16,8 +16,21 @@ const runtime = vi.hoisted(() => ({
   goToCalls: [] as Array<Record<string, unknown>>,
   navigationProps: null as Record<string, unknown> | null,
   create: vi.fn(),
+  waitForViewOverride: null as null | ((view: unknown, options?: unknown) => Promise<void>),
 }));
 vi.mock('../../gis-engine/arcgisModuleRuntime', () => ({ loadArcgisModules: runtime.load }));
+vi.mock('../../gis-engine/viewReadiness', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../gis-engine/viewReadiness')>();
+  return {
+    ...actual,
+    waitForArcgisView: (
+      view: Parameters<typeof actual.waitForArcgisView>[0],
+      options?: Parameters<typeof actual.waitForArcgisView>[1],
+    ) => runtime.waitForViewOverride
+      ? runtime.waitForViewOverride(view, options)
+      : actual.waitForArcgisView(view, options),
+  };
+});
 vi.mock('../../Store/Managers/MapManager', () => ({ default: {
   GetMapConfiguration: () => ({}), SetViewStateBridge: vi.fn(), SetViewPerformanceMonitor: vi.fn(),
   ClearViewPerformanceMonitor: vi.fn(), ClearViewStateBridge: vi.fn(),
@@ -49,8 +62,11 @@ const deferred = () => {
   const promise = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 };
-const setup = (strict = false) => {
-  const manager = createWindowManager();
+const setup = (
+  strict = false,
+  managerOverride?: Partial<ReturnType<typeof createWindowManager>>,
+) => {
+  const manager = { ...createWindowManager(), ...managerOverride };
   const component = <MapComponent windowManager={manager} />;
   const result = render(strict ? <StrictMode>{component}</StrictMode> : component);
   return { ...result, manager };
@@ -66,6 +82,7 @@ beforeEach(() => {
   runtime.navigationProps = null;
   Store.dispatch({ type: MapReducer_ActionTypes.SetMapView, payload: null });
   runtime.create.mockImplementation(() => ({ ready: true, readyState: 'ready' }));
+  runtime.waitForViewOverride = null;
   runtime.load.mockImplementation(async (moduleIds?: string[]) => {
     if (moduleIds?.[0] === 'esri/layers/GraphicsLayer') {
       class GraphicsLayer {
@@ -83,7 +100,11 @@ beforeEach(() => {
       class Map {
         add = vi.fn((layer: unknown) => { runtime.addedLayers.push(layer); });
         remove = vi.fn();
-        constructor(options: unknown) { runtime.mapOptions.push(options); }
+        basemap: unknown;
+        constructor(options: { basemap?: unknown }) {
+          this.basemap = options.basemap;
+          runtime.mapOptions.push(options);
+        }
       },
       class MapView {
         constructor(options: { map: unknown; container: HTMLElement }) {
@@ -109,7 +130,7 @@ beforeEach(() => {
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 describe('free OpenStreetMap 3D readiness', () => {
-  it('avoids 2D tiles without creating an ArcGIS empty-map readiness deadlock', async () => {
+  it('keeps a visible local layer and avoids 2D tiles during normal startup', async () => {
     setup();
     await screen.findByText('Araçlar hazır');
     expect(runtime.mapOptions[0]).toMatchObject({
@@ -117,12 +138,28 @@ describe('free OpenStreetMap 3D readiness', () => {
       layers: [{
         options: {
           title: 'Startup readiness (no network)',
-          visible: false,
+          visible: true,
           listMode: 'hide',
         },
       }],
     });
     expect(runtime.mapOptions[0]).not.toHaveProperty('ground');
+  });
+
+  it('falls back to OSM only if the no-basemap view cannot become ready', async () => {
+    const waitForViewOverride = vi.fn()
+      .mockRejectedValueOnce(new Error('empty-map'))
+      .mockResolvedValueOnce(undefined);
+    runtime.waitForViewOverride = waitForViewOverride;
+
+    setup();
+    await screen.findByText('Araçlar hazır');
+
+    expect(runtime.mapOptions[0]).toMatchObject({ basemap: null });
+    const initializedView = runtime.views[0];
+    if (!initializedView) throw new Error('MapView was not initialized');
+    expect((initializedView.map as { basemap?: unknown }).basemap).toBe('osm');
+    expect(waitForViewOverride).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -203,12 +240,8 @@ describe('real map workspace admission and recovery', () => {
     expect(canvasHost?.contains(status as Node)).toBe(false);
   });
   it('opens point identification from a native right-click on the visible map', async () => {
-    const manager = {
-      ...createWindowManager(),
-      ShowWindow: vi.fn(),
-    };
-    render(<MapComponent windowManager={manager} />);
-    const showWindow = manager.ShowWindow;
+    const showWindow = vi.fn();
+    setup(false, { ShowWindow: showWindow });
     await screen.findByText('Araçlar hazır');
 
     const mapHost = document.querySelector('.experience-mapview-host');

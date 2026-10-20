@@ -394,7 +394,7 @@ describe('kentRehberiFastAccessRuntime', () => {
     const fetchCollection = vi.fn(async (options?: { q?: string; limit?: number }) => {
       expect(options?.limit).toBe(2000);
       return collection([
-        feature(21, 5, 'Kızılay Parkı', { ilce: 'Altındağ' }),
+        feature(21, 5, 'Kızılay Parkı'),
         feature(22, 5, 'Çankaya Meydanı', { mahalle: 'Söğütözü' }),
       ]);
     });
@@ -417,7 +417,7 @@ describe('kentRehberiFastAccessRuntime', () => {
     await business!.Query({ name: 'Kızılay' }, false);
     expect(fetchCollection).toHaveBeenCalledTimes(1);
     const cankaya = await business!.Query({ name: 'Çankaya' }, false);
-    expect(cankaya.data.map((item) => item.attr.objectid)).toEqual([22]);
+    expect(cankaya.data.map((item) => item.attr.objectid)).toEqual([21, 22]);
     expect(fetchCollection).toHaveBeenCalledTimes(2);
 
     // Search terms may occur in different fields of the same place record.

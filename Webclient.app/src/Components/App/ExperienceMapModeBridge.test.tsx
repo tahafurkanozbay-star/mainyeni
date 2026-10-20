@@ -35,6 +35,7 @@ const harness = vi.hoisted(() => ({
   setSceneHome: vi.fn(),
   bindSceneState: vi.fn(),
   osmBuildingsRuntime: { activate: vi.fn(async () => undefined), deactivate: vi.fn(), dispose: vi.fn() },
+  basemapLoadFails: false,
 }));
 
 vi.mock('../../Store/Managers/MapManager', () => ({
@@ -83,7 +84,9 @@ vi.mock('../../gis-engine/arcgisModuleRuntime', () => ({
       id?: string;
       title?: string;
       baseLayers?: unknown[];
-      load = vi.fn(async () => undefined);
+      load = vi.fn(async () => {
+        if (harness.basemapLoadFails) throw new Error('3D basemap unavailable');
+      });
       destroy = vi.fn();
       constructor(properties: Record<string, unknown>) {
         Object.assign(this, properties);
@@ -166,6 +169,7 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     harness.osmBuildingsRuntime.activate.mockResolvedValue(undefined);
+    harness.basemapLoadFails = false;
     harness.loadBasemapModule.mockImplementation(async () => ({
       fromId: (id: string) => ({ id, load: vi.fn(async () => undefined), destroy: vi.fn() }),
     }));
@@ -289,6 +293,34 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
       expect(container.querySelector('.experience-scene-controls')).toBeNull();
       expect(harness.resizeScene).toHaveBeenCalled();
       expect(harness.applyToSceneView).toHaveBeenCalledTimes(2);
+    } finally {
+      window.removeEventListener(EXPERIENCE_MAP_MODE_EVENT, onModeChanged);
+      unmount();
+    }
+  });
+
+  it('falls back to the visible 2D OSM map when the free 3D basemap cannot load', async () => {
+    harness.basemapLoadFails = true;
+    mapView.map.basemap = null;
+    const changedModes: string[] = [];
+    const onModeChanged = (event: Event): void => {
+      const detail = (event as CustomEvent<{ mode?: string; source?: string }>).detail;
+      if (detail?.source?.startsWith('map-runtime') && detail.mode) changedModes.push(detail.mode);
+    };
+    const onInitialModeResolved = vi.fn();
+    window.addEventListener(EXPERIENCE_MAP_MODE_EVENT, onModeChanged);
+    const { container, unmount } = render(
+      <div id="esri-map-container">
+        <ExperienceMapModeBridge mapView={mapView} onInitialModeResolved={onInitialModeResolved} />
+      </div>,
+    );
+
+    try {
+      await waitFor(() => expect(onInitialModeResolved).toHaveBeenCalledTimes(1));
+      expect(mapView.map.basemap).toBe('osm');
+      expect(changedModes).toContain('2d');
+      expect(harness.views[0]?.destroyed).toBe(true);
+      expect(container.querySelector('.experience-scene-host')).not.toHaveClass('is-active');
     } finally {
       window.removeEventListener(EXPERIENCE_MAP_MODE_EVENT, onModeChanged);
       unmount();

@@ -397,7 +397,7 @@ const immutableHit = (
   record,
   score,
   distanceMeters,
-  reasons: Object.freeze(Array.from(reasons)),
+  reasons: Object.freeze([...reasons]),
 });
 
 const createDatasetSnapshot = (

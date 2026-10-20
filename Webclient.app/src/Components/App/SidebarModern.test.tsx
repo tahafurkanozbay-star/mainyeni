@@ -116,7 +116,7 @@ describe('SidebarModern governed interaction integration', () => {
     expect(host).toBeInTheDocument();
     expect(onToolHostChange).toHaveBeenCalledWith(host);
     result.unmount();
-    expect(onToolHostChange.mock.calls.some(([element]) => element === null)).toBe(true);
+    expect(onToolHostChange).toHaveBeenLastCalledWith(null);
   });
 
   it('renders the governed all-services view with semantic list structure', () => {
@@ -170,7 +170,7 @@ describe('SidebarModern governed interaction integration', () => {
     expect(screen.getByRole('list', { name: 'Tüm kent servisleri hizmet listesi' })).toBeInTheDocument();
   });
 
-  it('resolves institution logos relative to the configured app base path', () => {
+  it('resolves institution logos using relative app paths', () => {
     renderSidebar();
     const nav = screen.getByRole('navigation', { name: 'Kurum kategorileri' });
     const logoSources = Array.from(
@@ -179,12 +179,12 @@ describe('SidebarModern governed interaction integration', () => {
     );
 
     expect(logoSources).toEqual([
-      `${import.meta.env.BASE_URL}images/abbbuton.svg`,
-      `${import.meta.env.BASE_URL}images/egobuton.svg`,
-      `${import.meta.env.BASE_URL}images/askibuton.svg`,
-      `${import.meta.env.BASE_URL}images/istiraklerbuton.svg`,
+      './images/abbbuton.svg',
+      './images/egobuton.svg',
+      './images/askibuton.svg',
+      './images/istiraklerbuton.svg',
     ]);
-    expect(logoSources.every((source) => source?.startsWith(import.meta.env.BASE_URL))).toBe(true);
+    expect(logoSources.every((source) => source !== null && !source.startsWith('/') && !source.startsWith('../'))).toBe(true);
   });
 
   it('searches point names across all institutions with Turkish accent tolerance', async () => {
