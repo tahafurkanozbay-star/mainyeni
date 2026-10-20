@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NavigationBar } from './NavigationBar';
@@ -40,7 +40,7 @@ describe('NavigationBar', () => {
     expect(homeLink).toHaveTextContent('KENT REHBERİ');
   });
 
-  it('submits the address to the existing map geocoder without redirecting to Google Maps', async () => {
+  it('searches the current map without showing a success message or Google Maps redirect', async () => {
     const user = userEvent.setup();
     const onAddressSearch = createAddressSearch();
     render(<NavigationBar onAddressSearch={onAddressSearch} />);
@@ -51,12 +51,11 @@ describe('NavigationBar', () => {
     expect(onAddressSearch).toHaveBeenCalledTimes(1);
     expect(onAddressSearch.mock.calls[0]?.[0]).toBe('Kızılay');
     expect(onAddressSearch.mock.calls[0]?.[1]).toBeInstanceOf(AbortSignal);
-    expect(await screen.findByText('Haritada bulundu: Kızılay, Çankaya, Ankara')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Adres aramasını başlat' })).toBeEnabled());
+    expect(screen.queryByText(/Haritada bulundu/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Adres aranıyor/i)).not.toBeInTheDocument();
+    expect(document.querySelector('.kr-address-search-feedback--success')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Google Haritalar/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '© OpenStreetMap katkıcıları' })).toHaveAttribute(
-      'href',
-      'https://www.openstreetmap.org/copyright',
-    );
     expect(screen.queryByText(/Kategori\s+\d+/i)).not.toBeInTheDocument();
   });
 
