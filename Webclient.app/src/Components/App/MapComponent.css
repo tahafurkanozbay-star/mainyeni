@@ -58,8 +58,8 @@
   overflow: hidden;
   isolation: isolate;
   /* One shared width keeps the discovery rail and its in-panel tools aligned. */
-  --sidebar-hover-width: 400px;
-  --sidebar-width: 400px;
+  --sidebar-hover-width: min(400px, calc(100vw - 20px));
+  --sidebar-width: min(400px, calc(100vw - 20px));
 }
 
 /* Keep ArcGIS MapView's renderer in its own empty canvas host. UI overlays and
@@ -594,9 +594,3 @@ html[data-experience-motion="reduced"] .experience-scene-controls button {
   width: min(80px, 100dvw) !important;
 }
 
-@media (max-width: 780px) {
-  .esri-map {
-    --sidebar-hover-width: min(360px, calc(100vw - 20px));
-    --sidebar-width: min(360px, calc(100vw - 20px));
-  }
-}
