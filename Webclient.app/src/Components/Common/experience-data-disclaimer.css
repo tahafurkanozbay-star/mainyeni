@@ -11,9 +11,9 @@
   inline-size: 100dvw;
   max-inline-size: 100dvw;
   min-inline-size: 0;
-  min-block-size: 38px;
+  min-block-size: 46px;
   /* Asymmetric vertical padding places the copy lower without pushing it past the card. */
-  padding: 0.42rem 0.75rem 0.34rem;
+  padding: 0.5rem 1rem;
   color: var(--exp-text, #172033);
   background: color-mix(in srgb, var(--exp-surface, #fff) 86%, transparent);
   -webkit-backdrop-filter: blur(12px);
@@ -27,6 +27,7 @@
   text-align: start;
   pointer-events: none;
   overflow-wrap: anywhere;
+  overflow: hidden;
 }
 
 .experience-data-disclaimer__icon {
@@ -49,16 +50,21 @@
   align-items: baseline;
   gap: 0 0.45rem;
   min-inline-size: 0;
+  inline-size: 100%;
+  justify-content: center;
   white-space: nowrap;
   overflow-wrap: normal;
+  overflow: hidden;
 }
 
 .experience-data-disclaimer__copy > span,
 .experience-data-disclaimer__copy > strong {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   min-inline-size: 0;
   white-space: nowrap;
   overflow-wrap: normal;
+  overflow: hidden;
+  text-overflow: clip;
 }
 
 .experience-data-disclaimer__copy > strong {
@@ -76,7 +82,7 @@ html[data-exp-viewport='compact'] .experience-data-disclaimer {
 }
 
 html[data-exp-pointer='coarse'] .experience-data-disclaimer {
-  min-block-size: 40px;
+  min-block-size: 48px;
 }
 
 html[data-exp-contrast='more'] .experience-data-disclaimer {
@@ -113,8 +119,8 @@ html[data-exp-motion='reduced'] .experience-data-disclaimer {
   .experience-data-disclaimer {
     inset-block-end: 0;
     gap: 0;
-    padding: 0.36rem 0.5rem 0.28rem;
-    font-size: clamp(0.47rem, 2.05vw, 0.62rem);
+    padding: 0.34rem 0.5rem 0.28rem;
+    font-size: clamp(0.36rem, 2.05vw, 0.62rem);
     align-items: center;
   }
 
