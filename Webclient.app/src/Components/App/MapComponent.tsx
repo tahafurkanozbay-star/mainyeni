@@ -294,8 +294,6 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
     }
     markerLayer.removeAll();
 
-    const pinSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="44" viewBox="0 0 36 44"><path d="M18 1C8.6 1 1 8.5 1 17.7 1 29.9 18 43 18 43s17-13.1 17-25.3C35 8.5 27.4 1 18 1Z" fill="#c62828" stroke="#fff" stroke-width="2"/><circle cx="18" cy="17" r="6" fill="#fff"/></svg>';
-    const markerUrl = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(pinSvg);
     const marker = new GraphicCtor({
       geometry: {
         type: 'point',
@@ -303,12 +301,15 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
         latitude: result.latitude,
         spatialReference: { wkid: 4326 },
       },
+      // A native ArcGIS path marker avoids runtime image URLs and keeps the pin self-contained.
       symbol: {
-        type: 'picture-marker',
-        url: markerUrl,
-        width: '36px',
-        height: '44px',
-        yoffset: 22,
+        type: 'simple-marker',
+        style: 'path',
+        path: 'M18 1C8.6 1 1 8.5 1 17.7 1 29.9 18 43 18 43s17-13.1 17-25.3C35 8.5 27.4 1 18 1Z',
+        color: '#c62828',
+        size: 36,
+        yoffset: 17,
+        outline: { color: '#ffffff', width: 2 },
       },
       attributes: { address: result.displayName },
     });
