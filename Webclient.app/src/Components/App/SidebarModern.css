@@ -572,3 +572,31 @@
 .kr-sidebar--governed .kr-sidebar__tool-slot .common-query-window-body {
   background: color-mix(in srgb, var(--exp-surface, #fff) 76%, transparent);
 }
+
+/* Query tools replace the discovery list inside the same sidebar. Stretch every
+   supported window root to the host bounds so it has the same width as Keşfet. */
+.kr-sidebar--governed .kr-sidebar__tool-slot > .kr-fast-query,
+.kr-sidebar--governed .kr-sidebar__tool-slot > .common-query-window {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  inline-size: 100% !important;
+  height: 100% !important;
+  block-size: 100% !important;
+  min-width: 0 !important;
+  min-inline-size: 0 !important;
+  max-width: none !important;
+  max-inline-size: none !important;
+  margin: 0 !important;
+  box-sizing: border-box;
+  border-radius: 0;
+}
+
+.kr-sidebar--governed .kr-sidebar__tool-slot > .kr-lazy-window {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box;
+  margin: 0;
+}
