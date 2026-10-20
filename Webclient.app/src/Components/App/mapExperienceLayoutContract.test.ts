@@ -36,28 +36,31 @@ const mobileModeBlock = (): string => {
 };
 
 describe('map experience layout collision contract', () => {
-  it('anchors Keşfet at the left edge directly below the responsive fixed header', () => {
+  it('anchors the Keşfet shell to the viewport top and left while reserving space for the fixed header', () => {
     expect(mapCss).toMatch(
-      /\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{[\s\S]*?position:\s*fixed !important;[\s\S]*?top:\s*var\(--mainbar-height, 60px\) !important;[\s\S]*?inset-inline-start:\s*0 !important;[\s\S]*?inset-block-end:\s*0 !important;/u,
+      /\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{[\s\S]*?position:\s*fixed !important;[\s\S]*?top:\s*0 !important;[\s\S]*?inset-inline-start:\s*0 !important;[\s\S]*?inset-block-end:\s*0 !important;[\s\S]*?padding-block-start:\s*var\(--mainbar-height, 60px\) !important;/u,
     );
     expect(navigationCss).toContain(':root{--mainbar-height:58px}');
-    expect(mapCss).toContain('width: min(var(--sidebar-hover-width, 600px), 100dvw) !important;');
+    expect(mapCss).toContain('width: min(var(--sidebar-hover-width, 400px), 100dvw) !important;');
   });
 
-  it('keeps Keşfet flush to the left edge and widens it without hard-coding a separate mobile size', () => {
-    expect(legacySidebarCss).toMatch(/--sidebar-hover-width:\s*600px;/u);
-    expect(mapCss).toMatch(/\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{[\s\S]*?width:\s*min\(var\(--sidebar-hover-width, 600px\), 100dvw\)\s*!important;/u);
-
+  it('keeps Keşfet flush left at a balanced width that shrinks with the viewport', () => {
+    expect(mapCss).toContain('--sidebar-hover-width: min(400px, calc(100vw - 20px));');
+    expect(mapCss).toContain('--sidebar-width: min(400px, calc(100vw - 20px));');
+    expect(mapCss).toMatch(/\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{[\s\S]*?width:\s*min\(var\(--sidebar-hover-width, 400px\), 100dvw\)\s*!important;/u);
   });
 
-  it('uses the effective public stylesheet to align the widened Keşfet panel at both viewport edges', () => {
-    expect(publicWorkspaceCss).toContain('--kr-premium-sidebar-width: min(600px, calc(100dvw - 96px));');
+  it('uses the effective public stylesheet to align the full-height Keşfet panel with the viewport', () => {
+    expect(publicWorkspaceCss).toContain('--kr-premium-sidebar-width: min(400px, calc(100dvw - 20px));');
     expect(publicWorkspaceCss).toContain('#app-shell .sidebar-container.kr-sidebar--governed:not(.is-collapsed)');
     expect(publicWorkspaceCss).toContain('position: fixed !important;');
-    expect(publicWorkspaceCss).toContain('top: var(--kr-sidebar-top, var(--mainbar-height)) !important;');
+    expect(publicWorkspaceCss).toContain('top: 0 !important;');
+    expect(publicWorkspaceCss).toContain('padding-block-start: var(--mainbar-height, 66px) !important;');
     expect(publicWorkspaceCss).toContain('left: 0 !important;');
     expect(publicWorkspaceCss).toContain('--kr-sidebar-top: 106px;');
     expect(publicWorkspaceCss).toContain('--kr-sidebar-top: 102px;');
+    expect(publicWorkspaceCss).toContain('.mainbar-container {');
+    expect(publicWorkspaceCss).toContain('top: 0 !important;');
   });
 
   it('zooms to the clicked record geometry and rejects mismatched detail records', () => {
@@ -95,7 +98,8 @@ describe('map experience layout collision contract', () => {
   });
 
   it('keeps the bottom disclaimer panel expanded to the full single-line warning', () => {
-    expect(disclaimerCss).toContain('inline-size: max-content;');
+    expect(disclaimerCss).toContain('inline-size: 100dvw;');
+    expect(disclaimerCss).toContain('width: 100vw;');
     expect(disclaimerCss).toContain('max-inline-size: 100dvw;');
     expect(disclaimerCss).toContain('background: #fff;');
     expect(disclaimerCss).toContain('min-block-size: 46px;');
@@ -104,6 +108,9 @@ describe('map experience layout collision contract', () => {
     expect(disclaimerCss).toContain('overflow: visible;');
     expect(disclaimerCss).toMatch(
       /\.experience-data-disclaimer__copy\s*\{[\s\S]*?flex-wrap:\s*nowrap;[\s\S]*?white-space:\s*nowrap;/u,
+    );
+    expect(disclaimerCss).toMatch(
+      /@media \(max-width: 40rem\)[\s\S]*?\.experience-data-disclaimer\s*\{[\s\S]*?inline-size:\s*100dvw;/u,
     );
     expect(disclaimerCss).toMatch(
       /@media \(max-width: 40rem\)[\s\S]*?\.experience-data-disclaimer__copy\s*\{[\s\S]*?flex-wrap:\s*nowrap;[\s\S]*?white-space:\s*nowrap;/u,
