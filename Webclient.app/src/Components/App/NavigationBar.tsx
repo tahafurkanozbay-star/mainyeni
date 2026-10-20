@@ -12,7 +12,6 @@ export interface NavigationBarProps {
 type SearchFeedback = Readonly<{
   phase: 'idle' | 'loading' | 'success' | 'error';
   message: string;
-  attributionUrl?: string;
 }>;
 
 const EMPTY_FEEDBACK: SearchFeedback = Object.freeze({ phase: 'idle', message: '' });
@@ -45,11 +44,9 @@ export function NavigationBar({ id, onAddressSearch }: NavigationBarProps) {
     try {
       const address = await onAddressSearch(query, controller.signal);
       if (controller.signal.aborted || requestId !== searchSequenceRef.current) return;
-      setFeedback({
-        phase: 'success',
-        message: 'Haritada bulundu: ' + address,
-        attributionUrl: 'https://www.openstreetmap.org/copyright',
-      });
+      // Navigasyon araması sessiz tamamlanır; yalnızca hata durumunda bildirim gösterilir.
+      void address;
+      setFeedback(EMPTY_FEEDBACK);
     } catch (error) {
       if (controller.signal.aborted || requestId !== searchSequenceRef.current) return;
       setFeedback({
@@ -136,9 +133,6 @@ export function NavigationBar({ id, onAddressSearch }: NavigationBarProps) {
               aria-atomic="true"
             >
               <span>{feedback.message}</span>
-              {feedback.attributionUrl ? (
-                <a href={feedback.attributionUrl} target="_blank" rel="noopener noreferrer">© OpenStreetMap katkıcıları</a>
-              ) : null}
             </div>
           ) : null}
         </form>
