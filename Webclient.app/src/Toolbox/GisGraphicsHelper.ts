@@ -56,6 +56,59 @@ const asGraphic = (value: unknown): GraphicLike | null =>
 const asGeometry = (value: unknown): GeometryLike | null =>
   isRecord(value) ? value as GeometryLike : null;
 
+interface GeographicPointCoordinates {
+  readonly longitude: number;
+  readonly latitude: number;
+}
+
+const finiteCoordinate = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const number = Number(value);
+    if (Number.isFinite(number)) return number;
+  }
+  return null;
+};
+
+const isWgs84Coordinate = (longitude: number, latitude: number): boolean =>
+  longitude >= -180 && longitude <= 180 && latitude >= -90 && latitude <= 90;
+
+const getGeographicPointCoordinates = (value: unknown): GeographicPointCoordinates | null => {
+  if (!isRecord(value) || String(value.type ?? '').toLowerCase() !== 'point') return null;
+
+  // The Kent Rehberi adapter returns WGS84 points. Also accept plain GeoJSON
+  // Point objects because some layers expose their row geometry in that form.
+  const coordinates = value.coordinates;
+  if (Array.isArray(coordinates) && coordinates.length >= 2) {
+    const longitude = finiteCoordinate(coordinates[0]);
+    const latitude = finiteCoordinate(coordinates[1]);
+    if (longitude !== null && latitude !== null && isWgs84Coordinate(longitude, latitude)) {
+      return Object.freeze({ longitude, latitude });
+    }
+  }
+
+  const longitude = finiteCoordinate(value.longitude);
+  const latitude = finiteCoordinate(value.latitude);
+  if (longitude !== null && latitude !== null && isWgs84Coordinate(longitude, latitude)) {
+    return Object.freeze({ longitude, latitude });
+  }
+
+  const x = finiteCoordinate(value.x);
+  const y = finiteCoordinate(value.y);
+  const spatialReference = isRecord(value.spatialReference) ? value.spatialReference : null;
+  const wkid = finiteCoordinate(spatialReference?.wkid ?? spatialReference?.latestWkid);
+  if (
+    x !== null
+    && y !== null
+    && (wkid === 4326 || wkid === null)
+    && isWgs84Coordinate(x, y)
+  ) {
+    return Object.freeze({ longitude: x, latitude: y });
+  }
+
+  return null;
+};
+
 const toGraphicArray = (value: unknown): GraphicLike[] => {
   if (Array.isArray(value)) return value.map(asGraphic).filter((item): item is GraphicLike => item !== null);
   const single = asGraphic(value);
@@ -128,6 +181,15 @@ export const GisGraphicsHelper = Object.freeze({
   ): Promise<unknown> | unknown => {
     const mapView = asMapView(mapViewInput);
     if (!mapView?.goTo) return undefined;
+
+    const point = getGeographicPointCoordinates(geometry);
+    if (point) {
+      const center: readonly [number, number] = [point.longitude, point.latitude];
+      return zoomLevel !== null && zoomLevel !== undefined
+        ? mapView.goTo({ center, zoom: zoomLevel })
+        : mapView.goTo(center);
+    }
+
     if (zoomLevel !== null && zoomLevel !== undefined) {
       return mapView.goTo({ target: geometry, zoom: zoomLevel });
     }

@@ -318,7 +318,7 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
     if (!view || view.destroyed) return;
 
     const openPointPopup = (): void => {
-      if (MapManager.GetMapView() !== view || view.destroyed) return;
+      if ((MapManager.GetActiveMapView?.() ?? MapManager.GetMapView()) !== view || view.destroyed) return;
 
       // Render upstream text through textContent rather than treating it as
       // popup markup. The public dataset can contain arbitrary address/name text.
