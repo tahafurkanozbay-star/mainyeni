@@ -36,9 +36,10 @@
 }
 
 .kr-sidebar__group {
+  box-sizing: border-box;
   min-width: 44px;
-  min-height: 44px;
-  padding: 7px;
+  min-height: 54px;
+  padding: 5px 3px;
   border: 1px solid transparent;
   border-radius: 12px;
   background: transparent;
@@ -58,8 +59,8 @@
 .kr-sidebar__group img {
   display: block;
   width: 100%;
-  max-width: 48px;
-  height: 32px;
+  max-width: 60px;
+  height: 40px;
   margin: 0 auto;
   object-fit: contain;
 }
