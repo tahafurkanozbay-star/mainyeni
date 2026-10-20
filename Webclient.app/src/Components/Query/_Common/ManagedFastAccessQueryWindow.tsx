@@ -463,7 +463,29 @@ export function createManagedFastAccessQueryWindow({
       ) {
         return null;
       }
-      return result.data[0] ?? null;
+
+      const detail = result.data[0] ?? null;
+      if (!detail) return null;
+
+      // Some services ignore an unsupported ObjectId filter and return their
+      // first row. Never navigate to a detail record that cannot be tied to
+      // the exact row the user clicked.
+      const selectedId = item.objectId;
+      const returnedId = readAttribute(getRawAttributes(detail), ATTRIBUTE_CANDIDATES.objectId);
+      if (
+        selectedId !== null
+        && selectedId !== undefined
+        && selectedId !== ''
+        && (
+          returnedId === null
+          || returnedId === undefined
+          || String(returnedId) !== String(selectedId)
+        )
+      ) {
+        return null;
+      }
+
+      return detail;
     }, [business]);
 
     const runItemAction = useCallback(async <Result,>(
@@ -496,10 +518,18 @@ export function createManagedFastAccessQueryWindow({
       item,
       'zoom',
       async (signal, isCurrent) => {
-        const detail = await getItemDetails(item, signal);
-        if (!isCurrent()) return null;
-        const geometry = getFeatureGeometry(detail);
-        if (!geometry) throw new Error('Konum bilgisi bulunamadı.');
+        // Prefer geometry carried by the selected list row. This avoids a
+        // second service query accidentally returning another row's geometry.
+        let detail: FastAccessFeature | null = item.raw;
+        let geometry = getFeatureGeometry(item.raw);
+        if (!geometry) {
+          detail = await getItemDetails(item, signal);
+          if (!isCurrent()) return null;
+          geometry = getFeatureGeometry(detail);
+        }
+        if (!geometry) {
+          throw new Error('Seçilen kaydın konumu doğrulanamadı.');
+        }
 
         const activeView = getMapView() ?? mapViewRef.current;
         if (!activeView?.goTo) throw new Error('Harita görünümü hazır değil.');

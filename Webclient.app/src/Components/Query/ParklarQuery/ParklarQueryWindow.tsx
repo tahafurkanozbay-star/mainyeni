@@ -58,6 +58,8 @@ export interface ParkRecord {
   readonly phone: string;
   readonly address: string;
   readonly addressDescription: string;
+  /** Keep the clicked row's geometry; do not depend on a second query for its location. */
+  readonly geometry: GeometryLike | null;
 }
 
 interface ServiceResult {
@@ -203,6 +205,7 @@ export const normalizeParkRecord = (
       ['adres_tarifi', 'ADRES_TARIFI', 'addressDescription'],
       'Adres tarifi bulunmuyor',
     ),
+    geometry: feature.geometry ?? null,
   });
 };
 
@@ -469,7 +472,17 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
       ) {
         throw new Error('Öğe detayları bulunamadı.');
       }
-      return result.data[0];
+
+      const detail = result.data[0];
+      const returnedId = readId(attributesOf(detail));
+      if (
+        returnedId === null
+        || returnedId === undefined
+        || String(returnedId) !== String(objectId)
+      ) {
+        throw new Error('Detay kaydı seçilen park ile eşleşmedi; yanlış konuma gidilmedi.');
+      }
+      return detail;
     }, []);
 
     const showItem = useCallback(async (item: ParkRecord): Promise<void> => {
@@ -481,17 +494,15 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
       );
 
       try {
-        const itemDetails = await getItemDetailsById(item);
+        // Use the geometry already attached to the clicked list row whenever
+        // possible. A detail lookup is only a fallback and must match the row ID.
+        const geometry = item.geometry ?? (await getItemDetailsById(item)).geometry;
         const view = (MapManager.GetActiveMapView?.() ?? mapViewRef.current) as MapViewLike | null;
-        if (!view || !itemDetails.geometry) {
-          throw new Error('Konum bilgisi bulunamadı.');
+        if (!view || !geometry) {
+          throw new Error('Seçilen parkın konumu doğrulanamadı.');
         }
 
-        await Promise.resolve(GisGraphicsHelper.ZoomToGeometry(
-          view,
-          itemDetails.geometry,
-          18,
-        ));
+        await Promise.resolve(GisGraphicsHelper.ZoomToGeometry(view, geometry, 18));
 
         if (window.matchMedia?.('(max-width: 959px)').matches) {
           windowManager.ToggleMinimiseWindow(id);
@@ -503,8 +514,8 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
 
     const showRoute = useCallback(async (item: ParkRecord): Promise<void> => {
       try {
-        const itemDetails = await getItemDetailsById(item);
-        const routeUrl = createParkDirectionsUrl(itemDetails.geometry);
+        const geometry = item.geometry ?? (await getItemDetailsById(item)).geometry;
+        const routeUrl = createParkDirectionsUrl(geometry);
         if (!routeUrl) throw new Error('Koordinat bilgisi bulunamadı.');
         if (!openExternalSafely(routeUrl)) {
           throw new Error('Yol tarifi penceresi açılamadı.');

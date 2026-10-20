@@ -481,8 +481,8 @@ html[data-experience-motion="reduced"] .experience-scene-controls button {
    above the rail and position them in the free map column, including collapsed mode. */
 .esri-map > .common-query-window:not(.common-query-window-right) {
   z-index: var(--experience-z-panel, 30);
-  left: calc(var(--sidebar-hover-width, 520px) + 16px);
-  max-width: min(40vw, calc(100vw - var(--sidebar-hover-width, 520px) - var(--toolbar-width, 0px) - 48px));
+  left: calc(var(--sidebar-hover-width, 560px) + 16px);
+  max-width: min(40vw, calc(100vw - var(--sidebar-hover-width, 560px) - var(--toolbar-width, 0px) - 48px));
 }
 
 .esri-map > .sidebar-container.kr-sidebar--governed.is-collapsed ~ .common-query-window:not(.common-query-window-right) {
@@ -511,7 +511,7 @@ html[data-experience-motion="reduced"] .experience-scene-controls button {
 .esri-map > .sidebar-container1:not(.kr-sidebar) {
   position: absolute;
   top: calc(var(--mainbar-height, 64px) + 12px);
-  left: calc(var(--sidebar-hover-width, 520px) + 12px);
+  left: calc(var(--sidebar-hover-width, 560px) + 12px);
   z-index: var(--experience-z-panel, 30);
   box-sizing: border-box;
   display: flex;
@@ -519,7 +519,7 @@ html[data-experience-motion="reduced"] .experience-scene-controls button {
   align-items: stretch;
   padding: 0;
   overflow: hidden;
-  width: min(var(--sidebar-hover-width, 520px), calc(100vw - var(--sidebar-hover-width, 520px) - var(--toolbar-width, 0px) - 32px));
+  width: min(var(--sidebar-hover-width, 560px), calc(100vw - var(--sidebar-hover-width, 560px) - var(--toolbar-width, 0px) - 32px));
   height: calc(100dvh - var(--mainbar-height, 64px) - 24px);
   max-height: calc(100dvh - var(--mainbar-height, 64px) - 24px);
   min-width: 0;
@@ -528,13 +528,13 @@ html[data-experience-motion="reduced"] .experience-scene-controls button {
 
 .esri-map > .sidebar-container.kr-sidebar--governed:not(.is-collapsed) ~ .sidebar-container:not(.kr-sidebar),
 .esri-map > .sidebar-container.kr-sidebar--governed:not(.is-collapsed) ~ .sidebar-container1:not(.kr-sidebar) {
-  left: calc(var(--sidebar-hover-width, 520px) + 12px);
+  left: calc(var(--sidebar-hover-width, 560px) + 12px);
 }
 
 .esri-map > .sidebar-container.kr-sidebar--governed.is-collapsed ~ .sidebar-container:not(.kr-sidebar),
 .esri-map > .sidebar-container.kr-sidebar--governed.is-collapsed ~ .sidebar-container1:not(.kr-sidebar) {
   left: 80px;
-  width: min(var(--sidebar-hover-width, 520px), calc(100vw - 80px - var(--toolbar-width, 0px) - 32px));
+  width: min(var(--sidebar-hover-width, 560px), calc(100vw - 80px - var(--toolbar-width, 0px) - 32px));
 }
 
 @media (max-width: 780px) {
@@ -550,33 +550,25 @@ html[data-experience-motion="reduced"] .experience-scene-controls button {
 }
 
 
-/* Anchor Keşfet to the same viewport coordinate system as the fixed header.
-   Fixed positioning prevents any map-wrapper offset from creating a gap above
-   the panel while keeping its top edge flush with the header's bottom edge. */
+/* Keşfet is anchored directly below the fixed mainbar, using the same
+   responsive header-height token. Explicit priority prevents legacy sidebar
+   defaults and breakpoint rules from introducing a gap or shrinking the rail. */
 .esri-map > .sidebar-container.kr-sidebar--governed {
-  position: fixed;
-  width: min(var(--sidebar-hover-width, 520px), 100dvw);
-  top: var(--mainbar-height, 60px);
-  inset-block-start: var(--mainbar-height, 60px);
-  left: 0;
-  inset-inline-start: 0;
-  right: auto;
-  inset-inline-end: auto;
-  bottom: 0;
-  inset-block-end: 0;
-  height: auto;
-  max-height: none;
-  margin: 0;
-  margin-inline-start: 0;
+  position: fixed !important;
+  top: var(--mainbar-height, 60px) !important;
+  inset-block-start: var(--mainbar-height, 60px) !important;
+  left: 0 !important;
+  inset-inline-start: 0 !important;
+  right: auto !important;
+  inset-inline-end: auto !important;
+  bottom: 0 !important;
+  inset-block-end: 0 !important;
+  width: min(var(--sidebar-hover-width, 560px), 100dvw) !important;
+  height: auto !important;
+  max-height: none !important;
+  margin: 0 !important;
+  margin-inline-start: 0 !important;
+  box-sizing: border-box !important;
   border-start-start-radius: 0;
   border-end-start-radius: 0;
-}
-
-@media (max-width: 680px) {
-  .esri-map > .sidebar-container.kr-sidebar--governed {
-    top: 58px;
-    inset-block-start: 58px;
-    width: min(var(--sidebar-hover-width, 520px), 100dvw);
-    max-width: 100dvw;
-  }
 }

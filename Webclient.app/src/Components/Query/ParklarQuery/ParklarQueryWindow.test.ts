@@ -20,6 +20,7 @@ describe('ParklarQueryWindow helpers', () => {
       address: 'Çankaya',
       phone: '0312 000 00 00',
       addressDescription: 'Adres tarifi bulunmuyor',
+      geometry: null,
     });
   });
 
@@ -30,6 +31,7 @@ describe('ParklarQueryWindow helpers', () => {
       address: 'Adres bilgisi bulunmuyor',
       phone: '',
       addressDescription: 'Adres tarifi bulunmuyor',
+      geometry: null,
     });
   });
 
