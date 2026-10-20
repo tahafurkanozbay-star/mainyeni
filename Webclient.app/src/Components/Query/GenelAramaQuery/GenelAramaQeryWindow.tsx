@@ -28,6 +28,7 @@ import {
   type GeometryLike,
 } from '../_Common/QueryInteractionRuntime';
 import {
+  getRecordId,
   isTechnicalCategoryLabel,
   normalizeSearchCollection,
   type NormalizedSearchRecord,
@@ -88,6 +89,15 @@ const asDetailRecord = (value: unknown): SearchDetailRecord | null =>
   value !== null && typeof value === 'object'
     ? value as SearchDetailRecord
     : null;
+
+const getRecordGeometry = (value: unknown): GeometryLike | null => {
+  if (value === null || typeof value !== 'object') return null;
+  const record = value as {
+    readonly geometry?: GeometryLike | null;
+    readonly raw?: { readonly geometry?: GeometryLike | null } | null;
+  };
+  return record.geometry ?? record.raw?.geometry ?? null;
+};
 
 const renderHighlightSegments = (
   segments: readonly GeneralSearchHighlightSegmentV10[],
@@ -260,13 +270,13 @@ export const GenelAramaQeryWindow = forwardRef<
 
   const getItemDetails = useCallback(async (
     item: NormalizedSearchRecord,
+    requestId: number,
   ): Promise<SearchDetailRecord | null> => {
     const objectId = normalizeQueryIdentifier(item.id);
     if (objectId === null) {
       throw new Error('Kayıt kimliği bulunamadı.');
     }
 
-    const requestId = detailGateRef.current.next();
     const result: unknown = await GenelAramaQeryBusiness.Query(
       { ObjectId: objectId },
       true,
@@ -288,7 +298,12 @@ export const GenelAramaQeryWindow = forwardRef<
       throw new Error(message);
     }
 
-    return asDetailRecord(result.data[0]);
+    const detail = asDetailRecord(result.data[0]);
+    const returnedId = normalizeQueryIdentifier(getRecordId(detail));
+    if (returnedId === null || String(returnedId) !== String(objectId)) {
+      throw new Error('Detay kaydı seçilen arama sonucuyla eşleşmedi; yanlış konuma gidilmedi.');
+    }
+    return detail;
   }, []);
 
   const showItemOnMap = useCallback(async (
@@ -296,6 +311,7 @@ export const GenelAramaQeryWindow = forwardRef<
   ): Promise<void> => {
     if (!item) return;
 
+    const requestId = detailGateRef.current.next();
     setDetailLoadingKey(item.key);
     setErrorMessage('');
     void safeClientLog(
@@ -305,20 +321,33 @@ export const GenelAramaQeryWindow = forwardRef<
     );
 
     try {
-      const itemDetails = await getItemDetails(item);
-      if (!itemDetails?.geometry) throw new Error('Kayıt için harita konumu bulunamadı.');
+      // Use this row's own geometry first. A fallback detail query must resolve
+      // to the same ID as the selected row before it can drive map navigation.
+      let geometry = getRecordGeometry(item.raw);
+      if (!geometry) {
+        const itemDetails = await getItemDetails(item, requestId);
+        if (!mountedRef.current || !detailGateRef.current.isCurrent(requestId)) return;
+        geometry = getRecordGeometry(itemDetails);
+      }
+
+      if (!mountedRef.current || !detailGateRef.current.isCurrent(requestId)) return;
+      if (!geometry) throw new Error('Seçilen kaydın konumu doğrulanamadı.');
 
       const mapView = MapManager.GetActiveMapView?.() ?? MapManager.GetMapView();
       if (!mapView) throw new Error('Harita görünümü hazır değil.');
 
-      await Promise.resolve(GisGraphicsHelper.ZoomToGeometry(mapView, itemDetails.geometry, 18));
+      await Promise.resolve(GisGraphicsHelper.ZoomToGeometry(mapView, geometry, 18));
+      if (!mountedRef.current || !detailGateRef.current.isCurrent(requestId)) return;
       if (isSmallViewport()) windowManager.ToggleMinimiseWindow(id);
     } catch (error) {
+      if (!mountedRef.current || !detailGateRef.current.isCurrent(requestId)) return;
       const message = normalizeErrorMessage(error, 'Kayıt konumu gösterilemedi.');
       setErrorMessage(message);
       windowManager.ShowMessage(Constants_MessageType.Error, message);
     } finally {
-      if (mountedRef.current) setDetailLoadingKey(null);
+      if (mountedRef.current && detailGateRef.current.isCurrent(requestId)) {
+        setDetailLoadingKey(null);
+      }
     }
   }, [getItemDetails, id, windowManager]);
 
