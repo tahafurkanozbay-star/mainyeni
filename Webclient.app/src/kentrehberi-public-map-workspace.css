@@ -1008,3 +1008,42 @@ body {
   }
   #app-shell .mainbar-container .ns-input { width: 100% !important; }
 }
+
+
+/* Slightly translucent panels across the Kent Rehberi workspace. */
+:root {
+  --kr-premium-glass: rgb(255 255 255 / 91%);
+}
+html[data-experience-theme='dark'] {
+  --kr-premium-glass: rgb(19 39 49 / 91%);
+}
+
+#app-shell .mainbar-container {
+  background: var(--kr-premium-glass) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(1.08) !important;
+  backdrop-filter: blur(14px) saturate(1.08) !important;
+}
+#app-shell .sidebar-container.kr-sidebar {
+  background: var(--kr-premium-glass) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.08) !important;
+  backdrop-filter: blur(18px) saturate(1.08) !important;
+}
+#app-shell .toolbarwidget,
+#app-shell .experience-workspace,
+#app-shell .map-workspace-shell-overlay {
+  background: var(--kr-premium-glass) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(1.08) !important;
+  backdrop-filter: blur(14px) saturate(1.08) !important;
+}
+#app-shell .common-query-window,
+#app-shell .kr-lazy-window {
+  background: color-mix(in srgb, var(--exp-surface, #fff) 94%, transparent) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(1.04);
+  backdrop-filter: blur(12px) saturate(1.04);
+}
+#app-shell .common-query-window-header {
+  background: color-mix(in srgb, var(--exp-surface-2, #f5f9fa) 93%, transparent);
+}
+#app-shell .common-query-window-body {
+  background: color-mix(in srgb, var(--exp-surface, #fff) 94%, transparent);
+}
