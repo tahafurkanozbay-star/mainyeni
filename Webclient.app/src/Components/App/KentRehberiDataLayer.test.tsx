@@ -4,12 +4,13 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { attachKentRehberiGeoJsonLayer } from '../../data-services/kentRehberiGeoJsonLayer';
 import { KentRehberiDataLayer } from './KentRehberiDataLayer';
+import { setKentRehberiMapFilter } from '../../shell/kentRehberiMapFilter';
 
 vi.mock('../../data-services/kentRehberiGeoJsonLayer', () => ({ attachKentRehberiGeoJsonLayer: vi.fn() }));
 const attach = vi.mocked(attachKentRehberiGeoJsonLayer);
 const map = { add: vi.fn(), remove: vi.fn() };
 
-beforeEach(() => { vi.resetAllMocks(); });
+beforeEach(() => { vi.resetAllMocks(); setKentRehberiMapFilter(null); });
 
 describe('primary city data layer', () => {
   it('announces real loaded records and releases its handle on unmount', async () => {
@@ -21,6 +22,19 @@ describe('primary city data layer', () => {
     expect(attach).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ map, signal: expect.any(AbortSignal) }));
     unmount();
     expect(dispose).toHaveBeenCalledOnce();
+  });
+
+  it('applies and clears a shared category filter on the already-loaded overview layer', async () => {
+    const layer: { definitionExpression?: string | null } = {};
+    attach.mockResolvedValue({ layer, featureCount: 12, dispose: vi.fn() });
+    render(<KentRehberiDataLayer map={map} />);
+    await screen.findByText('12 kent kaydı haritaya yüklendi.');
+
+    act(() => setKentRehberiMapFilter({ label: 'Parklar', iconKeys: ['parklar'] }));
+    expect(layer.definitionExpression).toBe("iconKey IN ('parklar')");
+
+    act(() => setKentRehberiMapFilter(null));
+    expect(layer.definitionExpression).toBeNull();
   });
 
   it('offers bounded retries after a failed load without reflecting server error details', async () => {

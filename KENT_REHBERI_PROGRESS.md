@@ -2,6 +2,14 @@
 
 > Bu dosya kısa ve güncel başlangıç kaydıdır. Eski, ayrıntılı durum kayıtlarının tam kopyaları [`progress/archive/`](./progress/archive/) altındadır. Yapısal düzenleme öncesindeki eksiksiz kayıt [`KENT_REHBERI_PROGRESS_ARCHIVE_MAIN_THROUGH_20261019_PRE_STRUCTURE_HYGIENE.md`](./progress/archive/KENT_REHBERI_PROGRESS_ARCHIVE_MAIN_THROUGH_20261019_PRE_STRUCTURE_HYGIENE.md) dosyasında korunur.
 
+## 2026-10-20 — Keşfet kategori filtresi ve ana menüye dönüş
+
+- Güncel `main` tabanı: `212373e7ccaec9cc04a80d174463034e73742b10`; çalışma dalı: `agent/gis-category-filter-20261020-1110-212373e`.
+- Kent Rehberi overview katmanı ilk açılışta filtresizdir; tüm noktalar görünür kalır. Keşfet kurum ve hizmet seçimleri yüklü katmana istemci taraflı `definitionExpression` uygular; başka bir PlanASKI isteği veya katmanı yeniden yükleme gerekmez.
+- Filtre etkin olduğunda `Ana menü` kontrolü görünür. Ana menüye dönüş kurum/görünüm/arama durumunu sıfırlar ve filtreyi kaldırarak tüm noktaları gösterir. Aynı kuruma ikinci kez tıklanınca alt kategori panelinin açık kalması korunur.
+- Regresyon testleri: güvenli filtre ifadesi ve kategori anahtarları; yüklü katmanda filtre uygulama/temizleme; kurum/hizmet seçimi ve ana menüye dönüş.
+- PR/CI/merge sonucu henüz yoktur. Canlı IIS tarayıcısı doğrulanmış değildir.
+
 ## 2026-10-19 — Trafik eklentisi kaldırıldı
 
 - Ücretsiz ve anahtarsız kullanılabildiği doğrulanabilen bir gerçek zamanlı Ankara trafik API'si bulunamadığı için sağ araç çubuğundaki Trafik butonu ve TomTom entegrasyonu tamamen kaldırıldı.
