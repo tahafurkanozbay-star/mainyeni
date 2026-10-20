@@ -34,13 +34,12 @@ const mobileModeBlock = (): string => {
 };
 
 describe('map experience layout collision contract', () => {
-  it('anchors Keşfet to the left edge and bounds it between the header and viewport bottom', () => {
+  it('anchors Keşfet at the left edge directly below the responsive fixed header', () => {
     expect(mapCss).toMatch(
-      /\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{\s*position:\s*fixed;[\s\S]*?top:\s*var\(--mainbar-height, 60px\);[\s\S]*?inset-inline-start:\s*0;[\s\S]*?inset-block-end:\s*0;[\s\S]*?height:\s*auto;/u,
+      /\\.esri-map > \\.sidebar-container\\.kr-sidebar--governed\\s*\\{[\\s\\S]*?position:\\s*fixed !important;[\\s\\S]*?top:\\s*var\\(--mainbar-height, 60px\\) !important;[\\s\\S]*?inset-inline-start:\\s*0 !important;[\\s\\S]*?inset-block-end:\\s*0 !important;/u,
     );
-    expect(mapCss).toMatch(
-      /@media \(max-width: 680px\)[\s\S]*?\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{[\s\S]*?top:\s*58px;[\s\S]*?max-width:\s*100dvw;/u,
-    );
+    expect(navigationCss).toContain(':root{--mainbar-height:58px}');
+    expect(mapCss).toContain('width: min(var(--sidebar-hover-width, 560px), 100dvw) !important;');
   });
 
   it('keeps Keşfet flush to the left edge and widens it without hard-coding a separate mobile size', () => {
@@ -49,12 +48,15 @@ describe('map experience layout collision contract', () => {
     expect(mapCss).toContain('width: min(var(--sidebar-hover-width, 520px), 100dvw);');
   });
 
-  it('uses the currently visible map view for Haritada göster zoom actions', () => {
+  it('zooms to the clicked record geometry and rejects mismatched detail records', () => {
+    expect(fastAccessQuery).toContain('let geometry = getFeatureGeometry(item.raw);');
+    expect(fastAccessQuery).toContain('const returnedId = readAttribute(getRawAttributes(detail), ATTRIBUTE_CANDIDATES.objectId);');
     expect(fastAccessQuery).toContain('MapManager.GetActiveMapView?.() ?? MapManager.GetMapView()');
-    expect(fastAccessQuery).toContain('const activeView = getMapView() ?? mapViewRef.current;');
-    expect(parkQuery).toContain('MapManager.GetActiveMapView?.() ?? mapViewRef.current');
+    expect(parkQuery).toContain('geometry: feature.geometry ?? null');
+    expect(parkQuery).toContain('item.geometry ?? (await getItemDetailsById(item)).geometry');
+    expect(generalSearchQuery).toContain('getRecordGeometry(item.raw)');
+    expect(generalSearchQuery).toContain('String(returnedId) !== String(objectId)');
     expect(generalSearchQuery).toContain('MapManager.GetActiveMapView?.() ?? MapManager.GetMapView()');
-    expect(generalSearchQuery).toContain('await Promise.resolve(GisGraphicsHelper.ZoomToGeometry(mapView, itemDetails.geometry, 18));');
   });
 
   it('does not suppress focus outlines on search inputs or the settings dialog', () => {
