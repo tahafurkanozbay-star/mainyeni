@@ -62,8 +62,12 @@ describe('map experience layout collision contract', () => {
     expect(navigationCss).toContain('backdrop-filter:blur(12px);');
   });
 
-  it('keeps the bottom disclaimer on one full-width line, including compact screens', () => {
+  it('keeps the bottom disclaimer panel wide and tall enough to contain its single-line text', () => {
     expect(disclaimerCss).toContain('inline-size: 100dvw;');
+    expect(disclaimerCss).toContain('min-block-size: 46px;');
+    expect(disclaimerCss).toContain('overflow: hidden;');
+    expect(disclaimerCss).toContain('justify-content: center;');
+    expect(disclaimerCss).toContain('flex: 0 1 auto;');
     expect(disclaimerCss).toMatch(
       /\.experience-data-disclaimer__copy\s*\{[\s\S]*?flex-wrap:\s*nowrap;[\s\S]*?white-space:\s*nowrap;/u,
     );
@@ -167,6 +171,11 @@ describe('map experience layout collision contract', () => {
     expect(bridgeIndex).toBeGreaterThan(mapComponent.indexOf('{mapView && <>'));
     expect(mapComponent).not.toContain('<MapModeExperienceControl />');
     expect(toolbarComponent).toContain('leadingContent={<MapModeExperienceControl embedded />}');
+  });
+
+  it('keeps the global address search optically centered with a small left adjustment', () => {
+    expect(navigationCss).toContain('left:calc(50% - 20px);');
+    expect(navigationCss).toContain('.ns-input{left:calc(50% - 12px);width:min(470px,44vw)}');
   });
 
   it('pins the mainbar flush to the viewport top without inherited spacing or offsets', () => {
