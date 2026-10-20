@@ -110,9 +110,10 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       ]);
       if (disposed || signal.aborted || !mapDiv.current) return;
       accessorWatchRef.current = watchUtils.watch;
-      // The no-key 3D scene uses OpenStreetMap tiles and extruded OSM building footprints.
-      // Omit World Elevation so the default scene does not depend on an Esri credential.
-      const map = new MapCtor({ basemap: 'osm' });
+      // Start without a 2D basemap. The initial view is intentionally hidden while
+      // the local 3D scene is prepared, so loading 2D OSM tiles here only duplicates
+      // work before SceneView becomes active. 2D installs its free basemap on demand.
+      const map = new MapCtor({ basemap: null });
       view = new MapViewCtor(createMapViewOptions({ container: mapDiv.current, map, configuration: mapConfig, viewportWidth: window.innerWidth }));
       await waitForArcgisView(view, { signal, accessorWatch: watchUtils.watch });
       if (disposed || signal.aborted) return;
