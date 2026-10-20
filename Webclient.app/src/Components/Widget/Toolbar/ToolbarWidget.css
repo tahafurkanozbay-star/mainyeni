@@ -23,7 +23,7 @@
   gap: 4px;
   border: 1px solid var(--exp-border);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--exp-surface) 94%, transparent);
+  background: color-mix(in srgb, var(--exp-surface) 86%, transparent);
   box-shadow: var(--exp-shadow-sm);
   backdrop-filter: blur(10px);
   overscroll-behavior: contain;

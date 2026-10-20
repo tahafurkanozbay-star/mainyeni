@@ -3,8 +3,12 @@
 .kr-sidebar.sidebar-container {
   box-sizing: border-box;
   max-width: 100dvw;
-  max-height: 100dvh;
+  max-height: calc(100dvh - var(--mainbar-height, 60px));
   overflow: hidden;
+  background: color-mix(in srgb, var(--exp-surface, #fff) 84%, transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border-right-color: color-mix(in srgb, var(--exp-border, #cbd5e1) 76%, transparent);
 }
 
 .kr-sidebar {
@@ -104,13 +108,13 @@
   text-align: left;
   border: 1px solid rgb(15 23 42 / 9%);
   border-radius: 12px;
-  background: rgb(255 255 255 / 92%);
+  background: color-mix(in srgb, var(--exp-surface, #fff) 84%, transparent);
   box-shadow: 0 2px 8px rgb(15 23 42 / 5%);
 }
 
 .kr-sidebar__item.ns-card:hover {
   border-color: rgb(15 86 110 / 30%);
-  background: #fff;
+  background: color-mix(in srgb, var(--exp-surface, #fff) 92%, transparent);
   box-shadow: 0 6px 16px rgb(15 23 42 / 9%);
 }
 
@@ -549,4 +553,21 @@
     transition-duration: 0.001ms !important;
     animation-duration: 0.001ms !important;
   }
+}
+
+
+/* Keep the existing frosted panel treatment when a service result replaces the
+   discovery list inside the same panel slot. */
+.kr-sidebar--governed .kr-sidebar__tool-slot > .sidebar-container:not(.kr-sidebar),
+.kr-sidebar--governed .kr-sidebar__tool-slot > .sidebar-container1:not(.kr-sidebar),
+.kr-sidebar--governed .kr-sidebar__tool-slot > .kr-fast-query {
+  background: color-mix(in srgb, var(--exp-surface, #fff) 84%, transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+.kr-sidebar--governed .kr-sidebar__tool-slot .common-query-window-header {
+  background: color-mix(in srgb, var(--exp-surface, #fff) 80%, transparent);
+}
+.kr-sidebar--governed .kr-sidebar__tool-slot .common-query-window-body {
+  background: color-mix(in srgb, var(--exp-surface, #fff) 76%, transparent);
 }

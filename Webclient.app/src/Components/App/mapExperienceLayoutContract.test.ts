@@ -13,6 +13,14 @@ const application = readFileSync(resolve(webclientRoot, 'src', 'App.tsx'), 'utf8
 const toolbarComponent = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Widget', 'Toolbar', 'ToolbarWidgetModern.tsx'), 'utf8');
 const toolbarCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Widget', 'Toolbar', 'ToolbarWidget.css'), 'utf8');
 const navigationCss = read('NavigationBar.css');
+const sidebarModernCss = read('SidebarModern.css');
+const attributionCss = read('OpenStreetMap3DAttribution.css');
+const mapModeBridge = read('ExperienceMapModeBridge.tsx');
+const legacySidebarCss = read('Sidebar.css');
+const shellCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-shell.css'), 'utf8');
+const uiCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-ui.css'), 'utf8');
+const workspaceCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-workspace.css'), 'utf8');
+const disclaimerCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-data-disclaimer.css'), 'utf8');
 
 const mobileModeBlock = (): string => {
   const mediaStart = modeCss.indexOf('@media (max-width: 45rem)');
@@ -23,6 +31,57 @@ const mobileModeBlock = (): string => {
 };
 
 describe('map experience layout collision contract', () => {
+  it('anchors Keşfet to the left edge and bounds it between the header and viewport bottom', () => {
+    expect(mapCss).toMatch(
+      /\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{[\s\S]*?inset-inline-start:\s*0;[\s\S]*?inset-block-end:\s*0;[\s\S]*?height:\s*auto;/u,
+    );
+    expect(mapCss).toMatch(
+      /@media \(max-width: 680px\)[\s\S]*?\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{[\s\S]*?top:\s*58px;[\s\S]*?max-width:\s*100dvw;/u,
+    );
+  });
+
+  it('does not suppress focus outlines on search inputs or the settings dialog', () => {
+    expect(uiCss).not.toMatch(/\.ns-input-group input:focus\s*\{[^}]*outline:\s*0;/u);
+    expect(uiCss).not.toMatch(/\.input-group input\s*\{[^}]*outline:\s*0;/u);
+    expect(uiCss).toMatch(/\.ns-input-group input:focus-visible\s*\{[^}]*outline:\s*2px solid/u);
+    expect(uiCss).toMatch(/\.input-group input:focus-visible\s*\{[^}]*outline:\s*2px solid/u);
+    expect(workspaceCss).not.toMatch(/\.experience-settings:focus\s*\{[^}]*outline:\s*none;/u);
+    expect(workspaceCss).toMatch(/\.experience-settings:focus-visible\s*\{[^}]*outline:\s*3px solid/u);
+  });
+
+  it('keeps a visible keyboard focus indicator on legacy sidebar buttons', () => {
+    expect(legacySidebarCss).not.toMatch(/\.sidebar-header button\s*\{[^}]*outline:\s*none;/u);
+    expect(legacySidebarCss).toMatch(/\.sidebar-header button:focus-visible\s*\{[^}]*outline:\s*3px solid/u);
+    expect(legacySidebarCss).toMatch(/@media \(forced-colors: active\)[\s\S]*?\.sidebar-header button:focus-visible\s*\{[^}]*outline-color:\s*Highlight;/u);
+  });
+
+  it('uses translucent frosted surfaces on Keşfet, query windows, and the shell', () => {
+    expect(sidebarModernCss).toContain('background: color-mix(in srgb, var(--exp-surface, #fff) 84%, transparent);');
+    expect(uiCss).toContain('background: color-mix(in srgb, var(--exp-surface) 84%, transparent);');
+    expect(shellCss).toContain('background: color-mix(in srgb, var(--exp-surface) 84%, transparent);');
+    expect(navigationCss).toContain('backdrop-filter:blur(12px);');
+  });
+
+  it('keeps the bottom disclaimer on one full-width line, including compact screens', () => {
+    expect(disclaimerCss).toContain('inline-size: 100dvw;');
+    expect(disclaimerCss).toMatch(
+      /\.experience-data-disclaimer__copy\s*\{[\s\S]*?flex-wrap:\s*nowrap;[\s\S]*?white-space:\s*nowrap;/u,
+    );
+    expect(disclaimerCss).toMatch(
+      /@media \(max-width: 40rem\)[\s\S]*?\.experience-data-disclaimer__copy\s*\{[\s\S]*?flex-wrap:\s*nowrap;[\s\S]*?white-space:\s*nowrap;/u,
+    );
+    expect(disclaimerCss).toMatch(/\.experience-data-disclaimer__icon\s*\{\s*display:\s*none;/u);
+  });
+
+  it('removes the decorative lower-right map badge while preserving OSM credit', () => {
+    expect(attributionCss).toContain('top: calc(var(--mainbar-height, 60px) + 8px);');
+    expect(attributionCss).toContain('bottom: auto;');
+    expect(attributionCss).toContain('background: transparent;');
+    expect(mapModeBridge).toContain('© OpenStreetMap contributors');
+    expect(mapModeBridge).not.toContain('3B bina verisi:');
+  });
+
+
   it('mounts service query results inside the existing Keşfet panel instead of as map siblings', () => {
     const sidebarComponent = read('SidebarModern.tsx');
     const sidebarCss = read('SidebarModern.css');

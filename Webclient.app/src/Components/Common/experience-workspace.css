@@ -331,10 +331,6 @@
   font-family: var(--exp-font-sans);
 }
 
-.experience-settings:focus {
-  outline: none;
-}
-
 .experience-settings:focus-visible {
   outline: 3px solid var(--exp-accent) !important;
   outline-offset: 3px !important;

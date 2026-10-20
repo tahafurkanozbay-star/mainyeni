@@ -608,7 +608,7 @@ export function ExperienceMapModeBridge({
       />
       {sceneHostActive && (
         <div className="osm3d-attribution" role="note" aria-label="OpenStreetMap bina verisi atfı">
-          3B bina verisi: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer noopener">© OpenStreetMap contributors</a>
+          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer noopener">© OpenStreetMap contributors</a>
         </div>
       )}
       {activeMode === '3d' && (
