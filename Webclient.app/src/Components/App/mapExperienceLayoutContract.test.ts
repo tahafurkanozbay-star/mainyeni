@@ -16,6 +16,7 @@ const navigationCss = read('NavigationBar.css');
 const sidebarModernCss = read('SidebarModern.css');
 const attributionCss = read('OpenStreetMap3DAttribution.css');
 const mapModeBridge = read('ExperienceMapModeBridge.tsx');
+const legacySidebarCss = read('Sidebar.css');
 const shellCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-shell.css'), 'utf8');
 const uiCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-ui.css'), 'utf8');
 const disclaimerCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-data-disclaimer.css'), 'utf8');
@@ -36,6 +37,12 @@ describe('map experience layout collision contract', () => {
     expect(mapCss).toMatch(
       /@media \(max-width: 680px\)[\s\S]*?\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{[\s\S]*?top:\s*58px;[\s\S]*?max-width:\s*100dvw;/u,
     );
+  });
+
+  it('keeps a visible keyboard focus indicator on legacy sidebar buttons', () => {
+    expect(legacySidebarCss).not.toMatch(/\.sidebar-header button\s*\{[^}]*outline:\s*none;/u);
+    expect(legacySidebarCss).toMatch(/\.sidebar-header button:focus-visible\s*\{[^}]*outline:\s*3px solid/u);
+    expect(legacySidebarCss).toMatch(/@media \(forced-colors: active\)[\s\S]*?\.sidebar-header button:focus-visible\s*\{[^}]*outline-color:\s*Highlight;/u);
   });
 
   it('uses translucent frosted surfaces on Keşfet, query windows, and the shell', () => {
