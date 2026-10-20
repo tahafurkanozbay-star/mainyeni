@@ -139,7 +139,9 @@ describe('free OpenStreetMap 3D readiness', () => {
     await screen.findByText('Araçlar hazır');
 
     expect(runtime.mapOptions[0]).toMatchObject({ basemap: null });
-    expect((runtime.views[0]?.map as { basemap?: unknown }).basemap).toBe('osm');
+    const initializedView = runtime.views[0];
+    if (!initializedView) throw new Error('MapView was not initialized');
+    expect((initializedView.map as { basemap?: unknown }).basemap).toBe('osm');
     expect(runtime.waitForView).toHaveBeenCalledTimes(2);
   });
 });
