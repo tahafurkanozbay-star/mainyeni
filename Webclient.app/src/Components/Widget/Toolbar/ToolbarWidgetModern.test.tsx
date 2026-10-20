@@ -123,7 +123,7 @@ describe('ToolbarWidgetModern', () => {
     expect(toolbar.getAttribute('aria-describedby')).toBe('map-toolbar-instructions');
     expect(toolbar.querySelectorAll('[data-roving-focus-id]')).toHaveLength(4);
     expect(within(toolbar).getAllByRole('button')).toHaveLength(5);
-    expect(within(toolbar).getAllByRole('radio')).toHaveLength(0);
+    expect(within(toolbar).queryAllByRole('radio')).toHaveLength(0);
     expect(within(toolbar).queryByRole('radiogroup')).not.toBeInTheDocument();
     expect(within(toolbar).getByRole('button', { name: '2B görünümüne geç' })).toHaveTextContent(/^2B$/u);
     expect(toolbar.querySelector('.map-mode-experience--embedded')).toBeInTheDocument();
