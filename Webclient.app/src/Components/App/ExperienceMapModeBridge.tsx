@@ -410,8 +410,10 @@ export function ExperienceMapModeBridge({
         await sceneBasemapRuntimeRef.current?.activate(scene.map as SceneBasemapMap, sceneLifetimeRef.current.signal);
         synchronizeBasemapId(bridge, scene.map);
       } catch (error) {
-        // SceneView stays usable if the keyless OpenStreetMap tile layer is unavailable.
+        // An empty SceneView is visually indistinguishable from a missing map.
+        // Let the existing recovery path dispose it and expose a usable 2D OSM map.
         DebugHelper.Log({ context: 'scene-free-osm-basemap', error });
+        throw error;
       }
       if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
       try {
