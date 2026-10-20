@@ -66,15 +66,51 @@ describe('MapModeExperienceControl', () => {
     expect(screen.getByText('2B harita')).toBeInTheDocument();
   });
 
-  it('renders as a compact group when embedded in the right toolbar', () => {
+  it('renders one compact embedded button whose only visible label is the destination mode', () => {
     render(<MapModeExperienceControl embedded />);
 
-    expect(screen.getByRole('group', { name: 'Harita görünüm modu' })).toHaveClass('map-mode-experience--embedded');
+    const group = screen.getByRole('group', { name: 'Harita görünüm modu' });
+    const toggle = screen.getByRole('button', { name: '2B görünümüne geç' });
+    expect(group).toHaveClass('map-mode-experience--embedded');
     expect(screen.queryByRole('region', { name: 'Harita görünüm modu' })).not.toBeInTheDocument();
-    expect(screen.getByRole('radiogroup', { name: '2B veya 3B görünüm seç' })).toBeInTheDocument();
+    expect(toggle).toHaveTextContent(/^2B$/u);
+    expect(toggle.querySelector('small')).not.toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
   });
 
-  it('keeps mode-switcher arrow keys from triggering the enclosing toolbar navigation', () => {
+  it('toggles the embedded destination label after runtime confirmation and blocks duplicate requests', () => {
+    const modes: string[] = [];
+    const listener = (event: Event): void => {
+      const detail = (event as CustomEvent<ExperienceCommandDetail>).detail;
+      if (detail.mode) modes.push(detail.mode);
+    };
+    window.addEventListener(EXPERIENCE_COMMAND_EVENT, listener as EventListener);
+
+    render(<MapModeExperienceControl embedded />);
+    const twoD = screen.getByRole('button', { name: '2B görünümüne geç' });
+    fireEvent.click(twoD);
+
+    expect(modes).toEqual(['2d']);
+    expect(twoD).toHaveTextContent(/^2B$/u);
+    expect(twoD).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(twoD);
+    expect(modes).toEqual(['2d']);
+
+    dispatchModeChanged('2d');
+    const threeD = screen.getByRole('button', { name: '3B görünümüne geç' });
+    expect(threeD).toHaveTextContent(/^3B$/u);
+    expect(threeD).toHaveAttribute('data-target-mode', '3d');
+
+    fireEvent.click(threeD);
+    expect(modes).toEqual(['2d', '3d']);
+    dispatchModeChanged('3d');
+    expect(screen.getByRole('button', { name: '2B görünümüne geç' })).toHaveTextContent(/^2B$/u);
+
+    window.removeEventListener(EXPERIENCE_COMMAND_EVENT, listener as EventListener);
+  });
+
+  it('keeps navigation keys from leaking out of the single embedded toggle', () => {
     const parentKeyDown = vi.fn();
     render(
       <div onKeyDown={parentKeyDown}>
@@ -82,8 +118,10 @@ describe('MapModeExperienceControl', () => {
       </div>,
     );
 
-    fireEvent.keyDown(get2D(), { key: 'ArrowRight' });
-    expect(document.activeElement).toBe(get3D());
+    const toggle = screen.getByRole('button', { name: '2B görünümüne geç' });
+    toggle.focus();
+    fireEvent.keyDown(toggle, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(toggle);
     expect(parentKeyDown).not.toHaveBeenCalled();
   });
 

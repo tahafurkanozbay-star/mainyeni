@@ -88,12 +88,15 @@ export function MapModeExperienceControl({
   embedded = false,
 }: MapModeExperienceControlProps): ReactNode {
   const ownedModel = useMemo(() => suppliedModel ?? new MapModeExperienceModel({
+    // The production workspace starts in 3D, so the single embedded button
+    // must initially offer the alternate 2B mode even before the bridge publishes.
+    initialMode: embedded ? '3d' : '2d',
     onObserverError(error) {
       runtimeDiagnostics.captureError(error, {
         source: 'experience.map-mode-control.observer',
       }, 'warn');
     },
-  }), [suppliedModel]);
+  }), [embedded, suppliedModel]);
   const model = ownedModel;
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
   const focusModel = useMemo(() => new MapModeFocusModel({
@@ -179,6 +182,14 @@ export function MapModeExperienceControl({
     if (next !== snapshot.currentMode) requestMode(model, next);
   };
 
+  const handleEmbeddedKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>): void => {
+    // This is one toggle, not a two-option keyboard composite. Do not leak
+    // navigation keys into the outer toolbar's roving-focus handler.
+    if (!['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
   return (
     <section
       role={embedded ? 'group' : 'region'}
@@ -195,54 +206,75 @@ export function MapModeExperienceControl({
       data-reduced-motion={String(snapshot.environment.reducedMotion)}
       data-forced-colors={String(snapshot.environment.forcedColors)}
     >
-      <div className="map-mode-experience__header">
-        <span className="map-mode-experience__eyebrow">Görünüm</span>
-        <strong className="map-mode-experience__title">
-          {snapshot.currentMode === '3d' ? '3B sahne' : '2B harita'}
-        </strong>
-      </div>
+      {embedded ? (
+        <button
+          type="button"
+          className="map-mode-experience__mode map-mode-experience__toggle"
+          aria-label={`${snapshot.currentMode === '3d' ? '2B' : '3B'} görünümüne geç`}
+          title={`${snapshot.currentMode === '3d' ? '2B' : '3B'} görünümüne geç`}
+          aria-disabled={interactionDisabled}
+          aria-busy={interactionDisabled}
+          data-target-mode={snapshot.currentMode === '3d' ? '2d' : '3d'}
+          onKeyDown={handleEmbeddedKeyDown}
+          onClick={() => {
+            if (interactionDisabled) return;
+            requestMode(model, snapshot.currentMode === '3d' ? '2d' : '3d');
+          }}
+        >
+          <span aria-hidden="true">{snapshot.currentMode === '3d' ? '2B' : '3B'}</span>
+        </button>
+      ) : (
+        <>
+          <div className="map-mode-experience__header">
+            <span className="map-mode-experience__eyebrow">Görünüm</span>
+            <strong className="map-mode-experience__title">
+              {snapshot.currentMode === '3d' ? '3B sahne' : '2B harita'}
+            </strong>
+          </div>
 
-      <div
-        className="map-mode-experience__switcher"
-        role="radiogroup"
-        aria-label="2B veya 3B görünüm seç"
-        aria-busy={interactionDisabled}
-      >
-        <button
-          ref={mode2DRef}
-          type="button"
-          role="radio"
-          className="map-mode-experience__mode"
-          aria-checked={snapshot.currentMode === '2d'}
-          aria-label="2B harita görünümüne geç"
-          aria-disabled={interactionDisabled}
-          tabIndex={focusSnapshot.tabIndex2D}
-          data-active={snapshot.currentMode === '2d' ? 'true' : 'false'}
-          onFocus={() => focusModel.setFocused('2d')}
-          onKeyDown={handleModeKeyDown}
-          onClick={() => { if (!interactionDisabled) requestMode(model, '2d'); }}
-        >
-          <span aria-hidden="true">2B</span>
-          <small>Harita</small>
-        </button>
-        <button
-          ref={mode3DRef}
-          type="button"
-          role="radio"
-          className="map-mode-experience__mode"
-          aria-checked={snapshot.currentMode === '3d'}
-          aria-label="3B sahne görünümüne geç"
-          aria-disabled={interactionDisabled}
-          tabIndex={focusSnapshot.tabIndex3D}
-          data-active={snapshot.currentMode === '3d' ? 'true' : 'false'}
-          onFocus={() => focusModel.setFocused('3d')}
-          onKeyDown={handleModeKeyDown}
-          onClick={() => { if (!interactionDisabled) requestMode(model, '3d'); }}
-        >
-          <span aria-hidden="true">3B</span>
-          <small>Sahne</small>
-        </button>
-      </div>
+          <div
+            className="map-mode-experience__switcher"
+            role="radiogroup"
+            aria-label="2B veya 3B görünüm seç"
+            aria-busy={interactionDisabled}
+          >
+            <button
+              ref={mode2DRef}
+              type="button"
+              role="radio"
+              className="map-mode-experience__mode"
+              aria-checked={snapshot.currentMode === '2d'}
+              aria-label="2B harita görünümüne geç"
+              aria-disabled={interactionDisabled}
+              tabIndex={focusSnapshot.tabIndex2D}
+              data-active={snapshot.currentMode === '2d' ? 'true' : 'false'}
+              onFocus={() => focusModel.setFocused('2d')}
+              onKeyDown={handleModeKeyDown}
+              onClick={() => { if (!interactionDisabled) requestMode(model, '2d'); }}
+            >
+              <span aria-hidden="true">2B</span>
+              <small>Harita</small>
+            </button>
+            <button
+              ref={mode3DRef}
+              type="button"
+              role="radio"
+              className="map-mode-experience__mode"
+              aria-checked={snapshot.currentMode === '3d'}
+              aria-label="3B sahne görünümüne geç"
+              aria-disabled={interactionDisabled}
+              tabIndex={focusSnapshot.tabIndex3D}
+              data-active={snapshot.currentMode === '3d' ? 'true' : 'false'}
+              onFocus={() => focusModel.setFocused('3d')}
+              onKeyDown={handleModeKeyDown}
+              onClick={() => { if (!interactionDisabled) requestMode(model, '3d'); }}
+            >
+              <span aria-hidden="true">3B</span>
+              <small>Sahne</small>
+            </button>
+          </div>
+        </>
+      )}
 
       <div
         className="map-mode-experience__status-sr"
@@ -259,10 +291,21 @@ export function MapModeExperienceControl({
             <button
               type="button"
               className="map-mode-experience__retry"
+              aria-label={snapshot.requestedMode === '3d' ? '3B görünümü yeniden dene' : '2B görünümü yeniden dene'}
+              title={snapshot.requestedMode === '3d' ? '3B görünümü yeniden dene' : '2B görünümü yeniden dene'}
               onClick={() => retryRequestedMode(model)}
             >
-              {snapshot.requestedMode === '3d' ? '3B görünümü yeniden dene' : '2B görünümü yeniden dene'}
+              {embedded ? <span aria-hidden="true">↻</span> : snapshot.requestedMode === '3d' ? '3B görünümü yeniden dene' : '2B görünümü yeniden dene'}
             </button>
+          ) : embedded ? (
+            <span
+              className="map-mode-experience__limit"
+              role="img"
+              aria-label="Görünüm geçişi için yeniden deneme sınırına ulaşıldı."
+              title="Görünüm geçişi için yeniden deneme sınırına ulaşıldı."
+            >
+              !
+            </span>
           ) : (
             <span className="map-mode-experience__limit">Görünüm geçişi için yeniden deneme sınırına ulaşıldı.</span>
           )}
