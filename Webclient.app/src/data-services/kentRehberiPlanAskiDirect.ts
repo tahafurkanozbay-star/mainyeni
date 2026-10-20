@@ -285,6 +285,144 @@ const readBudgetedJsonText = async (
   }
 };
 
+interface InFlightCategoryResponse {
+  readonly controller: AbortController;
+  promise: Promise<string>;
+  consumers: number;
+  settled: boolean;
+}
+
+const inFlightCategoryResponses = new WeakMap<typeof fetch, Map<number, InFlightCategoryResponse>>();
+
+const abortReason = (signal?: AbortSignal): Error => signal?.reason instanceof Error
+  ? signal.reason
+  : new DOMException('PlanASKI category request was aborted.', 'AbortError');
+
+const removeInFlightCategoryResponse = (
+  fetchImpl: typeof fetch,
+  tur: number,
+  entry: InFlightCategoryResponse,
+): void => {
+  const requests = inFlightCategoryResponses.get(fetchImpl);
+  if (requests?.get(tur) !== entry || entry.consumers !== 0) return;
+  requests.delete(tur);
+  if (requests.size === 0) inFlightCategoryResponses.delete(fetchImpl);
+};
+
+const fetchCategoryResponseBody = async (
+  fetchImpl: typeof fetch,
+  tur: number,
+  signal?: AbortSignal,
+): Promise<{ readonly body: string; readonly release: () => void }> => {
+  signal?.throwIfAborted();
+  let requests = inFlightCategoryResponses.get(fetchImpl);
+  if (!requests) {
+    requests = new Map<number, InFlightCategoryResponse>();
+    inFlightCategoryResponses.set(fetchImpl, requests);
+  }
+
+  let entry = requests.get(tur);
+  if (!entry) {
+    const controller = new AbortController();
+    entry = {
+      controller,
+      promise: Promise.resolve(''),
+      consumers: 0,
+      settled: false,
+    };
+    const currentEntry = entry;
+    currentEntry.promise = (async (): Promise<string> => {
+      const response = await fetchImpl(SOURCE + '?tur=' + String(sourceType(tur)), {
+        method: 'GET',
+        mode: 'cors',
+        credentials: 'omit',
+        cache: 'default',
+        redirect: 'error',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+      controller.signal.throwIfAborted();
+      if (!response.ok) throw new Error('PlanASKI category request failed.');
+      const contentType = response.headers.get('content-type')?.toLowerCase().trim() ?? '';
+      if (!/^application\/json(?:\s*;|$)/u.test(contentType)) {
+        throw new TypeError('PlanASKI returned an unexpected content type.');
+      }
+      const headerLength = response.headers.get('content-length');
+      if (headerLength !== null) {
+        if (!/^\d+$/u.test(headerLength.trim())) {
+          throw new TypeError('PlanASKI returned an invalid content length.');
+        }
+        const statedBytes = Number(headerLength);
+        if (!Number.isSafeInteger(statedBytes) || statedBytes > MAX_BYTES_PER_TYPE) {
+          throw new RangeError('PlanASKI category response exceeded its size budget.');
+        }
+      }
+      return readBudgetedJsonText(response, controller.signal);
+    })();
+    requests.set(tur, currentEntry);
+    const settle = (): void => {
+      currentEntry.settled = true;
+      if (currentEntry.consumers === 0) {
+        removeInFlightCategoryResponse(fetchImpl, tur, currentEntry);
+      }
+    };
+    void currentEntry.promise.then(settle, settle);
+  }
+
+  const sharedEntry = entry;
+  sharedEntry.consumers += 1;
+  let released = false;
+  const release = (): void => {
+    if (released) return;
+    released = true;
+    sharedEntry.consumers = Math.max(0, sharedEntry.consumers - 1);
+    if (sharedEntry.consumers === 0) {
+      if (!sharedEntry.settled) {
+        // Remove before aborting so a new caller can retry immediately rather than
+        // attaching itself to a request that is already being cancelled.
+        removeInFlightCategoryResponse(fetchImpl, tur, sharedEntry);
+        sharedEntry.controller.abort(new DOMException('No active PlanASKI request consumers remain.', 'AbortError'));
+      } else {
+        removeInFlightCategoryResponse(fetchImpl, tur, sharedEntry);
+      }
+    }
+  };
+
+  try {
+    const body = await new Promise<string>((resolve, reject) => {
+      let finished = false;
+      const cleanup = (): void => signal?.removeEventListener('abort', onAbort);
+      const onAbort = (): void => {
+        if (finished) return;
+        finished = true;
+        cleanup();
+        release();
+        reject(abortReason(signal));
+      };
+      if (signal?.aborted) {
+        onAbort();
+        return;
+      }
+      signal?.addEventListener('abort', onAbort, { once: true });
+      sharedEntry.promise.then((value) => {
+        if (finished) return;
+        finished = true;
+        cleanup();
+        resolve(value);
+      }, (error: unknown) => {
+        if (finished) return;
+        finished = true;
+        cleanup();
+        reject(error);
+      });
+    });
+    return { body, release };
+  } catch (error) {
+    release();
+    throw error;
+  }
+};
+
 const fetchType = async (
   tur: number,
   options: KentRehberiFetchOptions,
@@ -294,56 +432,40 @@ const fetchType = async (
   options.signal?.throwIfAborted();
   const cachedBody = readCachedCategoryResponse(fetchImpl, tur);
   let body: string;
+  let releaseInFlight: (() => void) | null = null;
   if (cachedBody !== null) {
     body = cachedBody;
   } else {
-    const response = await fetchImpl(SOURCE + '?tur=' + String(sourceType(tur)), {
-      method: 'GET',
-      mode: 'cors',
-      credentials: 'omit',
-      cache: 'default',
-      redirect: 'error',
-      headers: { Accept: 'application/json' },
-      ...(options.signal ? { signal: options.signal } : {}),
-    });
-    if (!response.ok) throw new Error('PlanASKI category request failed.');
-    const contentType = response.headers.get('content-type')?.toLowerCase().trim() ?? '';
-    if (!/^application\/json(?:\s*;|$)/u.test(contentType)) {
-      throw new TypeError('PlanASKI returned an unexpected content type.');
-    }
-    const headerLength = response.headers.get('content-length');
-    if (headerLength !== null) {
-      if (!/^\d+$/u.test(headerLength.trim())) {
-        throw new TypeError('PlanASKI returned an invalid content length.');
-      }
-      const statedBytes = Number(headerLength);
-      if (!Number.isSafeInteger(statedBytes) || statedBytes > MAX_BYTES_PER_TYPE) {
-        throw new RangeError('PlanASKI category response exceeded its size budget.');
-      }
-    }
-    body = await readBudgetedJsonText(response, options.signal);
+    const sharedResponse = await fetchCategoryResponseBody(fetchImpl, tur, options.signal);
+    body = sharedResponse.body;
+    releaseInFlight = sharedResponse.release;
   }
-  let parsed: unknown;
+
   try {
-    parsed = JSON.parse(body) as unknown;
-  } catch {
-    throw new TypeError('PlanASKI returned invalid JSON.');
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(body) as unknown;
+    } catch {
+      throw new TypeError('PlanASKI returned invalid JSON.');
+    }
+    if (!Array.isArray(parsed) || parsed.length > MAX_ROWS_PER_TYPE) {
+      throw new TypeError('PlanASKI category response is not a bounded array.');
+    }
+    const seen = new Set<number>();
+    const features = parsed.map((row) => {
+      const feature = parseFeature(row, tur);
+      const id = feature.properties.objectid as number;
+      if (seen.has(id)) throw new TypeError('PlanASKI contains a repeated objectid.');
+      seen.add(id);
+      return feature;
+    });
+    options.signal?.throwIfAborted();
+    // Only cache complete, validated success responses; errors never poison cache.
+    if (cachedBody === null) cacheCategoryResponse(fetchImpl, tur, body);
+    return features;
+  } finally {
+    releaseInFlight?.();
   }
-  if (!Array.isArray(parsed) || parsed.length > MAX_ROWS_PER_TYPE) {
-    throw new TypeError('PlanASKI category response is not a bounded array.');
-  }
-  const seen = new Set<number>();
-  const features = parsed.map((row) => {
-    const feature = parseFeature(row, tur);
-    const id = feature.properties.objectid as number;
-    if (seen.has(id)) throw new TypeError('PlanASKI contains a repeated objectid.');
-    seen.add(id);
-    return feature;
-  });
-  options.signal?.throwIfAborted();
-  // Only cache complete, validated success responses; errors never poison cache.
-  if (cachedBody === null) cacheCategoryResponse(fetchImpl, tur, body);
-  return features;
 };
 
 const fetchCategories = async (
