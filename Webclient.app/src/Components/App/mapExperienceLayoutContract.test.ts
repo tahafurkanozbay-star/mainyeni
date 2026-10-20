@@ -36,7 +36,7 @@ const mobileModeBlock = (): string => {
 describe('map experience layout collision contract', () => {
   it('anchors Keşfet to the left edge and bounds it between the header and viewport bottom', () => {
     expect(mapCss).toMatch(
-      /\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{[\s\S]*?inset-inline-start:\s*0;[\s\S]*?inset-block-end:\s*0;[\s\S]*?height:\s*auto;/u,
+      /\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{\s*position:\s*fixed;[\s\S]*?top:\s*var\(--mainbar-height, 60px\);[\s\S]*?inset-inline-start:\s*0;[\s\S]*?inset-block-end:\s*0;[\s\S]*?height:\s*auto;/u,
     );
     expect(mapCss).toMatch(
       /@media \(max-width: 680px\)[\s\S]*?\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{[\s\S]*?top:\s*58px;[\s\S]*?max-width:\s*100dvw;/u,
