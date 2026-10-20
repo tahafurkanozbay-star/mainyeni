@@ -41,12 +41,12 @@ describe('map experience layout collision contract', () => {
   });
 
   it('does not suppress focus outlines on search inputs or the settings dialog', () => {
-    expect(uiCss).not.toMatch(/\\.ns-input-group input:focus\\s*\\{[^}]*outline:\\s*0;/u);
-    expect(uiCss).not.toMatch(/\\.input-group input\\s*\\{[^}]*outline:\\s*0;/u);
-    expect(uiCss).toMatch(/\\.ns-input-group input:focus-visible\\s*\\{[^}]*outline:\\s*2px solid/u);
-    expect(uiCss).toMatch(/\\.input-group input:focus-visible\\s*\\{[^}]*outline:\\s*2px solid/u);
-    expect(workspaceCss).not.toMatch(/\\.experience-settings:focus\\s*\\{[^}]*outline:\\s*none;/u);
-    expect(workspaceCss).toMatch(/\\.experience-settings:focus-visible\\s*\\{[^}]*outline:\\s*3px solid/u);
+    expect(uiCss).not.toMatch(/\.ns-input-group input:focus\s*\{[^}]*outline:\s*0;/u);
+    expect(uiCss).not.toMatch(/\.input-group input\s*\{[^}]*outline:\s*0;/u);
+    expect(uiCss).toMatch(/\.ns-input-group input:focus-visible\s*\{[^}]*outline:\s*2px solid/u);
+    expect(uiCss).toMatch(/\.input-group input:focus-visible\s*\{[^}]*outline:\s*2px solid/u);
+    expect(workspaceCss).not.toMatch(/\.experience-settings:focus\s*\{[^}]*outline:\s*none;/u);
+    expect(workspaceCss).toMatch(/\.experience-settings:focus-visible\s*\{[^}]*outline:\s*3px solid/u);
   });
 
   it('keeps a visible keyboard focus indicator on legacy sidebar buttons', () => {
