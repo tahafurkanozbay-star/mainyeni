@@ -435,6 +435,8 @@ export function ExperienceMapModeBridge({
       DebugHelper.Log(error);
       osmBuildingsRuntimeRef.current?.deactivate();
       sceneBasemapRuntimeRef.current?.restore(mapView.map as SceneBasemapMap);
+      const sharedMap = mapView.map as { basemap?: unknown } | null;
+      if (sharedMap && !sharedMap.basemap) sharedMap.basemap = 'osm';
       synchronizeBasemapId(bridge, mapView.map);
       sceneExperienceRef.current?.setActive(false);
       setSceneHostActive(false);
