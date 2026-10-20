@@ -24,6 +24,7 @@ const shellCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Commo
 const uiCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-ui.css'), 'utf8');
 const workspaceCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-workspace.css'), 'utf8');
 const disclaimerCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-data-disclaimer.css'), 'utf8');
+const publicWorkspaceCss = readFileSync(resolve(webclientRoot, 'src', 'kentrehberi-public-map-workspace.css'), 'utf8');
 
 const mobileModeBlock = (): string => {
   const mediaStart = modeCss.indexOf('@media (max-width: 45rem)');
@@ -81,20 +82,28 @@ describe('map experience layout collision contract', () => {
     expect(navigationCss).toContain('backdrop-filter:blur(12px);');
   });
 
-  it('keeps the bottom disclaimer panel wide and tall enough to contain its single-line text', () => {
-    expect(disclaimerCss).toContain('inline-size: 100dvw;');
+  it('keeps the bottom disclaimer panel wide enough to wrap rather than clip its warning text', () => {
+    expect(disclaimerCss).toContain('inline-size: min(680px, calc(100dvw - 24px));');
     expect(disclaimerCss).toContain('min-block-size: 46px;');
-    expect(disclaimerCss).toContain('flex: 1 1 0%;');
-    expect(disclaimerCss).toContain('inline-size: auto;');
+    expect(disclaimerCss).toContain('flex: 1 1 auto;');
+    expect(disclaimerCss).toContain('inline-size: 100%;');
     expect(disclaimerCss).toContain('overflow: visible;');
-    expect(disclaimerCss).toContain('flex: 0 0 auto;');
+    expect(disclaimerCss).toContain('flex: 0 1 auto;');
     expect(disclaimerCss).toMatch(
-      /\.experience-data-disclaimer__copy\s*\{[\s\S]*?flex-wrap:\s*nowrap;[\s\S]*?white-space:\s*nowrap;/u,
+      /\.experience-data-disclaimer__copy\s*\{[\s\S]*?flex-wrap:\s*wrap;[\s\S]*?white-space:\s*normal;/u,
     );
     expect(disclaimerCss).toMatch(
-      /@media \(max-width: 40rem\)[\s\S]*?\.experience-data-disclaimer__copy\s*\{[\s\S]*?flex-wrap:\s*nowrap;[\s\S]*?white-space:\s*nowrap;/u,
+      /@media \(max-width: 40rem\)[\s\S]*?\.experience-data-disclaimer__copy\s*\{[\s\S]*?flex-wrap:\s*wrap;[\s\S]*?white-space:\s*normal;/u,
     );
     expect(disclaimerCss).toMatch(/\.experience-data-disclaimer__icon\s*\{\s*display:\s*none;/u);
+  });
+
+  it('applies subtle translucent glass to the fixed header, sidebar, map tools, and managed windows', () => {
+    expect(publicWorkspaceCss).toContain('--kr-premium-glass: rgb(255 255 255 / 91%);');
+    expect(publicWorkspaceCss).toContain('--kr-premium-glass: rgb(19 39 49 / 91%);');
+    expect(publicWorkspaceCss).toContain('#app-shell .mainbar-container {');
+    expect(publicWorkspaceCss).toContain('backdrop-filter: blur(14px) saturate(1.08) !important;');
+    expect(publicWorkspaceCss).toContain('color-mix(in srgb, var(--exp-surface, #fff) 94%, transparent) !important;');
   });
 
   it('removes the decorative lower-right map badge while preserving OSM credit', () => {
