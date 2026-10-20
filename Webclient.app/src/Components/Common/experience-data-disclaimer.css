@@ -74,10 +74,10 @@
 }
 
 html[data-exp-viewport='compact'] .experience-data-disclaimer {
-  inset-inline-start: 12px;
+  inset-inline-start: 0;
   inset-inline-end: auto;
-  inline-size: min(680px, calc(100dvw - 24px));
-  max-inline-size: min(680px, calc(100dvw - 24px));
+  inline-size: max-content;
+  max-inline-size: 100dvw;
   transform: none;
 }
 
@@ -124,7 +124,7 @@ html[data-exp-motion='reduced'] .experience-data-disclaimer {
     max-inline-size: 100dvw;
     gap: 0;
     padding: 0.38rem 0.5rem 0.34rem;
-    font-size: clamp(0.58rem, 2.05vw, 0.72rem);
+    font-size: clamp(0.48rem, 2.05vw, 0.72rem);
     align-items: center;
   }
 
