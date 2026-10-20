@@ -53,7 +53,7 @@ describe('map experience layout collision contract', () => {
     expect(disclaimerCss).toMatch(
       /@media \(max-width: 40rem\)[\s\S]*?\.experience-data-disclaimer__copy\s*\{[\s\S]*?flex-wrap:\s*nowrap;[\s\S]*?white-space:\s*nowrap;/u,
     );
-    expect(disclaimerCss).toContain('.experience-data-disclaimer__icon {\\n    display: none;');
+    expect(disclaimerCss).toMatch(/\.experience-data-disclaimer__icon\s*\{\s*display:\s*none;/u);
   });
 
   it('removes the decorative lower-right map badge while preserving OSM credit', () => {
