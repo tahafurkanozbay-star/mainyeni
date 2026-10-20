@@ -146,9 +146,9 @@ body {
 }
 
 #app-shell .mainbar-logo {
-  width: 54px;
-  height: 48px;
-  flex: 0 0 54px;
+  width: 68px;
+  height: 56px;
+  flex: 0 0 68px;
   display: grid;
   place-items: center;
   border: 1px solid var(--exp-border);
@@ -158,8 +158,8 @@ body {
 }
 
 #app-shell .mainbar-logo img {
-  max-width: 44px;
-  max-height: 38px;
+  max-width: 56px;
+  max-height: 46px;
   object-fit: contain;
 }
 
@@ -357,8 +357,8 @@ body {
 }
 
 #app-shell .kr-sidebar .kr-sidebar__group img {
-  max-width: 34px;
-  max-height: 30px;
+  max-width: 48px;
+  max-height: 36px;
   object-fit: contain;
 }
 
@@ -655,15 +655,15 @@ body {
   }
 
   #app-shell .mainbar-logo {
-    width: 42px;
+    width: 46px;
     height: 36px;
-    flex-basis: 42px;
+    flex-basis: 46px;
     border-radius: 10px;
   }
 
   #app-shell .mainbar-logo img {
-    max-width: 36px;
-    max-height: 30px;
+    max-width: 40px;
+    max-height: 32px;
   }
 
   #app-shell .mainbar-text {
@@ -764,9 +764,14 @@ body {
   }
 
   #app-shell .mainbar-logo {
-    width: 38px;
+    width: 44px;
     height: 32px;
-    flex-basis: 38px;
+    flex-basis: 44px;
+  }
+
+  #app-shell .mainbar-logo img {
+    max-width: 38px;
+    max-height: 28px;
   }
 
   #app-shell .mainbar-text {
