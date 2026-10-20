@@ -36,7 +36,7 @@ const mobileModeBlock = (): string => {
 describe('map experience layout collision contract', () => {
   it('anchors Keşfet at the left edge directly below the responsive fixed header', () => {
     expect(mapCss).toMatch(
-      /\\.esri-map > \\.sidebar-container\\.kr-sidebar--governed\\s*\\{[\\s\\S]*?position:\\s*fixed !important;[\\s\\S]*?top:\\s*var\\(--mainbar-height, 60px\\) !important;[\\s\\S]*?inset-inline-start:\\s*0 !important;[\\s\\S]*?inset-block-end:\\s*0 !important;/u,
+      /\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{[\s\S]*?position:\s*fixed !important;[\s\S]*?top:\s*var\(--mainbar-height, 60px\) !important;[\s\S]*?inset-inline-start:\s*0 !important;[\s\S]*?inset-block-end:\s*0 !important;/u,
     );
     expect(navigationCss).toContain(':root{--mainbar-height:58px}');
     expect(mapCss).toContain('width: min(var(--sidebar-hover-width, 560px), 100dvw) !important;');
@@ -44,7 +44,7 @@ describe('map experience layout collision contract', () => {
 
   it('keeps Keşfet flush to the left edge and widens it without hard-coding a separate mobile size', () => {
     expect(legacySidebarCss).toMatch(/--sidebar-hover-width:\s*560px;/u);
-    expect(mapCss).toMatch(/\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{[\s\S]*?width:\s*min\(var\(--sidebar-hover-width, 560px\), 100dvw\);[\s\S]*?inset-inline-start:\s*0;/u);
+    expect(mapCss).toMatch(/\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{[\s\S]*?width:\s*min\(var\(--sidebar-hover-width, 560px\), 100dvw\)\s*!important;/u);
     expect(mapCss).toContain('width: min(var(--sidebar-hover-width, 560px), 100dvw);');
   });
 
