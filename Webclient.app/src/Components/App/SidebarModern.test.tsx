@@ -144,7 +144,7 @@ describe('SidebarModern governed interaction integration', () => {
     expect(groups[0]).toHaveAttribute('title', 'Ankara Büyükşehir Belediyesi');
   });
 
-  it('filters points by institution and restores all points from the main menu', async () => {
+  it('clears the institution map filter from beside the selected category without leaving the list', async () => {
     const user = userEvent.setup();
     renderSidebar();
 
@@ -154,27 +154,26 @@ describe('SidebarModern governed interaction integration', () => {
     const selected = getKentRehberiMapFilterSnapshot();
     expect(selected.label).toBe('EGO Genel Müdürlüğü');
     expect(selected.iconKeys).not.toBeNull();
-    expect(selected.iconKeys?.length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Ana menüye dön; tüm noktaları göster' })).toBeInTheDocument();
+    expect(screen.getByText('Haritada yalnızca')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tüm noktaları göster' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Ana menüye dön; tüm noktaları göster' }));
+    await user.click(screen.getByRole('button', { name: 'Tüm noktaları göster' }));
     expect(getKentRehberiMapFilterSnapshot().iconKeys).toBeNull();
-    expect(screen.getByRole('list', { name: 'Tüm kent servisleri hizmet listesi' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Ana menüye dön; tüm noktaları göster' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'EGO Genel Müdürlüğü' })).toBeInTheDocument();
+    expect(serviceButton('Metro Hattı')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Tüm noktaları göster' })).not.toBeInTheDocument();
   });
 
-  it('filters points by selected service and restores all points from the main menu', async () => {
+  it('clears the selected service map filter with one click without resetting navigation', async () => {
     const user = userEvent.setup();
     renderSidebar();
 
     await user.click(serviceButton('Parklar'));
-    const selected = getKentRehberiMapFilterSnapshot();
-    expect(selected.label).toBe('Parklar');
-    expect(selected.iconKeys).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Ana menüye dön; tüm noktaları göster' })).toBeInTheDocument();
+    expect(getKentRehberiMapFilterSnapshot().label).toBe('Parklar');
+    await user.click(screen.getByRole('button', { name: 'Tüm noktaları göster' }));
 
-    await user.click(screen.getByRole('button', { name: 'Ana menüye dön; tüm noktaları göster' }));
     expect(getKentRehberiMapFilterSnapshot().iconKeys).toBeNull();
+    expect(screen.getByRole('list', { name: 'Tüm kent servisleri hizmet listesi' })).toBeInTheDocument();
   });
 
   it('resolves institution logos relative to the configured app base path', () => {
@@ -482,7 +481,7 @@ describe('SidebarModern governed interaction integration', () => {
     expect(screen.queryByRole('button', { name: 'Parklar sorgusunu aç' })).not.toBeInTheDocument();
   });
 
-  it('keeps the selected institution and its subcategory list open when the same main category is clicked again', async () => {
+  it('toggles the active institution map filter off while keeping its subcategory list open', async () => {
     const user = userEvent.setup();
     const { ShowWindow } = renderSidebar();
     const sidebar = screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' });
@@ -490,14 +489,15 @@ describe('SidebarModern governed interaction integration', () => {
 
     await user.click(ego);
     expect(ego).toHaveAttribute('aria-pressed', 'true');
+    expect(getKentRehberiMapFilterSnapshot().label).toBe('EGO Genel Müdürlüğü');
     expect(screen.getByText('8 hizmet')).toBeInTheDocument();
-    expect(screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).toBe(sidebar);
 
     await user.click(ego);
     expect(ego).toHaveAttribute('aria-pressed', 'true');
+    expect(getKentRehberiMapFilterSnapshot().iconKeys).toBeNull();
     expect(screen.getByText('8 hizmet')).toBeInTheDocument();
     expect(screen.queryByText('40 hizmet')).not.toBeInTheDocument();
-    expect(screen.getAllByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).toHaveLength(1);
+    expect(screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).toBe(sidebar);
     expect(ShowWindow).not.toHaveBeenCalled();
   });
 

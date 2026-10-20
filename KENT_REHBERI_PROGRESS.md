@@ -2,6 +2,13 @@
 
 > Bu dosya kısa ve güncel başlangıç kaydıdır. Eski, ayrıntılı durum kayıtlarının tam kopyaları [`progress/archive/`](./progress/archive/) altındadır. Yapısal düzenleme öncesindeki eksiksiz kayıt [`KENT_REHBERI_PROGRESS_ARCHIVE_MAIN_THROUGH_20261019_PRE_STRUCTURE_HYGIENE.md`](./progress/archive/KENT_REHBERI_PROGRESS_ARCHIVE_MAIN_THROUGH_20261019_PRE_STRUCTURE_HYGIENE.md) dosyasında korunur.
 
+## 2026-10-20 — Keşfet filtre temizleme UX iyileştirmesi
+
+- Güncel `main` tabanı: `70d37031c421e1558fd0df974a344b2eb35b39bb`; dal: `agent/keşfet-map-filter-clear-ux-20261020`.
+- Önceki üst başlıktaki genel `Ana Menü` düğmesi yerine kurum logolarının hemen altında, filtrelenen kurum/hizmet adını gösteren bağlamsal bir satır ve `Tüm noktalar` düğmesi bulunur.
+- Düğme sadece harita filtresini temizler; seçili kurumun alt kategori listesini açık bırakır. Seçili kurum logosuna tekrar tıklamak da harita filtresini kapatır; alt kategori listesi kapanmaz ve sonraki tıklama filtreyi yeniden uygular.
+- PR #576 güncel taban üzerinde doğrulanıyor. Canlı IIS tarayıcı testi yapılmış değildir.
+
 ## 2026-10-20 — Keşfet kategori filtresi ve ana menüye dönüş
 
 - Güncel `main` tabanı: `212373e7ccaec9cc04a80d174463034e73742b10`; çalışma dalı: `agent/gis-category-filter-20261020-1110-212373e`.
