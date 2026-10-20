@@ -81,7 +81,8 @@ export class IndexedDbPlanAskiCategoryCacheStore implements PlanAskiCategoryCach
     if (!database) return null;
     try {
       const transaction = database.transaction(CACHE_STORE_NAME, 'readonly');
-      return await requestResult(transaction.objectStore(CACHE_STORE_NAME).get(tur)) as unknown ?? null;
+      const result: unknown = await requestResult(transaction.objectStore(CACHE_STORE_NAME).get(tur));
+      return result ?? null;
     } catch {
       return null;
     }
@@ -134,7 +135,7 @@ export class IndexedDbPlanAskiCategoryCacheStore implements PlanAskiCategoryCach
   async #openDatabase(): Promise<IDBDatabase | null> {
     if (typeof indexedDB === 'undefined') return null;
     if (this.#databasePromise) return this.#databasePromise;
-    this.#databasePromise = new Promise<IDBDatabase | null>((resolve) => {
+    const opening = new Promise<IDBDatabase | null>((resolve) => {
       let settled = false;
       const finish = (database: IDBDatabase | null): void => {
         if (settled) {
@@ -163,7 +164,14 @@ export class IndexedDbPlanAskiCategoryCacheStore implements PlanAskiCategoryCach
         finish(null);
       }
     });
-    return this.#databasePromise;
+    let shared: Promise<IDBDatabase | null>;
+    shared = opening.then((database) => {
+      // Do not permanently disable persistence if the first open was transiently blocked.
+      if (!database && this.#databasePromise === shared) this.#databasePromise = undefined;
+      return database;
+    });
+    this.#databasePromise = shared;
+    return shared;
   }
 }
 
