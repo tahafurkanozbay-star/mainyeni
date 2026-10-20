@@ -4,10 +4,10 @@
 
 ## 2026-10-20 — Keşfet filtre temizleme UX iyileştirmesi
 
-- Güncel `main` tabanı: `70d37031c421e1558fd0df974a344b2eb35b39bb`; dal: `agent/keşfet-map-filter-clear-ux-20261020`.
+- Birleştirme öncesi güncel `main` tabanı: `70d37031c421e1558fd0df974a344b2eb35b39bb`; dal: `agent/keşfet-map-filter-clear-ux-20261020`.
 - Önceki üst başlıktaki genel `Ana Menü` düğmesi yerine kurum logolarının hemen altında, filtrelenen kurum/hizmet adını gösteren bağlamsal bir satır ve `Tüm noktalar` düğmesi bulunur.
 - Düğme sadece harita filtresini temizler; seçili kurumun alt kategori listesini açık bırakır. Seçili kurum logosuna tekrar tıklamak da harita filtresini kapatır; alt kategori listesi kapanmaz ve sonraki tıklama filtreyi yeniden uygular.
-- PR #576 güncel taban üzerinde doğrulanıyor. Canlı IIS tarayıcı testi yapılmış değildir.
+- [PR #576](https://github.com/tahafurkanozbay-star/mainyeni/pull/576) 20 Ekim 2026 tarihinde birleştirildi; merge commit: `eb674234c93740582e03492040ef4940e7a18434`. Exact-head zorunlu CI kontrollerinin tümü başarılı: Webclient Quality (tam Vitest ve exact-base regresyon kapıları, üretim derlemesi, bütünlük ve bütçe kontrolleri), Release QA, Typed Source Boundary, Platform Architecture Audit ve Platform Dependency Governance. Canlı IIS/üretim tarayıcısı doğrulanmadı.
 
 ## 2026-10-20 — Keşfet kategori filtresi ve ana menüye dönüş
 
