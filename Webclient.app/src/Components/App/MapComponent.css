@@ -548,3 +548,34 @@ html[data-experience-motion="reduced"] .experience-scene-controls button {
     max-height: calc(100dvh - var(--mainbar-height, 64px) - 18px);
   }
 }
+
+
+/* The governed Keşfet rail uses the viewport edge as its anchor. The generic
+   legacy sidebar has no explicit left edge and a 100% height, which can create
+   an inset and extend the panel below the viewport after the header offset. */
+.esri-map > .sidebar-container.kr-sidebar--governed {
+  position: absolute;
+  top: var(--mainbar-height, 60px);
+  inset-block-start: var(--mainbar-height, 60px);
+  left: 0;
+  inset-inline-start: 0;
+  right: auto;
+  inset-inline-end: auto;
+  bottom: 0;
+  inset-block-end: 0;
+  height: auto;
+  max-height: none;
+  margin: 0;
+  margin-inline-start: 0;
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+}
+
+@media (max-width: 680px) {
+  .esri-map > .sidebar-container.kr-sidebar--governed {
+    top: 58px;
+    inset-block-start: 58px;
+    width: min(470px, 100dvw);
+    max-width: 100dvw;
+  }
+}
