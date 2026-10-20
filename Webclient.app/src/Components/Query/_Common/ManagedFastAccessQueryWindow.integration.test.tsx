@@ -68,26 +68,21 @@ describe('shared service result window ownership and usability', () => {
     expect(screen.getByRole('button', { name: longTitle + ' — Haritada göster' })).toBeEnabled();
   });
 
-  it('preserves results across controlled minimize and expand', async () => {
-    const { ref, Window, manager, rerender } = setup();
+  it('uses “Hizmetlere dön” as the only service-window navigation control', async () => {
+    const { ref } = setup();
     await act(async () => { await ref.current!.OnShow(); });
-    fireEvent.click(screen.getByRole('button', { name: 'Sonuçları küçült' }));
-    expect(manager.ToggleMinimiseWindow).toHaveBeenCalledExactlyOnceWith('service-window');
-    manager.IsMinimized.mockReturnValue(true);
-    rerender(<Window id="service-window" windowManager={manager} ref={ref} />);
-    expect(screen.getByRole('region', { name: 'Merkezler' })).toHaveAttribute('data-minimized', 'true');
-    expect(screen.getByRole('button', { name: 'Sonuçları genişlet' })).toHaveAttribute('aria-expanded', 'false');
-    manager.IsMinimized.mockReturnValue(false);
-    rerender(<Window id="service-window" windowManager={manager} ref={ref} />);
-    expect(screen.getByRole('heading', { name: 'Merkez 1' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Sonuçları küçült' })).toHaveAttribute('aria-expanded', 'true');
+
+    expect(screen.getByRole('button', { name: 'Hizmetlere dön' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sonuçları küçült' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sonuçları genişlet' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Merkezler penceresini kapat' })).not.toBeInTheDocument();
   });
-  it.each(['Hizmetlere dön', 'Merkezler penceresini kapat'])('closes the result window, clears the map filter and returns to services with %s', (label) => {
+  it('returns to services and clears the map filter through “Hizmetlere dön”', () => {
     const { manager } = setup();
     setKentRehberiMapFilter({ label: 'EGO Genel Müdürlüğü', iconKeys: ['ego_metro'] });
     expect(getKentRehberiMapFilterSnapshot().iconKeys).not.toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: label }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hizmetlere dön' }));
 
     expect(manager.HideWindow).toHaveBeenCalledExactlyOnceWith('service-window');
     expect(manager.ShowWindow).toHaveBeenCalledExactlyOnceWith('sidebar');

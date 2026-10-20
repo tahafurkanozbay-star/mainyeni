@@ -12,7 +12,7 @@
 
 .kr-fast-query__header {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) 44px 44px;
+  grid-template-columns: 38px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   min-height: 62px;
@@ -31,8 +31,6 @@
   font-weight: 700;
 }
 
-.kr-fast-query__close,
-.kr-fast-query__minimize,
 .kr-fast-query__back,
 .kr-fast-query__actions button,
 .kr-fast-query__more {
@@ -44,16 +42,6 @@
   color: inherit;
   font: inherit;
   cursor: pointer;
-}
-
-.kr-fast-query__close,
-.kr-fast-query__minimize {
-  width: 44px;
-  padding: 0;
-  font-size: 24px;
-  line-height: 1;
-  display: inline-grid;
-  place-items: center;
 }
 
 .kr-fast-query__toolbar {
@@ -205,8 +193,6 @@
 
 .kr-fast-query__actions button:hover,
 .kr-fast-query__back:hover,
-.kr-fast-query__close:hover,
-.kr-fast-query__minimize:hover,
 .kr-fast-query__more:hover {
   border-color: rgb(15 86 110 / 36%);
   background: rgb(15 86 110 / 7%);
@@ -225,8 +211,6 @@
 
 [data-experience-theme="dark"] .kr-fast-query,
 [data-experience-theme="dark"] .kr-fast-query__filter input,
-[data-experience-theme="dark"] .kr-fast-query__close,
-[data-experience-theme="dark"] .kr-fast-query__minimize,
 [data-experience-theme="dark"] .kr-fast-query__back,
 [data-experience-theme="dark"] .kr-fast-query__actions button,
 [data-experience-theme="dark"] .kr-fast-query__more,
@@ -270,8 +254,6 @@
 @media (forced-colors: active) {
   .kr-fast-query,
   .kr-fast-query__item,
-  .kr-fast-query__close,
-  .kr-fast-query__minimize,
   .kr-fast-query__back,
   .kr-fast-query__actions button,
   .kr-fast-query__more,
