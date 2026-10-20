@@ -40,7 +40,7 @@ describe('NavigationBar', () => {
     expect(homeLink).toHaveTextContent('KENT REHBERİ');
   });
 
-  it('submits the trimmed address to the address geocoder instead of the legacy category query', async () => {
+  it('submits the address to the existing map geocoder without redirecting to Google Maps', async () => {
     const user = userEvent.setup();
     const onAddressSearch = createAddressSearch();
     render(<NavigationBar onAddressSearch={onAddressSearch} />);
@@ -51,15 +51,28 @@ describe('NavigationBar', () => {
     expect(onAddressSearch).toHaveBeenCalledTimes(1);
     expect(onAddressSearch.mock.calls[0]?.[0]).toBe('Kızılay');
     expect(onAddressSearch.mock.calls[0]?.[1]).toBeInstanceOf(AbortSignal);
-    expect(await screen.findByText('Bulundu: Kızılay, Çankaya, Ankara')).toBeInTheDocument();
-    const googleMapsLink = screen.getByRole('link', { name: 'Google Haritalar’da adresi aç' });
-    expect(googleMapsLink).toHaveAttribute(
+    expect(await screen.findByText('Haritada bulundu: Kızılay, Çankaya, Ankara')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Google Haritalar/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '© OpenStreetMap katkıcıları' })).toHaveAttribute(
       'href',
-      'https://www.google.com/maps/search/?api=1&query=K%C4%B1z%C4%B1lay',
+      'https://www.openstreetmap.org/copyright',
     );
-    expect(googleMapsLink).toHaveAttribute('target', '_blank');
-    expect(googleMapsLink).toHaveAttribute('rel', 'noopener noreferrer');
     expect(screen.queryByText(/Kategori\s+\d+/i)).not.toBeInTheDocument();
+  });
+
+
+  it('does not offer an external map redirect when an address cannot be found', async () => {
+    const user = userEvent.setup();
+    const onAddressSearch = vi.fn(async () => {
+      throw new Error('Adres bulunamadı. Daha açık bir adres deneyin.');
+    });
+    render(<NavigationBar onAddressSearch={onAddressSearch} />);
+
+    await user.type(getSearchInput(), 'Bilinmeyen yer');
+    await user.click(screen.getByRole('button', { name: 'Adres aramasını başlat' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Adres bulunamadı');
+    expect(screen.queryByRole('link', { name: /Google Haritalar/i })).not.toBeInTheDocument();
   });
 
   it('does not submit whitespace-only input', async () => {
