@@ -142,7 +142,7 @@ describe('global address search map selection', () => {
     expect(runtime.graphics).toHaveLength(1);
     expect(runtime.graphics[0]).toMatchObject({
       geometry: { type: 'point', longitude: 32.8542, latitude: 39.9209 },
-      symbol: { type: 'picture-marker', width: '36px', height: '44px' },
+      symbol: { type: 'simple-marker', style: 'path', color: '#c62828' },
       attributes: { address: 'Kızılay Meydanı, Çankaya, Ankara, Türkiye' },
     });
     expect(runtime.goToCalls).toContainEqual({
