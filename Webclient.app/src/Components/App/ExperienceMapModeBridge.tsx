@@ -273,8 +273,28 @@ export function ExperienceMapModeBridge({
     sceneNavigationHomeSetRef.current = false;
 
     const lifetime = sceneLifetimeRef.current;
+    const startupBridge = MapManager.GetViewStateBridge?.() as ViewStateBridgeLike | null;
+    const startupState = startupBridge?.getState?.();
+    const stateCenter = startupState?.center;
+    const viewCenter = mapView.center as { longitude?: unknown; latitude?: unknown } | null | undefined;
+    const center = Array.isArray(stateCenter)
+      && stateCenter.length >= 2
+      && Number.isFinite(Number(stateCenter[0]))
+      && Number.isFinite(Number(stateCenter[1]))
+      ? [Number(stateCenter[0]), Number(stateCenter[1])] as const
+      : viewCenter
+        && Number.isFinite(Number(viewCenter.longitude))
+        && Number.isFinite(Number(viewCenter.latitude))
+        ? [Number(viewCenter.longitude), Number(viewCenter.latitude)] as const
+        : null;
+    const initialCamera = center ? {
+      position: { longitude: center[0], latitude: center[1], z: 8_000 },
+      heading: Number.isFinite(Number(startupState?.heading)) ? Number(startupState?.heading) : 0,
+      tilt: DEFAULT_SCENE_TILT,
+    } : undefined;
     const scene = await createSceneView(sceneHostRef.current, {
       map: mapView.map,
+      ...(initialCamera ? { camera: initialCamera } : {}),
       qualityProfile: 'medium',
       padding: mapView.padding,
       environment: {
@@ -478,6 +498,8 @@ export function ExperienceMapModeBridge({
       setSceneHostActive(false);
       osmBuildingsRuntimeRef.current?.deactivate();
       sceneBasemapRuntimeRef.current?.restore(mapView.map as SceneBasemapMap);
+      const sharedMap = mapView.map as { basemap?: unknown } | null;
+      if (sharedMap && !sharedMap.basemap) sharedMap.basemap = 'osm';
       synchronizeBasemapId(bridge, mapView.map);
       setMode('2d');
       publishMode('2d');
