@@ -15,6 +15,10 @@ import {
 
 const fixture = (): string => mkdtempSync(join(tmpdir(), 'kent-module-resolution-'));
 
+const normalizePathForAssertion = (value: string): string => value
+  .replaceAll('\\', '/')
+  .replace(/^[A-Za-z]:/u, '');
+
 const write = (root: string, relativePath: string, content = 'export {};'): string => {
   const target = join(root, relativePath);
   mkdirSync(dirname(target), { recursive: true });
@@ -51,7 +55,7 @@ describe('module resolution guard', () => {
       ['.ts', '.js'],
     );
     expect(candidates.map((candidate) => [
-      candidate.path.replaceAll('\\', '/'),
+      normalizePathForAssertion(candidate.path),
       candidate.extension,
       candidate.indexModule,
       candidate.typed,
