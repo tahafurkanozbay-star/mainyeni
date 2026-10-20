@@ -236,18 +236,26 @@ describe('SidebarModern governed interaction integration', () => {
     expect(popupOptions.content.querySelector('em, img')).toBeNull();
   });
 
-  it('uses the active 3D view instead of the hidden 2D view for point results', async () => {
+  it('uses the active 3D view for point navigation and popup instead of the hidden 2D view', async () => {
     seedPoiIndex([{ id: 107, name: 'Aktif görünüm noktası', address: 'Çankaya', district: 'Çankaya', neighborhood: '', longitude: 32.854, latitude: 39.920 }]);
     const activeGoTo = vi.fn().mockResolvedValue(undefined);
     const inactiveGoTo = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(MapManager.GetMapView).mockReturnValue({ destroyed: false, goTo: inactiveGoTo } as never);
-    vi.mocked(MapManager.GetActiveMapView).mockReturnValue({ destroyed: false, goTo: activeGoTo } as never);
+    const activePopupOpen = vi.fn();
+    const inactivePopupOpen = vi.fn();
+    vi.mocked(MapManager.GetMapView).mockReturnValue({
+      destroyed: false, goTo: inactiveGoTo, popup: { open: inactivePopupOpen },
+    } as never);
+    vi.mocked(MapManager.GetActiveMapView).mockReturnValue({
+      destroyed: false, goTo: activeGoTo, popup: { open: activePopupOpen },
+    } as never);
     const user = userEvent.setup();
     renderSidebar();
     await user.type(screen.getByRole('searchbox', { name: 'Harita noktalarında ara' }), 'aktif görünüm');
     await user.click(screen.getByRole('button', { name: 'Aktif görünüm noktası noktasına git' }));
     expect(activeGoTo).toHaveBeenCalledWith({ center: [32.854, 39.920], zoom: 17 }, { duration: 650 });
     expect(inactiveGoTo).not.toHaveBeenCalled();
+    await waitFor(() => expect(activePopupOpen).toHaveBeenCalledTimes(1));
+    expect(inactivePopupOpen).not.toHaveBeenCalled();
   });
 
   it('clears search with the explicit clear button', async () => {
