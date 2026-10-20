@@ -1,7 +1,7 @@
 @font-face{font-family:'ankara';src:url('./AnkaraDisplay-Regular.ttf');font-display:swap;}
 :root{--mainbar-height:60px;--mainbar-background:var(--exp-surface,#fff);}
 html,body,#root,#app-shell{margin:0!important;padding:0!important;}
-.mainbar-container{position:fixed!important;top:0!important;inset-block-start:0!important;inset-inline-start:0!important;inset-inline-end:0!important;transform:none!important;translate:none!important;margin:0!important;width:100%;height:var(--mainbar-height);min-height:var(--mainbar-height);margin-block-start:0;box-sizing:border-box;padding:6px 10px;background:var(--exp-surface,#fff);border-bottom:1px solid var(--exp-border);box-shadow:0 1px 2px rgb(15 23 42 / 5%);backdrop-filter:none;isolation:isolate;z-index:2000;color:var(--exp-text);}
+.mainbar-container{position:fixed!important;top:0!important;inset-block-start:0!important;inset-inline-start:0!important;inset-inline-end:0!important;transform:none!important;translate:none!important;margin:0!important;width:100%;height:var(--mainbar-height);min-height:var(--mainbar-height);margin-block-start:0;box-sizing:border-box;padding:6px 10px;background:color-mix(in srgb,var(--exp-surface,#fff) 88%,transparent);border-bottom:1px solid color-mix(in srgb,var(--exp-border) 80%,transparent);box-shadow:0 1px 2px rgb(15 23 42 / 5%);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);isolation:isolate;z-index:2000;color:var(--exp-text);}
 .mainbar{height:100%;display:flex;align-items:center;gap:8px;position:relative;}
 .mainbar-logo{display:flex;align-items:center;justify-content:center;width:72px;height:54px;flex:0 0 72px;}
 .mainbar-logo img{max-height:46px;max-width:70px;width:auto;object-fit:contain;margin:0;}
