@@ -8,6 +8,11 @@ import type {
 import {
   type KentRehberiPoiSearchInput,
 } from './kentRehberiPoiSearchIndex';
+import {
+  planAskiPersistentCategoryCache,
+  type PlanAskiCategoryCacheHit,
+  type PlanAskiPersistentCategoryCache,
+} from './kentRehberiPersistentCache';
 
 // Do not accept arbitrary origins or URL overrides: this mode deliberately
 // speaks only to the official, browser-CORS-enabled municipal endpoint.
@@ -423,6 +428,38 @@ const fetchCategoryResponseBody = async (
   }
 };
 
+const parseCategoryResponseBody = (
+  body: string,
+  tur: number,
+  signal?: AbortSignal,
+): readonly KentRehberiGeoJsonFeature[] => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body) as unknown;
+  } catch {
+    throw new TypeError('PlanASKI returned invalid JSON.');
+  }
+  if (!Array.isArray(parsed) || parsed.length > MAX_ROWS_PER_TYPE) {
+    throw new TypeError('PlanASKI category response is not a bounded array.');
+  }
+  const seen = new Set<number>();
+  const features = parsed.map((row) => {
+    const feature = parseFeature(row, tur);
+    const id = feature.properties.objectid as number;
+    if (seen.has(id)) throw new TypeError('PlanASKI contains a repeated objectid.');
+    seen.add(id);
+    return feature;
+  });
+  signal?.throwIfAborted();
+  return features;
+};
+
+const parseStaleCategoryFallback = (
+  cached: PlanAskiCategoryCacheHit,
+  tur: number,
+  signal?: AbortSignal,
+): readonly KentRehberiGeoJsonFeature[] => parseCategoryResponseBody(cached.body, tur, signal);
+
 const fetchType = async (
   tur: number,
   options: KentRehberiFetchOptions,
@@ -430,41 +467,62 @@ const fetchType = async (
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   if (typeof fetchImpl !== 'function') throw new Error('Fetch API is unavailable.');
   options.signal?.throwIfAborted();
+
+  const persistentCache: PlanAskiPersistentCategoryCache =
+    options.persistentCache ?? planAskiPersistentCategoryCache;
   const cachedBody = readCachedCategoryResponse(fetchImpl, tur);
-  let body: string;
-  let releaseInFlight: (() => void) | null = null;
   if (cachedBody !== null) {
-    body = cachedBody;
-  } else {
-    const sharedResponse = await fetchCategoryResponseBody(fetchImpl, tur, options.signal);
-    body = sharedResponse.body;
-    releaseInFlight = sharedResponse.release;
+    return parseCategoryResponseBody(cachedBody, tur, options.signal);
+  }
+
+  let persisted: PlanAskiCategoryCacheHit | null = null;
+  try {
+    persisted = await persistentCache.read(tur);
+  } catch {
+    persisted = null;
+  }
+  options.signal?.throwIfAborted();
+
+  if (persisted?.fresh) {
+    try {
+      const features = parseCategoryResponseBody(persisted.body, tur, options.signal);
+      cacheCategoryResponse(fetchImpl, tur, persisted.body);
+      return features;
+    } catch (error) {
+      if (options.signal?.aborted) throw error;
+      // Persistent browser state is untrusted input. Discard a corrupt snapshot
+      // and fetch a newly validated official response rather than failing closed.
+      await persistentCache.remove(tur);
+      persisted = null;
+    }
+  }
+
+  const staleFallback = persisted && !persisted.fresh ? persisted : null;
+  let sharedResponse: { readonly body: string; readonly release: () => void };
+  try {
+    sharedResponse = await fetchCategoryResponseBody(fetchImpl, tur, options.signal);
+  } catch (error) {
+    if (options.signal?.aborted) throw error;
+    if (staleFallback) {
+      try {
+        const features = parseStaleCategoryFallback(staleFallback, tur, options.signal);
+        cacheCategoryResponse(fetchImpl, tur, staleFallback.body);
+        return features;
+      } catch {
+        await persistentCache.remove(tur);
+      }
+    }
+    throw error;
   }
 
   try {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(body) as unknown;
-    } catch {
-      throw new TypeError('PlanASKI returned invalid JSON.');
-    }
-    if (!Array.isArray(parsed) || parsed.length > MAX_ROWS_PER_TYPE) {
-      throw new TypeError('PlanASKI category response is not a bounded array.');
-    }
-    const seen = new Set<number>();
-    const features = parsed.map((row) => {
-      const feature = parseFeature(row, tur);
-      const id = feature.properties.objectid as number;
-      if (seen.has(id)) throw new TypeError('PlanASKI contains a repeated objectid.');
-      seen.add(id);
-      return feature;
-    });
-    options.signal?.throwIfAborted();
-    // Only cache complete, validated success responses; errors never poison cache.
-    if (cachedBody === null) cacheCategoryResponse(fetchImpl, tur, body);
+    const features = parseCategoryResponseBody(sharedResponse.body, tur, options.signal);
+    // Only complete, validated success responses may enter either cache.
+    cacheCategoryResponse(fetchImpl, tur, sharedResponse.body);
+    void persistentCache.write(tur, sharedResponse.body).catch(() => undefined);
     return features;
   } finally {
-    releaseInFlight?.();
+    sharedResponse.release();
   }
 };
 

@@ -12,6 +12,8 @@ import {
   publishKentRehberiPoiSearchIndex,
   type KentRehberiPoiSearchInput,
 } from './kentRehberiPoiSearchIndex';
+import type { PlanAskiPersistentCategoryCache } from './kentRehberiPersistentCache';
+
 
 const DEFAULT_LIMIT = 500;
 const MAX_LIMIT = 2000;
@@ -148,6 +150,8 @@ export interface KentRehberiFetchOptions extends KentRehberiRequestFilters {
   readonly timeoutMs?: number;
   readonly maxPayloadBytes?: number;
   readonly fetchImpl?: typeof fetch;
+  /** Optional persistent cache port for testing or managed cache lifetimes. */
+  readonly persistentCache?: PlanAskiPersistentCategoryCache;
 }
 
 export interface KentRehberiMapLike {
