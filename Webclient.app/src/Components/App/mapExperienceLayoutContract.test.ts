@@ -19,6 +19,7 @@ const mapModeBridge = read('ExperienceMapModeBridge.tsx');
 const legacySidebarCss = read('Sidebar.css');
 const fastAccessQuery = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Query', '_Common', 'ManagedFastAccessQueryWindow.tsx'), 'utf8');
 const parkQuery = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Query', 'ParklarQuery', 'ParklarQueryWindow.tsx'), 'utf8');
+const graphicsHelper = readFileSync(resolve(webclientRoot, 'src', 'Toolbox', 'GisGraphicsHelper.ts'), 'utf8');
 const generalSearchQuery = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Query', 'GenelAramaQuery', 'GenelAramaQeryWindow.tsx'), 'utf8');
 const shellCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-shell.css'), 'utf8');
 const uiCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-ui.css'), 'utf8');
@@ -40,13 +41,23 @@ describe('map experience layout collision contract', () => {
       /\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{[\s\S]*?position:\s*fixed !important;[\s\S]*?top:\s*var\(--mainbar-height, 60px\) !important;[\s\S]*?inset-inline-start:\s*0 !important;[\s\S]*?inset-block-end:\s*0 !important;/u,
     );
     expect(navigationCss).toContain(':root{--mainbar-height:58px}');
-    expect(mapCss).toContain('width: min(var(--sidebar-hover-width, 560px), 100dvw) !important;');
+    expect(mapCss).toContain('width: min(var(--sidebar-hover-width, 600px), 100dvw) !important;');
   });
 
   it('keeps Keşfet flush to the left edge and widens it without hard-coding a separate mobile size', () => {
-    expect(legacySidebarCss).toMatch(/--sidebar-hover-width:\s*560px;/u);
-    expect(mapCss).toMatch(/\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{[\s\S]*?width:\s*min\(var\(--sidebar-hover-width, 560px\), 100dvw\)\s*!important;/u);
+    expect(legacySidebarCss).toMatch(/--sidebar-hover-width:\s*600px;/u);
+    expect(mapCss).toMatch(/\.esri-map > \.sidebar-container\.kr-sidebar--governed\s*\{[\s\S]*?width:\s*min\(var\(--sidebar-hover-width, 600px\), 100dvw\)\s*!important;/u);
 
+  });
+
+  it('uses the effective public stylesheet to align the widened Keşfet panel at both viewport edges', () => {
+    expect(publicWorkspaceCss).toContain('--kr-premium-sidebar-width: min(600px, calc(100dvw - 96px));');
+    expect(publicWorkspaceCss).toContain('#app-shell .sidebar-container.kr-sidebar--governed:not(.is-collapsed)');
+    expect(publicWorkspaceCss).toContain('position: fixed !important;');
+    expect(publicWorkspaceCss).toContain('top: var(--kr-sidebar-top, var(--mainbar-height)) !important;');
+    expect(publicWorkspaceCss).toContain('left: 0 !important;');
+    expect(publicWorkspaceCss).toContain('--kr-sidebar-top: 106px;');
+    expect(publicWorkspaceCss).toContain('--kr-sidebar-top: 102px;');
   });
 
   it('zooms to the clicked record geometry and rejects mismatched detail records', () => {
@@ -58,6 +69,7 @@ describe('map experience layout collision contract', () => {
     expect(generalSearchQuery).toContain('getRecordGeometry(item.raw)');
     expect(generalSearchQuery).toContain('String(returnedId) !== String(objectId)');
     expect(generalSearchQuery).toContain('MapManager.GetActiveMapView?.() ?? MapManager.GetMapView()');
+    expect(graphicsHelper).toContain('mapView.goTo({ center, zoom: zoomLevel })');
   });
 
   it('does not suppress focus outlines on search inputs or the settings dialog', () => {
@@ -82,18 +94,19 @@ describe('map experience layout collision contract', () => {
     expect(navigationCss).toContain('backdrop-filter:blur(12px);');
   });
 
-  it('keeps the bottom disclaimer panel wide enough to wrap rather than clip its warning text', () => {
-    expect(disclaimerCss).toContain('inline-size: min(680px, calc(100dvw - 24px));');
+  it('keeps the bottom disclaimer panel expanded to the full single-line warning', () => {
+    expect(disclaimerCss).toContain('inline-size: max-content;');
+    expect(disclaimerCss).toContain('max-inline-size: 100dvw;');
+    expect(disclaimerCss).toContain('background: #fff;');
     expect(disclaimerCss).toContain('min-block-size: 46px;');
-    expect(disclaimerCss).toContain('flex: 1 1 auto;');
-    expect(disclaimerCss).toContain('inline-size: 100%;');
+    expect(disclaimerCss).toContain('flex: 0 0 auto;');
+    expect(disclaimerCss).toContain('inline-size: auto;');
     expect(disclaimerCss).toContain('overflow: visible;');
-    expect(disclaimerCss).toContain('flex: 0 1 auto;');
     expect(disclaimerCss).toMatch(
-      /\.experience-data-disclaimer__copy\s*\{[\s\S]*?flex-wrap:\s*wrap;[\s\S]*?white-space:\s*normal;/u,
+      /\.experience-data-disclaimer__copy\s*\{[\s\S]*?flex-wrap:\s*nowrap;[\s\S]*?white-space:\s*nowrap;/u,
     );
     expect(disclaimerCss).toMatch(
-      /@media \(max-width: 40rem\)[\s\S]*?\.experience-data-disclaimer__copy\s*\{[\s\S]*?flex-wrap:\s*wrap;[\s\S]*?white-space:\s*normal;/u,
+      /@media \(max-width: 40rem\)[\s\S]*?\.experience-data-disclaimer__copy\s*\{[\s\S]*?flex-wrap:\s*nowrap;[\s\S]*?white-space:\s*nowrap;/u,
     );
     expect(disclaimerCss).toMatch(/\.experience-data-disclaimer__icon\s*\{\s*display:\s*none;/u);
   });
