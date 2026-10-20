@@ -252,7 +252,8 @@ const safeRemoveLayer = (
 };
 
 const getMapView = (): MapViewLike | null => {
-  const value = MapManager.GetMapView();
+  // In 3D, the visible camera belongs to SceneView, not the stored 2D MapView.
+  const value = MapManager.GetActiveMapView?.() ?? MapManager.GetMapView();
   return value && typeof value === 'object' ? value as MapViewLike : null;
 };
 
@@ -500,7 +501,9 @@ export function createManagedFastAccessQueryWindow({
         const geometry = getFeatureGeometry(detail);
         if (!geometry) throw new Error('Konum bilgisi bulunamadı.');
 
-        await Promise.resolve(GisGraphicsHelper.ZoomToGeometry(mapViewRef.current, geometry, 18));
+        const activeView = getMapView() ?? mapViewRef.current;
+        if (!activeView?.goTo) throw new Error('Harita görünümü hazır değil.');
+        await Promise.resolve(GisGraphicsHelper.ZoomToGeometry(activeView, geometry, 18));
         if (!isCurrent()) return null;
         void safeClientLog(
           LoggingBusiness,
