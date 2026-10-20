@@ -249,13 +249,6 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
     windowManager.ShowWindow(windowId);
   };
 
-  const returnToMainMenu = (): void => {
-    navigationModel.setGroup(null);
-    navigationModel.setView('all');
-    navigationModel.clearQuery();
-    setKentRehberiMapFilter(null);
-  };
-
   const toggleFavorite = (windowId: string): void => {
     navigationModel.toggleFavorite(windowId);
     preferenceStore.saveFavorites(navigationModel.getSnapshot().favoriteIds);
@@ -420,18 +413,6 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
           <span>ŞEHİR SERVİSLERİ</span>
           <strong>Keşfet</strong>
         </div>
-        {mapFilter.iconKeys !== null ? (
-          <button
-            type="button"
-            className="kr-sidebar__home-button"
-            onClick={returnToMainMenu}
-            aria-label="Ana menüye dön; tüm noktaları göster"
-            title="Ana menüye dön"
-          >
-            <span aria-hidden="true">←</span>
-            <span>Ana menü</span>
-          </button>
-        ) : null}
         <button
           type="button"
           ref={sidebarToggleRef}
@@ -459,6 +440,7 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
             type="button"
             className={`kr-sidebar__group ns-btn${group.id} ${navigation.activeGroupId === group.id ? 'active' : ''}`}
             onClick={() => {
+              const wasSelectedGroup = navigationModel.getSnapshot().activeGroupId === group.id;
               navigationModel.setGroup(group.id);
               const selectedGroupId = navigationModel.getSnapshot().activeGroupId;
               if (selectedGroupId === null) {
@@ -466,8 +448,22 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
                 return;
               }
               const selectedGroup = GROUPS.find((candidate) => candidate.id === selectedGroupId);
+              const selectedGroupLabel = selectedGroup?.label ?? selectedGroupId;
+
+              // Clicking the already-selected institution again toggles the map
+              // filter off without closing its subcategory list. Clicking it once
+              // more reapplies that institution filter.
+              if (
+                wasSelectedGroup
+                && mapFilter.iconKeys !== null
+                && mapFilter.label === selectedGroupLabel
+              ) {
+                setKentRehberiMapFilter(null);
+                return;
+              }
+
               setKentRehberiMapFilter({
-                label: selectedGroup?.label ?? selectedGroupId,
+                label: selectedGroupLabel,
                 iconKeys: iconKeysForItems(ITEMS.filter((item) => item.group === selectedGroupId)),
               });
             }}
@@ -483,6 +479,27 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
           </button>
         ))}
       </nav>
+
+      {mapFilter.iconKeys !== null ? (
+        <div className="kr-sidebar__map-filter" role="group" aria-label="Harita nokta filtresi">
+          <span className="kr-sidebar__map-filter-label">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z" />
+              <path d="M9 3v15M15 6v15" />
+            </svg>
+            <span>Haritada yalnızca <strong>{mapFilter.label}</strong></span>
+          </span>
+          <button
+            type="button"
+            className="kr-sidebar__map-filter-clear"
+            onClick={() => setKentRehberiMapFilter(null)}
+            aria-label="Tüm noktaları göster"
+            title="Harita filtresini kaldır ve tüm noktaları göster"
+          >
+            Tüm noktalar
+          </button>
+        </div>
+      ) : null}
 
       {/* Query tools portal into this slot so results reuse Keşfet's existing panel
           instead of creating a second floating panel over the category navigation. */}
