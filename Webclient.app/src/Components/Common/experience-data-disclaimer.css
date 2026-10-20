@@ -122,7 +122,8 @@ html[data-exp-motion='reduced'] .experience-data-disclaimer {
     inset-inline-start: 0;
     inset-inline-end: auto;
     inset-block-end: 0;
-    inline-size: max-content;
+    inline-size: 100dvw;
+    width: 100vw;
     max-inline-size: 100dvw;
     gap: 0;
     padding: 0.38rem 0.5rem 0.34rem;
