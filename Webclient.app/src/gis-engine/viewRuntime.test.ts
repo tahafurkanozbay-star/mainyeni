@@ -1,5 +1,6 @@
 import { createViewStateBridge } from './viewState';
 import {
+  applyInitialMapViewState,
   applyViewStateToMapView,
   bindMapViewState,
   createMapViewOptions,
@@ -150,6 +151,23 @@ describe('viewRuntime', () => {
         rotationEnabled: false,
       },
     });
+  });
+
+  test('applies the configured initial center and zoom after the basemap becomes available', async () => {
+    const { view } = createWatchableView();
+
+    await expect(applyInitialMapViewState(view, {
+      Centerx: 32.854,
+      Centery: 39.92,
+      Zoom: 12,
+      MinZoom: 2,
+      MaxZoom: 20,
+    })).resolves.toBe(true);
+
+    expect(view.goTo).toHaveBeenCalledWith(
+      { center: [32.854, 39.92], zoom: 12 },
+      { duration: 0, animate: false },
+    );
   });
 
   test('snapshots geographic MapView state into the shared contract', () => {

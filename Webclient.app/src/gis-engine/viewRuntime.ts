@@ -81,10 +81,19 @@ export const createResponsivePadding = (viewportWidth: unknown, options: Respons
   return { top: 0, bottom: mobile ? mobileBottom : 0, left: mobile ? 0 : sidebarWidth, right: 0 };
 };
 export interface MapViewOptionsInput { map?: unknown; container?: unknown; configuration?: ViewConfiguration; viewportWidth?: unknown; padding?: ResponsivePadding; }
-export const createMapViewOptions = ({ map, container, configuration = {}, viewportWidth, padding }: MapViewOptionsInput = {}) => {
+interface InitialMapViewState { center: [number, number]; zoom: number; }
+const resolveInitialMapViewState = (configuration: ViewConfiguration): InitialMapViewState => {
   const constraints = normalizeViewConstraints(configuration);
   const configuredZoom = Math.floor(finite(configuration.Zoom ?? configuration.zoom, 11) as number);
-  return { container, ui: { components: [] as unknown[] }, map, spatialReference: WEB_MERCATOR_SPATIAL_REFERENCE, zoom: clamp(configuredZoom, constraints.minZoom, constraints.maxZoom), center: normalizeInitialCenter(configuration), padding: padding || createResponsivePadding(viewportWidth, configuration), constraints };
+  return {
+    center: normalizeInitialCenter(configuration),
+    zoom: clamp(configuredZoom, constraints.minZoom, constraints.maxZoom),
+  };
+};
+export const createMapViewOptions = ({ map, container, configuration = {}, viewportWidth, padding }: MapViewOptionsInput = {}) => {
+  const initialState = resolveInitialMapViewState(configuration);
+  const constraints = normalizeViewConstraints(configuration);
+  return { container, ui: { components: [] as unknown[] }, map, spatialReference: WEB_MERCATOR_SPATIAL_REFERENCE, zoom: initialState.zoom, center: initialState.center, padding: padding || createResponsivePadding(viewportWidth, configuration), constraints };
 };
 
 export const snapshotMapViewState = (view: MapViewLike, previous: ViewStateInput | ViewState = {}): ViewState => createViewState({
@@ -117,6 +126,18 @@ export const applyViewStateToMapView = async (view: MapViewLike, inputState: Vie
   if (!Object.keys(target).length) return false;
   await view.goTo(target, { duration: Math.max(0, finite(options.duration, 0) as number), animate: options.animate === true });
   return true;
+};
+
+export const applyInitialMapViewState = async (
+  view: MapViewLike,
+  configuration: ViewConfiguration = {},
+): Promise<boolean> => {
+  const initialState = resolveInitialMapViewState(configuration);
+  return applyViewStateToMapView(view, {
+    mode: '2d',
+    center: initialState.center,
+    zoom: initialState.zoom,
+  }, { duration: 0, animate: false });
 };
 
 export interface BindMapViewOptions {

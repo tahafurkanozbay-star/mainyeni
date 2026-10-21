@@ -36,7 +36,7 @@ body { margin: 0; user-select: text; }
  * isolated context around the map would trap a mobile query below utilities. */
 #app-shell .esri-map { height: 100dvh; isolation: auto; }
 #app-shell:has(.kr-sidebar.is-collapsed):not(:has(.kr-fast-query[aria-hidden='false'])) { --kr-premium-sidebar-width: 72px; }
-#app-shell:has(.kr-fast-query[aria-hidden='false']) { --kr-premium-sidebar-width: 320px; }
+#app-shell:has(.kr-sidebar.is-collapsed):has(.kr-fast-query[aria-hidden='false']) { --kr-premium-sidebar-width: 320px; }
 
 /* Grid reserves real space for the brand and portal; the search can shrink
  * without painting over either link at intermediate widths or text zoom. */
@@ -594,7 +594,7 @@ html[data-experience-theme='dark'] .experience-settings .experience-btn--primary
   #app-shell .common-query-window-header { padding: 10px 12px; }
   #app-shell .common-query-window-body { padding: 12px; }
   #app-shell .map-workspace-recovery { left: 8px; width: calc(100dvw - 16px); inline-size: calc(100dvw - 16px); }
-  #app-shell .sidebar-container.kr-fast-query { top: 132px; width: calc(100dvw - 16px); height: calc(100dvh - 140px); left: 8px; inset-inline-start: 8px; border-radius: 12px; z-index: 1300; }
+  #app-shell .sidebar-container.kr-fast-query { top: 132px; width: var(--kr-premium-sidebar-width); box-sizing: border-box; height: calc(100dvh - 140px); left: 8px; inset-inline-start: 8px; border-radius: 12px; z-index: 1300; }
   #app-shell .experience-utility { inset-inline: 8px; left: 8px; right: 8px !important; bottom: calc(var(--kr-footer-edge) + 60px); width: calc(100dvw - 16px); inline-size: calc(100dvw - 16px); max-width: none; max-inline-size: none; transform: none; }
   #app-shell .experience-utility__actions { display: flex; flex-direction: row; justify-content: space-between; width: 100%; gap: 0; }
   #app-shell .experience-utility__button { min-width: 44px; min-height: 44px; }

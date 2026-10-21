@@ -24,6 +24,7 @@ const generalSearchQuery = readFileSync(resolve(webclientRoot, 'src', 'Component
 const shellCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-shell.css'), 'utf8');
 const uiCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-ui.css'), 'utf8');
 const workspaceCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-workspace.css'), 'utf8');
+const workspaceUsabilityCss = readFileSync(resolve(webclientRoot, 'src', 'experience', 'workspaceUsability.css'), 'utf8');
 const disclaimerCss = readFileSync(resolve(webclientRoot, 'src', 'Components', 'Common', 'experience-data-disclaimer.css'), 'utf8');
 const publicWorkspaceCss = readFileSync(resolve(webclientRoot, 'src', 'kentrehberi-public-map-workspace.css'), 'utf8');
 
@@ -44,6 +45,16 @@ describe('map experience layout collision contract', () => {
     expect(mapCss).toContain('width: min(var(--sidebar-hover-width, 400px), 100dvw) !important;');
   });
 
+  it('hides institution tabs while quick-access results are active and shares the sidebar width', () => {
+    const fastQueryRule = workspaceUsabilityCss.match(/#app-shell \.sidebar-container\.kr-fast-query\s*\{([^}]+)\}/u)?.[1] ?? '';
+    expect(publicWorkspaceCss).toContain('.kr-sidebar:has(.kr-fast-query[aria-hidden=\'false\']) .kr-sidebar__groups');
+    expect(publicWorkspaceCss).toContain('.kr-sidebar:has(.kr-fast-query[aria-hidden=\'false\']) .kr-sidebar__tool-slot');
+    expect(publicWorkspaceCss).toContain('.kr-fast-query[aria-hidden=\'false\'] {');
+    expect(publicWorkspaceCss).toContain('width: min(var(--kr-premium-sidebar-width), 100dvw) !important;');
+    expect(workspaceUsabilityCss).toContain('width: var(--kr-premium-sidebar-width);');
+    expect(fastQueryRule).toContain('width: var(--kr-premium-sidebar-width);');
+  });
+
   it('keeps Keşfet flush left at a balanced width that shrinks with the viewport', () => {
     expect(mapCss).toContain('--sidebar-hover-width: min(400px, calc(100vw - 20px));');
     expect(mapCss).toContain('--sidebar-width: min(400px, calc(100vw - 20px));');
@@ -51,7 +62,7 @@ describe('map experience layout collision contract', () => {
   });
 
   it('uses the effective public stylesheet to align the full-height Keşfet panel with the viewport', () => {
-    expect(publicWorkspaceCss).toContain('--kr-premium-sidebar-width: min(400px, calc(100dvw - 20px));');
+    expect(publicWorkspaceCss).toContain('--kr-premium-sidebar-width: 320px;');
     expect(publicWorkspaceCss).toContain('#app-shell .sidebar-container.kr-sidebar--governed:not(.is-collapsed)');
     expect(publicWorkspaceCss).toContain('position: fixed !important;');
     expect(publicWorkspaceCss).toContain('top: 0 !important;');

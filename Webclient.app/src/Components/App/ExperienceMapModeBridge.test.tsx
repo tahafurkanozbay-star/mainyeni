@@ -36,11 +36,13 @@ const harness = vi.hoisted(() => ({
   bindSceneState: vi.fn(),
   osmBuildingsRuntime: { activate: vi.fn(async () => undefined), deactivate: vi.fn(), dispose: vi.fn() },
   basemapLoadFails: false,
+  applyInitialMapViewState: vi.fn(),
 }));
 
 vi.mock('../../Store/Managers/MapManager', () => ({
   default: {
     GetViewStateBridge: () => harness.bridge,
+    GetMapConfiguration: () => ({ Centerx: 32.854, Centery: 39.92, Zoom: 12 }),
   },
 }));
 
@@ -49,6 +51,7 @@ vi.mock('../../Toolbox/DebugHelper', () => ({
 }));
 
 vi.mock('../../gis-engine/viewRuntime', () => ({
+  applyInitialMapViewState: harness.applyInitialMapViewState,
   applyViewStateToMapView: harness.applyToMapView,
   snapshotMapViewState: (_view: unknown, previous: Record<string, unknown>) => ({
     ...previous,
@@ -221,6 +224,7 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
       return { map: options.map, view, ownsMap: false };
     });
     harness.applyToMapView.mockResolvedValue(true);
+    harness.applyInitialMapViewState.mockResolvedValue(true);
     harness.applyToSceneView.mockResolvedValue(true);
     harness.bindSceneState.mockReturnValue(() => undefined);
     harness.destroySceneView.mockImplementation((scene: Record<string, any>) => {
@@ -257,6 +261,13 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
     try {
       // The SceneView must initialize and become visible on the first load.
       await waitFor(() => expect(changedModes.filter((mode) => mode === '3d')).toHaveLength(1));
+      expect(harness.applyInitialMapViewState).toHaveBeenCalledWith(mapView, {
+        Centerx: 32.854,
+        Centery: 39.92,
+        Zoom: 12,
+      });
+      expect(harness.applyInitialMapViewState.mock.invocationCallOrder[0])
+        .toBeLessThan(harness.applyToSceneView.mock.invocationCallOrder[0]);
       expect((mapView.map.basemap as { id?: string }).id).toBe('openstreetmap-3d');
       expect(harness.bridge?.getState().basemapId).toBe('openstreetmap-3d');
       expect(harness.views).toHaveLength(1);

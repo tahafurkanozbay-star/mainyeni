@@ -40,10 +40,14 @@ vi.mock('../../Store/Managers/MapManager', () => ({ default: {
   SetMapClickEvent: (event: Record<string, unknown>) => runtime.clickEvents.push(event),
   GetMobileRightClick: () => false,
 } }));
-vi.mock('../../gis-engine/viewRuntime', () => ({
-  bindMapViewState: () => vi.fn(), createMapViewOptions: (options: unknown) => options,
-  createResponsivePadding: () => ({}), createViewPerformanceMonitor: () => ({ dispose: vi.fn() }),
-}));
+vi.mock('../../gis-engine/viewRuntime', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../gis-engine/viewRuntime')>();
+  return {
+    ...actual,
+    bindMapViewState: () => vi.fn(),
+    createViewPerformanceMonitor: () => ({ dispose: vi.fn() }),
+  };
+});
 vi.mock('./NavigationBar', () => ({ NavigationBar: (props: Record<string, unknown>) => {
   runtime.navigationProps = props;
   return <header>Harita menüsü</header>;
