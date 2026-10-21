@@ -4,6 +4,7 @@ import { DebugHelper } from '../../Toolbox/DebugHelper';
 import {
   applyInitialMapViewState,
   applyViewStateToMapView,
+  normalizeInitialCenter,
   snapshotMapViewState,
 } from '../../gis-engine/viewRuntime';
 import {
@@ -22,6 +23,7 @@ import { SceneBasemapRuntime, type SceneBasemapMap } from '../../gis-engine/scen
 import { Esri3DBuildingsRuntime } from '../../gis-engine/esri3DBuildingsRuntime';
 import { SceneIconPresentationRuntime } from '../../gis-engine/sceneIconPresentationRuntime';
 import { WEB_MERCATOR_SPATIAL_REFERENCE } from '../../gis-engine/contracts';
+import { loadArcgisModules } from '../../gis-engine/arcgisModuleRuntime';
 import './OpenStreetMap3DAttribution.css';
 import {
   createSceneExperienceRuntime,
@@ -45,6 +47,25 @@ import { executeSceneCommand as executeSceneRuntimeCommand } from '../../experie
 
 const DEFAULT_SCENE_TILT = 48;
 const SCENE_TRANSITION_DURATION_MS = 320;
+const ATLAS_2D_BASEMAP_ID = 'dark-gray-vector';
+const ATLAS_2D_BASEMAP_TITLE = 'Atlas Night — Dark Gray Vector';
+
+const createAtlas2DBasemap = async (): Promise<unknown> => {
+  const [Basemap, VectorTileLayer] = await loadArcgisModules<readonly [
+    new (properties?: Record<string, unknown>) => { load?: () => Promise<unknown>; destroy?: () => void },
+    new (properties?: Record<string, unknown>) => { load?: () => Promise<unknown>; destroy?: () => void },
+  ]>(['esri/Basemap', 'esri/layers/VectorTileLayer']);
+  const layer = new VectorTileLayer({ portalItem: { id: 'c3ae924d5dea4b2b8f0a8e9f2f94b5f1' }, opacity: 0.82 });
+  try {
+    await layer.load?.();
+    return new Basemap({ id: ATLAS_2D_BASEMAP_ID, title: ATLAS_2D_BASEMAP_TITLE, baseLayers: [layer] });
+  } catch (error) {
+    try { layer.destroy?.(); } catch (cleanupError) {
+      DebugHelper.Log({ context: 'atlas-vector-basemap-failed-load-cleanup', error: cleanupError });
+    }
+    throw error;
+  }
+};
 
 const basemapIdForMap = (map: unknown): string | null => {
   const basemap = (map as { basemap?: { id?: unknown; portalItem?: { id?: unknown } | null; title?: unknown } | string | null } | null)?.basemap;
@@ -177,10 +198,9 @@ const nextBrowserFrame = (): Promise<void> => new Promise((resolve) => {
 /**
  * Type-safe ownership boundary for the application's 2D/3D transition.
  *
- * The SceneView is lazy and shares the exact ArcGIS Map used by the MapView.
- * This preserves layer visibility, basemap and selection state while avoiding a
- * second data model. Dedicated scene experience and navigation runtimes adapt
- * quality, own WebGL recovery, and bound camera movement/history.
+ * The SceneView lazily shares the ArcGIS Map used by the MapView. Scene-only
+ * layers and graphics are detached before returning to MapView. Dedicated
+ * runtimes adapt quality and own navigation/history.
  */
 export function ExperienceMapModeBridge({
   mapView,
@@ -189,6 +209,7 @@ export function ExperienceMapModeBridge({
   onInitialModeResolved,
 }: ExperienceMapModeBridgeProps) {
   const sceneHostRef = useRef<HTMLDivElement | null>(null);
+  const sharedMapRef = useRef<unknown>(mapView.map);
   const sceneRef = useRef<SceneHandle | null>(null);
   const sceneBasemapRuntimeRef = useRef<SceneBasemapRuntime | null>(null);
   if (!sceneBasemapRuntimeRef.current) sceneBasemapRuntimeRef.current = new SceneBasemapRuntime();
@@ -280,27 +301,16 @@ export function ExperienceMapModeBridge({
     const lifetime = sceneLifetimeRef.current;
     const startupBridge = MapManager.GetViewStateBridge?.() as ViewStateBridgeLike | null;
     const startupState = startupBridge?.getState?.();
-    const stateCenter = startupState?.center;
-    const viewCenter = mapView.center as { longitude?: unknown; latitude?: unknown } | null | undefined;
-    const center = Array.isArray(stateCenter)
-      && stateCenter.length >= 2
-      && Number.isFinite(Number(stateCenter[0]))
-      && Number.isFinite(Number(stateCenter[1]))
-      ? [Number(stateCenter[0]), Number(stateCenter[1])] as const
-      : viewCenter
-        && Number.isFinite(Number(viewCenter.longitude))
-        && Number.isFinite(Number(viewCenter.latitude))
-        ? [Number(viewCenter.longitude), Number(viewCenter.latitude)] as const
-        : null;
-    const initialCamera = center ? {
-      position: { longitude: center[0], latitude: center[1], z: 8_000 },
+    const initialCenter = normalizeInitialCenter(MapManager.GetMapConfiguration?.() ?? {});
+    const initialCamera = {
+      position: { longitude: initialCenter[0], latitude: initialCenter[1], z: 5_000 },
       heading: Number.isFinite(Number(startupState?.heading)) ? Number(startupState?.heading) : 0,
       tilt: DEFAULT_SCENE_TILT,
-    } : undefined;
+    };
     const scene = await createSceneView(sceneHostRef.current, {
       map: mapView.map,
       spatialReference: WEB_MERCATOR_SPATIAL_REFERENCE,
-      ...(initialCamera ? { camera: initialCamera } : {}),
+      camera: initialCamera,
       qualityProfile: 'medium',
       padding: mapView.padding,
       environment: {
@@ -371,6 +381,9 @@ export function ExperienceMapModeBridge({
       if (!scene?.view || disposedRef.current) return;
       if (!sceneHost) throw new Error('3B harita kapsayıcısı kullanılamıyor.');
       if (scene.view.destroyed) throw new Error('3B harita görünümü kapatılmış.');
+      const sharedMap = mapView.map;
+      if (!sharedMap) throw new Error('2B harita nesnesi 3B görünüme aktarılmadan önce hazır olmalıdır.');
+      sharedMapRef.current = sharedMap;
 
       // Keep the SceneView attached to its measurable host for its entire
       // lifetime. Detaching the WebGL view between 2B/3B transitions can leave
@@ -401,21 +414,6 @@ export function ExperienceMapModeBridge({
 
       synchronizeBasemapId(bridge, scene.map);
       if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
-      try {
-        await esriBuildingsRuntimeRef.current?.activate(scene.view as never);
-      } catch (error) {
-        // The optional buildings layer must not block 2D/3D navigation.
-        DebugHelper.Log({ context: 'scene-esri-3d-buildings', error });
-      }
-      if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
-      // The shared Kent Rehberi layer keeps its existing SVG assets. Switch it
-      // to raised 3D billboards immediately before the SceneView becomes visible.
-      sceneIconPresentationRuntimeRef.current?.activate(scene.map as never);
-      setSceneHostActive(true);
-      await nextBrowserFrame();
-      synchronizeSceneViewSize(scene.view);
-      await nextBrowserFrame();
-      synchronizeSceneViewSize(scene.view);
 
       if (initialSceneActivation) {
         const configuration = MapManager.GetMapConfiguration?.() ?? {};
@@ -424,7 +422,38 @@ export function ExperienceMapModeBridge({
         if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
       }
 
-      const sceneState = normalizeSceneStateFromMap(mapView, bridge);
+      const sceneState = initialSceneActivation
+        ? createViewState({
+          ...normalizeSceneStateFromMap(mapView, bridge),
+          center: normalizeInitialCenter(MapManager.GetMapConfiguration?.() ?? {}),
+          scale: null,
+          zoom: null,
+        })
+        : normalizeSceneStateFromMap(mapView, bridge);
+
+      // The 2D canvas shares the same map object. Give the Atlas workspace its
+      // own night cartography when entering 2D; the 3D OSM runtime restores its
+      // owned scene style when returning to SceneView.
+      const atlasMap = mapView.map as { basemap?: unknown } | null;
+      if (atlasMap && !sceneState && atlasMap.basemap !== ATLAS_2D_BASEMAP_ID) {
+        atlasMap.basemap = await createAtlas2DBasemap();
+      }
+
+      try {
+        await esriBuildingsRuntimeRef.current?.activate(scene.view as never);
+      } catch (error) {
+        // The optional buildings layer must not block 2D/3D navigation.
+        DebugHelper.Log({ context: 'scene-esri-3d-buildings', error });
+      }
+      if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
+      // Keep the existing SVG assets while presenting them as raised 3D billboards.
+      await sceneIconPresentationRuntimeRef.current?.activate(scene.map as never);
+      setSceneHostActive(true);
+      await nextBrowserFrame();
+      synchronizeSceneViewSize(scene.view);
+      await nextBrowserFrame();
+      synchronizeSceneViewSize(scene.view);
+
       bridge.setState(sceneState);
       await applyViewStateToSceneView(scene.view, sceneState, {
         allowCrossMode: true,
@@ -456,10 +485,12 @@ export function ExperienceMapModeBridge({
       DebugHelper.Log(error);
       sceneIconPresentationRuntimeRef.current?.deactivate();
       esriBuildingsRuntimeRef.current?.deactivate();
-      sceneBasemapRuntimeRef.current?.restore(mapView.map as SceneBasemapMap);
-      const sharedMap = mapView.map as { basemap?: unknown } | null;
+      const sharedMap = sharedMapRef.current as { basemap?: unknown } | null;
+      if (sharedMap) {
+        sceneBasemapRuntimeRef.current?.restore(sharedMap as SceneBasemapMap);
+      }
       if (sharedMap && !sharedMap.basemap) sharedMap.basemap = 'osm';
-      synchronizeBasemapId(bridge, mapView.map);
+      synchronizeBasemapId(bridge, sharedMap);
       sceneExperienceRef.current?.setActive(false);
       setSceneHostActive(false);
       activeModeRef.current = '2d';
@@ -504,6 +535,7 @@ export function ExperienceMapModeBridge({
         : createViewState(fallbackMapState
           ? Object.assign({}, fallbackMapState, { mode: '2d', tilt: 0 })
           : { mode: '2d', tilt: 0 });
+      const sharedMap = sharedMapRef.current as { basemap?: unknown } | null;
 
       unbindSceneRef.current?.();
       unbindSceneRef.current = () => undefined;
@@ -512,6 +544,14 @@ export function ExperienceMapModeBridge({
       if (modeRef) modeRef.current = '2d';
       bridge?.setState?.(mapState);
 
+      sceneIconPresentationRuntimeRef.current?.deactivate();
+      esriBuildingsRuntimeRef.current?.deactivate();
+      if (sharedMap) {
+        sceneBasemapRuntimeRef.current?.restore(sharedMap as SceneBasemapMap);
+        if (sharedMap.basemap !== ATLAS_2D_BASEMAP_ID) sharedMap.basemap = await createAtlas2DBasemap();
+      }
+      synchronizeBasemapId(bridge, sharedMap);
+
       await applyViewStateToMapView(mapView as never, mapState, {
         allowCrossMode: true,
         duration: prefersReducedMotion() ? 0 : SCENE_TRANSITION_DURATION_MS,
@@ -519,18 +559,22 @@ export function ExperienceMapModeBridge({
       });
 
       if (disposedRef.current) return;
-      sceneIconPresentationRuntimeRef.current?.deactivate();
       setSceneHostActive(false);
-      esriBuildingsRuntimeRef.current?.deactivate();
-      sceneBasemapRuntimeRef.current?.restore(mapView.map as SceneBasemapMap);
-      const sharedMap = mapView.map as { basemap?: unknown } | null;
-      if (sharedMap && !sharedMap.basemap) sharedMap.basemap = 'osm';
-      synchronizeBasemapId(bridge, mapView.map);
       setMode('2d');
       publishMode('2d');
       announce('2B görünüm etkinleştirildi.');
     } catch (error) {
       DebugHelper.Log(error);
+      const sharedMap = sharedMapRef.current as { basemap?: unknown } | null;
+      if (sharedMap) {
+        try {
+          await sceneBasemapRuntimeRef.current?.activate(sharedMap as SceneBasemapMap, sceneLifetimeRef.current.signal);
+          await esriBuildingsRuntimeRef.current?.activate(sceneRef.current?.view as never);
+          await sceneIconPresentationRuntimeRef.current?.activate(sharedMap as never);
+        } catch (recoveryError) {
+          DebugHelper.Log({ context: 'scene-transition-recovery', error: recoveryError });
+        }
+      }
       sceneExperienceRef.current?.setActive(true);
       setSceneHostActive(true);
       activeModeRef.current = '3d';
@@ -633,6 +677,8 @@ export function ExperienceMapModeBridge({
     sceneLifetimeRef.current.abort();
     sceneIconPresentationRuntimeRef.current?.dispose();
     esriBuildingsRuntimeRef.current?.dispose();
+    const sharedMap = sharedMapRef.current as SceneBasemapMap | null;
+    if (sharedMap) sceneBasemapRuntimeRef.current?.restore(sharedMap);
     sceneBasemapRuntimeRef.current?.dispose();
     if (pendingSceneRef.current) destroySceneView(pendingSceneRef.current, (error) => DebugHelper.Log({ context: 'pending-scene-destroy', error }));
     pendingSceneRef.current = null;

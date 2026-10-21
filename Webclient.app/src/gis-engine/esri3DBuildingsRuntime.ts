@@ -3,10 +3,12 @@ import { runtimeDiagnostics } from '../platform/runtime/runtimeDiagnostics';
 
 export const ESRI_3D_BUILDINGS_SCENE_LAYER_URL =
   'https://basemaps3d.arcgis.com/arcgis/rest/services/Esri3D_Buildings_v1/SceneServer/layers/0';
+export const ESRI_3D_BUILDINGS_OPACITY = 0.42;
 
 export interface Esri3DBuildingsLayerLike {
   visible?: boolean;
   loaded?: boolean;
+  opacity?: number;
   load?: () => PromiseLike<unknown> | unknown;
   destroy?: () => void;
 }
@@ -31,14 +33,15 @@ const defaultLoadSceneLayer: LoadSceneLayer = () =>
 
 /**
  * Attaches Esri's streamed 3D-object buildings only on demand in SceneView.
- * The layer is retained but hidden when the user returns to 2D, so switching
- * between modes does not repeatedly recreate the layer or reload its nodes.
+ * The layer is retained but detached when the user returns to 2D, because a
+ * SceneLayer has no MapView implementation. Switching back to 3D reuses it.
  */
 export class Esri3DBuildingsRuntime {
   readonly #loadSceneLayer: LoadSceneLayer;
   readonly #onError: (error: unknown, source: string) => void;
   #map: Esri3DBuildingsMapLike | null = null;
   #layer: Esri3DBuildingsLayerLike | null = null;
+  #attached = false;
   #generation = 0;
 
   constructor(options: Esri3DBuildingsRuntimeOptions = {}) {
@@ -55,6 +58,10 @@ export class Esri3DBuildingsRuntime {
     }
 
     if (this.#map === map && this.#layer) {
+      if (!this.#attached) {
+        map.add(this.#layer, 0);
+        this.#attached = true;
+      }
       this.#layer.visible = true;
       return;
     }
@@ -69,6 +76,7 @@ export class Esri3DBuildingsRuntime {
       title: 'Esri 3D Buildings',
       url: ESRI_3D_BUILDINGS_SCENE_LAYER_URL,
       visible: true,
+      opacity: ESRI_3D_BUILDINGS_OPACITY,
       listMode: 'hide',
       legendEnabled: false,
       popupEnabled: true,
@@ -96,9 +104,11 @@ export class Esri3DBuildingsRuntime {
     this.#layer = layer;
     try {
       map.add(layer, 0);
+      this.#attached = true;
     } catch (error) {
       this.#map = null;
       this.#layer = null;
+      this.#attached = false;
       try { layer.destroy?.(); } catch (destroyError) {
         this.#report(destroyError, 'gis.esri-3d-buildings.destroy-after-add-failure');
       }
@@ -118,7 +128,15 @@ export class Esri3DBuildingsRuntime {
   }
 
   deactivate(): void {
-    if (this.#layer) this.#layer.visible = false;
+    if (!this.#layer) return;
+    this.#layer.visible = false;
+    if (!this.#attached) return;
+    try {
+      this.#map?.remove?.(this.#layer);
+      this.#attached = false;
+    } catch (error) {
+      this.#report(error, 'gis.esri-3d-buildings.detach');
+    }
   }
 
   dispose(): void {
@@ -131,6 +149,7 @@ export class Esri3DBuildingsRuntime {
     const map = this.#map;
     this.#layer = null;
     this.#map = null;
+    this.#attached = false;
     if (!layer) return;
 
     try {

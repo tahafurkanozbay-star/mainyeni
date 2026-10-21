@@ -87,6 +87,9 @@ const ARCGIS_MODULE_CATALOG: readonly ArcgisModuleDescriptor[] = Object.freeze([
   descriptor('esri/request', '@arcgis/core/request.js', ['core'], 2, 'on-demand'),
   descriptor('esri/rest/identify', '@arcgis/core/rest/identify.js', ['query'], 2, 'on-demand'),
   descriptor('esri/rest/query', '@arcgis/core/rest/query.js', ['query'], 2, 'feature'),
+  descriptor('esri/rest/networkService', '@arcgis/core/rest/networkService.js', ['query'], 2, 'on-demand'),
+  descriptor('esri/rest/route', '@arcgis/core/rest/route.js', ['query'], 6, 'on-demand'),
+  descriptor('esri/rest/support/FeatureSet', '@arcgis/core/rest/support/FeatureSet.js', ['query'], 2, 'on-demand'),
   descriptor(
     'esri/rest/support/IdentifyParameters',
     '@arcgis/core/rest/support/IdentifyParameters.js',
@@ -95,6 +98,7 @@ const ARCGIS_MODULE_CATALOG: readonly ArcgisModuleDescriptor[] = Object.freeze([
     'on-demand',
   ),
   descriptor('esri/rest/support/Query', '@arcgis/core/rest/support/Query.js', ['query'], 1, 'feature'),
+  descriptor('esri/rest/support/RouteParameters', '@arcgis/core/rest/support/RouteParameters.js', ['query'], 2, 'on-demand'),
   descriptor('esri/views/MapView', '@arcgis/core/views/MapView.js', ['view-2d'], 7, 'feature'),
   descriptor('esri/views/SceneView', '@arcgis/core/views/SceneView.js', ['view-3d'], 8, 'feature'),
   descriptor('esri/widgets/BasemapGallery', '@arcgis/core/widgets/BasemapGallery.js', ['widget'], 4, 'on-demand'),

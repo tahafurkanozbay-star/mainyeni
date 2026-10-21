@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { AppConfig } from '../../Core/AppConfig';
 import type { AddressGeocodingResult } from '../../data-services/addressGeocoding';
-import { useExperienceTheme } from '../Common/ExperienceDesignSystem';
 import { NAVIGATION_SEARCH_QUERY_LIMIT, NavigationSearchModel } from './navigationSearchModel';
 import './NavigationBar.css';
 
@@ -9,6 +8,8 @@ export interface NavigationBarProps {
   readonly id?: string;
   readonly onAddressSearch: (query: string, signal: AbortSignal) => Promise<readonly AddressGeocodingResult[]>;
   readonly onAddressSelect: (result: AddressGeocodingResult, signal: AbortSignal) => Promise<void>;
+  readonly onOpenDirections?: () => void;
+  readonly directionsOpen?: boolean;
 }
 
 type SearchFeedback = Readonly<{
@@ -18,10 +19,15 @@ type SearchFeedback = Readonly<{
 
 const EMPTY_FEEDBACK: SearchFeedback = Object.freeze({ phase: 'idle', message: '' });
 
-export function NavigationBar({ id, onAddressSearch, onAddressSelect }: NavigationBarProps) {
+export function NavigationBar({
+  id,
+  onAddressSearch,
+  onAddressSelect,
+  onOpenDirections,
+  directionsOpen = false,
+}: NavigationBarProps) {
   const searchModel = useMemo(() => new NavigationSearchModel(), []);
   const search = useSyncExternalStore(searchModel.subscribe, searchModel.getSnapshot, searchModel.getSnapshot);
-  const { theme, toggleTheme } = useExperienceTheme();
   const searchControllerRef = useRef<AbortController | null>(null);
   const searchSequenceRef = useRef(0);
   const [searching, setSearching] = useState(false);
@@ -113,8 +119,6 @@ export function NavigationBar({ id, onAddressSearch, onAddressSelect }: Navigati
     searchModel.setQuery(value);
   };
 
-  const themeLabel = theme === 'dark' ? 'Aydınlık temaya geç' : 'Karanlık temaya geç';
-
   return (
     <header id={id} className="mainbar-container" style={{ top: 0, insetBlockStart: 0 }} role="banner" aria-label="Kent Rehberi üst gezinme">
       <div className="mainbar">
@@ -205,25 +209,27 @@ export function NavigationBar({ id, onAddressSearch, onAddressSelect }: Navigati
         </form>
 
         <nav className="mainbar-right" aria-label="Üst menü">
-          <button
-            type="button"
-            className="kr-theme-toggle"
-            onClick={toggleTheme}
-            aria-label={themeLabel}
-            title={themeLabel}
-          >
-            {theme === 'dark' ? (
+          {onOpenDirections ? (
+            <button
+              type="button"
+              className="kr-header-directions"
+              aria-label="Uygulama içi yol tarifi"
+              aria-expanded={directionsOpen}
+              aria-controls="map-navigation-panel"
+              onClick={onOpenDirections}
+            >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="4" />
-                <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42" />
+                <path d="M12 22s7-6.4 7-13a7 7 0 1 0-14 0c0 6.6 7 13 7 13Z" />
+                <circle cx="12" cy="9" r="2.2" />
+                <path d="M9 17h6" />
               </svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M20.5 15.6A8.5 8.5 0 0 1 8.4 3.5 8.5 8.5 0 1 0 20.5 15.6Z" />
-              </svg>
-            )}
-            <span>{theme === 'dark' ? 'Aydınlık' : 'Karanlık'}</span>
-          </button>
+              <span>Yol tarifi</span>
+            </button>
+          ) : null}
+          <span className="kr-map-theme-badge" aria-label="Bağımsız Atlas harita teması">
+            <span className="kr-map-theme-badge__indicator" aria-hidden="true" />
+            Atlas
+          </span>
           <a className="kr-header-shortcut kr-header-portal" href="https://cbsbaskent.ankara.bel.tr/" target="_blank" rel="noopener noreferrer" aria-label="CBS Başkent portalını yeni sekmede aç">
             <span aria-hidden="true">CBS Başkent</span>
           </a>

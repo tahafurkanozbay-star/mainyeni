@@ -2,8 +2,9 @@ import { loadArcgisModules } from './arcgisModuleRuntime';
 import { withTimeout } from '../platform/runtime/resilience';
 import { runtimeDiagnostics } from '../platform/runtime/runtimeDiagnostics';
 
-export const FREE_SCENE_BASEMAP_ID = 'openstreetmap-3d';
-export const FREE_SCENE_BASEMAP_TITLE = 'OpenStreetMap — ücretsiz 3B binalar';
+export const FREE_SCENE_BASEMAP_ID = 'atlas-night-vector-3d';
+export const FREE_SCENE_BASEMAP_TITLE = 'Atlas Night — Dark Vector 3B';
+const ATLAS_DARK_VECTOR_PORTAL_ITEM_ID = 'c3ae924d5dea4b2b8f0a8e9f2f94b5f1';
 
 export interface SceneBasemapLike {
   readonly id?: string;
@@ -45,14 +46,18 @@ interface SceneBasemapOwnership {
 type ArcgisConstructor<T = unknown> = new (properties?: Record<string, unknown>) => T;
 
 const loadFreeOpenStreetMapBasemap = async (): Promise<SceneBasemapModule> => {
-  const [Basemap, OpenStreetMapLayer] = await loadArcgisModules<
+  const [Basemap, VectorTileLayer] = await loadArcgisModules<
     readonly [ArcgisConstructor<SceneBasemapLike>, ArcgisConstructor<SceneBasemapLayerLike>]
-  >(['esri/Basemap', 'esri/layers/OpenStreetMapLayer']);
+  >(['esri/Basemap', 'esri/layers/VectorTileLayer']);
 
   return {
     fromId: (id: string) => {
       if (id !== FREE_SCENE_BASEMAP_ID) return null;
-      const layer = new OpenStreetMapLayer({ title: FREE_SCENE_BASEMAP_TITLE });
+      const layer = new VectorTileLayer({
+        title: FREE_SCENE_BASEMAP_TITLE,
+        portalItem: { id: ATLAS_DARK_VECTOR_PORTAL_ITEM_ID },
+        opacity: 0.9,
+      });
       layer.on?.('layerview-create-error', ({ error, view }) => {
         runtimeDiagnostics.captureError(error, {
           source: 'gis.scene-basemap.layer-view',

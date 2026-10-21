@@ -305,6 +305,7 @@ export class OSM3DBuildingsRuntime {
         title: 'OpenStreetMap 3B binalar',
         listMode: 'hide',
         visible: true,
+        opacity: 0.52,
       });
       map.add(this.#layer, 0);
     }
@@ -474,8 +475,8 @@ export class OSM3DBuildingsRuntime {
         symbolLayers: [{
           type: 'extrude',
           size: building.heightMeters,
-          material: { color: [184, 197, 210, 0.92] },
-          edges: { type: 'solid', color: [92, 107, 122, 0.95], size: 0.6 },
+          material: { color: [184, 197, 210, 0.42] },
+          edges: { type: 'solid', color: [92, 107, 122, 0.52], size: 0.6 },
         }],
       },
     }));

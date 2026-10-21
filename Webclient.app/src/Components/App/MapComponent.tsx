@@ -13,6 +13,7 @@ import { WIDGET_WINDOW_DEFINITIONS } from '../Common/WidgetWindowRegistry';
 import { waitForArcgisView } from '../../gis-engine/viewReadiness';
 import { withTimeout } from '../../platform/runtime/resilience';
 import { ExperienceMapModeBridge } from './ExperienceMapModeBridge';
+import { MapNavigationPanel } from './MapNavigationPanel';
 import { MapWorkspaceRecoverySurface } from './MapWorkspaceRecoverySurface';
 import { MapWorkspaceRecoveryModel } from './mapWorkspaceRecoveryModel';
 import { MapWorkspaceAccessibilityModel } from './mapWorkspaceAccessibility';
@@ -25,11 +26,17 @@ import {
   createResponsivePadding,
   createViewPerformanceMonitor,
 } from '../../gis-engine/viewRuntime';
-import type { ExperienceMapMode } from '../../experience/experienceRuntime';
+import { EXPERIENCE_COMMAND_EVENT, EXPERIENCE_MAP_MODE_EVENT, type ExperienceMapMode } from '../../experience/experienceRuntime';
 import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
 import type { KentRehberiMapLike } from '../../data-services/kentRehberiGeoJsonLayer';
 import { searchAddressCandidates } from '../../data-services/addressGeocoding';
 import type { AddressGeocodingResult } from '../../data-services/addressGeocoding';
+import {
+  InAppNavigationRuntime,
+  type InAppNavigationResult,
+  type InAppNavigationMapLike,
+  type InAppTravelMode,
+} from '../../gis-engine/inAppNavigationRuntime';
 import { KentRehberiDataLayer } from './KentRehberiDataLayer';
 import './MapComponent.css';
 import '../Widget/_shared/ExperienceWidgetModernization.css';
@@ -86,6 +93,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
   const mapDiv = useRef<HTMLDivElement | null>(null);
   const searchMarkerLayerRef = useRef<SearchGraphicsLayerLike | null>(null);
   const searchMarkerMapRef = useRef<SearchMapLike | null>(null);
+  const navigationRuntimeRef = useRef<InAppNavigationRuntime | null>(null);
   const accessorWatchRef = useRef<ArcgisAccessorWatch | null>(null);
   const activeViewModeRef = useRef<ExperienceMapMode>('2d');
   const accessibilityModelRef = useRef<MapWorkspaceAccessibilityModel | null>(null);
@@ -102,8 +110,23 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
   const [mapGeneration, setMapGeneration] = useState(0);
   const [initialModeResolved, setInitialModeResolved] = useState(false);
   const [mapView, setMapView] = useState<MapViewLike | null>(null);
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const [atlasMode, setAtlasMode] = useState<ExperienceMapMode>('3d');
   const [sidebarToolHost, setSidebarToolHost] = useState<HTMLDivElement | null>(null);
   const sidebarRef = useRef<unknown>(null);
+
+  useEffect(() => {
+    const syncMode = (event: Event) => {
+      const mode = (event as CustomEvent<{ mode?: ExperienceMapMode }>).detail?.mode;
+      if (mode === '2d' || mode === '3d') setAtlasMode(mode);
+    };
+    window.addEventListener(EXPERIENCE_MAP_MODE_EVENT, syncMode);
+    return () => window.removeEventListener(EXPERIENCE_MAP_MODE_EVENT, syncMode);
+  }, []);
+
+  const sendAtlasCommand = (name: string, mode?: ExperienceMapMode): void => {
+    window.dispatchEvent(new CustomEvent(EXPERIENCE_COMMAND_EVENT, { detail: { name, mode, source: 'atlas-map-deck' } }));
+  };
 
   useEffect(() => {
     let disposed = false;
@@ -224,6 +247,9 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       } catch (error) { DebugHelper.Log(error); }
       searchMarkerLayerRef.current = null;
       searchMarkerMapRef.current = null;
+      navigationRuntimeRef.current?.dispose();
+      navigationRuntimeRef.current = null;
+      setNavigationOpen(false);
       unbindViewState(); performanceMonitor?.dispose?.(); MapManager.ClearViewPerformanceMonitor?.(performanceMonitor);
       MapManager.ClearViewStateBridge?.(bridge as never); bridge?.destroy?.(); handles.forEach(safeRemove); windowManager.SetMapUpdating(false);
       Store.dispatch({ type: MapReducer_ActionTypes.SetMapView, payload: null });
@@ -344,6 +370,46 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
     }
   }, []);
 
+  const planNavigationRoute = useCallback(async (
+    origin: AddressGeocodingResult,
+    destination: AddressGeocodingResult,
+    mode: InAppTravelMode,
+    signal: AbortSignal,
+  ): Promise<InAppNavigationResult> => {
+    if (signal.aborted) throw signal.reason ?? new DOMException('Rota işlemi iptal edildi.', 'AbortError');
+    const view = (
+      MapManager.GetActiveMapView?.() ?? MapManager.GetMapView()
+    ) as MapViewLike | null;
+    const map = view?.map as InAppNavigationMapLike | null | undefined;
+    if (!view || view.destroyed || typeof view.goTo !== 'function' || !map) {
+      throw new Error('Harita henüz hazır değil. Birkaç saniye sonra yeniden deneyin.');
+    }
+
+    const runtime = navigationRuntimeRef.current ?? new InAppNavigationRuntime();
+    navigationRuntimeRef.current = runtime;
+    const result = await runtime.planRoute(
+      map,
+      origin,
+      destination,
+      mode,
+      signal,
+    );
+    if (signal.aborted) throw signal.reason ?? new DOMException('Rota işlemi iptal edildi.', 'AbortError');
+    const activeView = (
+      MapManager.GetActiveMapView?.() ?? MapManager.GetMapView()
+    ) as MapViewLike | null;
+    if (view !== activeView || view.destroyed) {
+      throw new DOMException('Harita görünümü rota hesaplanırken değişti.', 'AbortError');
+    }
+    await view.goTo(result.geometry, { duration: 700 });
+    if (signal.aborted) throw signal.reason ?? new DOMException('Rota işlemi iptal edildi.', 'AbortError');
+    return result;
+  }, []);
+
+  const clearNavigationRoute = useCallback((): void => {
+    navigationRuntimeRef.current?.clear();
+  }, []);
+
   const modelsMountedRef = useRef(false);
   useEffect(() => {
     modelsMountedRef.current = true;
@@ -358,14 +424,51 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
   }, [accessibilityModel, recoveryModel]);
 
   return (
-    <div className="esri-map" id="esri-map-container" aria-label="Kent Rehberi ana harita çalışma alanı" aria-busy={accessibilitySnapshot.isBusy} data-workspace-phase={accessibilitySnapshot.phase} data-initial-mode-resolved={initialModeResolved ? 'true' : 'false'}>
+    <div className="esri-map map-experience-atlas" id="esri-map-container" aria-label="Kent Rehberi ana harita çalışma alanı" aria-busy={accessibilitySnapshot.isBusy} data-map-theme="atlas" data-workspace-phase={accessibilitySnapshot.phase} data-initial-mode-resolved={initialModeResolved ? 'true' : 'false'}>
       <div ref={mapDiv} className="experience-mapview-host" tabIndex={-1} aria-label="Kent Rehberi harita çizim alanı" />
       <div className="map-workspace-status" role={accessibilitySnapshot.phase === 'error' ? 'alert' : 'status'} aria-live={accessibilitySnapshot.phase === 'error' ? 'assertive' : 'polite'} aria-atomic="true">{accessibilitySnapshot.announcement}</div>
       <MapWorkspaceRecoverySurface model={recoveryModel} onRetry={restartMapWorkspace} />
       {mapView && <>
         <KentRehberiDataLayer map={mapView.map as KentRehberiMapLike} />
         <ExperienceMapModeBridge mapView={mapView as never} modeRef={activeViewModeRef} accessorWatch={accessorWatchRef.current ?? undefined} onInitialModeResolved={markInitialModeResolved} />
-        <NavigationBar id="mainbar" onAddressSearch={searchAddress} onAddressSelect={selectAddress} />
+        <NavigationBar
+          id="mainbar"
+          onAddressSearch={searchAddress}
+          onAddressSelect={selectAddress}
+          onOpenDirections={() => setNavigationOpen(true)}
+          directionsOpen={navigationOpen}
+        />
+        <aside className="atlas-map-deck" aria-label="Atlas harita araçları">
+          <div className="atlas-map-deck__brand">
+            <span className="atlas-map-deck__mark" aria-hidden="true">A</span>
+            <span><strong>ATLAS</strong><small>ANKARA · KENTSEL VERİ</small></span>
+          </div>
+          <div className="atlas-map-deck__divider" />
+          <button type="button" className="atlas-map-deck__tool" aria-label="Yakınlaştır" title="Yakınlaştır" onClick={() => sendAtlasCommand('map-zoom-in')}><span aria-hidden="true">＋</span></button>
+          <button type="button" className="atlas-map-deck__tool" aria-label="Uzaklaştır" title="Uzaklaştır" onClick={() => sendAtlasCommand('map-zoom-out')}><span aria-hidden="true">−</span></button>
+          <button type="button" className="atlas-map-deck__tool" aria-label="Ana görünüme dön" title="Ana görünüme dön" onClick={() => sendAtlasCommand('map-home')}><span aria-hidden="true">⌂</span></button>
+          <div className="atlas-map-deck__divider" />
+          <div className="atlas-map-deck__mode" role="group" aria-label="Harita görünümü">
+            <button type="button" aria-pressed={atlasMode === '2d'} onClick={() => sendAtlasCommand('map-mode', '2d')}>2B</button>
+            <button type="button" aria-pressed={atlasMode === '3d'} onClick={() => sendAtlasCommand('map-mode', '3d')}>3B</button>
+          </div>
+        </aside>
+        <section className="atlas-map-card" aria-label="Harita bilgisi">
+          <span className="atlas-map-card__live"><i /> CANLI HARİTA</span>
+          <strong>Ankara</strong>
+          <span className="atlas-map-card__meta">{atlasMode === '3d' ? 'Üç boyutlu şehir modeli' : 'Koyu vektör harita'} · {atlasMode.toUpperCase()}</span>
+        </section>
+        <div className="atlas-map-footer" aria-hidden="true">
+          <span><i /> Harita hazır</span><span>WGS 84 · EPSG:3857</span><span>ATLAS / 01</span>
+        </div>
+        {navigationOpen ? (
+          <MapNavigationPanel
+            onAddressSearch={searchAddress}
+            onPlanRoute={planNavigationRoute}
+            onClearRoute={clearNavigationRoute}
+            onClose={() => setNavigationOpen(false)}
+          />
+        ) : null}
         <LegacySidebar id="sidebar" windowManager={windowManager} ref={sidebarRef} onToolHostChange={setSidebarToolHost} />
         <ModernToolbarWidget
           id="toolbar-widget"

@@ -102,10 +102,10 @@ describe('map experience layout collision contract', () => {
   });
 
   it('uses translucent frosted surfaces on Keşfet, query windows, and the shell', () => {
-    expect(sidebarModernCss).toContain('background: color-mix(in srgb, var(--exp-surface, #fff) 84%, transparent);');
+    expect(sidebarModernCss).toContain('background: color-mix(in srgb, var(--exp-surface, #fff) 78%, transparent);');
     expect(uiCss).toContain('background: color-mix(in srgb, var(--exp-surface) 84%, transparent);');
     expect(shellCss).toContain('background: color-mix(in srgb, var(--exp-surface) 84%, transparent);');
-    expect(navigationCss).toContain('backdrop-filter:blur(12px);');
+    expect(navigationCss).toContain('backdrop-filter:blur(18px) saturate(1.1);');
   });
 
   it('keeps the bottom disclaimer panel expanded to the full single-line warning', () => {
@@ -129,12 +129,14 @@ describe('map experience layout collision contract', () => {
     expect(disclaimerCss).toMatch(/\.experience-data-disclaimer__icon\s*\{\s*display:\s*none;/u);
   });
 
-  it('applies subtle translucent glass to the fixed header, sidebar, map tools, and managed windows', () => {
-    expect(publicWorkspaceCss).toContain('--kr-premium-glass: rgb(255 255 255 / 91%);');
-    expect(publicWorkspaceCss).toContain('--kr-premium-glass: rgb(19 39 49 / 91%);');
+  it('uses an independent Atlas palette and translucent glass across the map workspace', () => {
+    expect(publicWorkspaceCss).toContain('--exp-accent: #45c6bb;');
+    expect(publicWorkspaceCss).toContain('--exp-surface: #10262e;');
+    expect(publicWorkspaceCss).toContain('--exp-text: #eff8f6;');
+    expect(publicWorkspaceCss).toContain('--kr-premium-glass: rgb(8 25 31 / 82%);');
     expect(publicWorkspaceCss).toContain('#app-shell .mainbar-container {');
-    expect(publicWorkspaceCss).toContain('backdrop-filter: blur(14px) saturate(1.08) !important;');
-    expect(publicWorkspaceCss).toContain('color-mix(in srgb, var(--exp-surface, #fff) 94%, transparent) !important;');
+    expect(publicWorkspaceCss).toContain('backdrop-filter: blur(18px) saturate(1.12) !important;');
+    expect(publicWorkspaceCss).toContain('color-mix(in srgb, var(--exp-surface, #fff) 82%, transparent) !important;');
   });
 
   it('removes the decorative lower-right map badge while preserving OSM credit', () => {

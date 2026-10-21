@@ -1036,42 +1036,91 @@ body {
 }
 
 
-/* Slightly translucent panels across the Kent Rehberi workspace. */
-:root {
-  --kr-premium-glass: rgb(255 255 255 / 91%);
-}
-html[data-experience-theme='dark'] {
-  --kr-premium-glass: rgb(19 39 49 / 91%);
+/* Shared translucent glass surface for the map workspace. */
+/* The map owns a fixed visual identity, independent of the site light/dark mode. */
+#app-shell {
+  --exp-accent: #45c6bb;
+  --exp-accent-strong: #208b84;
+  --exp-accent-soft: rgb(69 198 187 / 15%);
+  --exp-bg: #08171d;
+  --exp-surface: #10262e;
+  --exp-surface-2: #17343c;
+  --exp-surface-3: #21464d;
+  --exp-text: #eff8f6;
+  --exp-text-soft: #c1d5d2;
+  --exp-text-muted: #91aaa7;
+  --exp-border: rgb(175 211 205 / 22%);
+  --exp-border-strong: rgb(175 211 205 / 38%);
+  --exp-focus: 0 0 0 3px rgb(69 198 187 / 34%);
+  --exp-danger: #ff8585;
+  --exp-danger-text: #ffc0bd;
+  --exp-success: #72d9a6;
+  --exp-shadow-xs: 0 2px 8px rgb(0 0 0 / 18%);
+  --exp-shadow-sm: 0 8px 24px rgb(0 0 0 / 30%);
+  --exp-shadow-md: 0 18px 48px rgb(0 0 0 / 42%);
+  --kr-premium-ink: #eff8f6;
+  --kr-premium-blue: #45c6bb;
+  --kr-premium-blue-2: #8cdbca;
+  --kr-premium-gold: #e4bd70;
+  --kr-premium-glass: rgb(8 25 31 / 82%);
+  --kr-premium-border: rgb(175 211 205 / 24%);
+  --kr-premium-shadow: 0 18px 42px rgb(0 0 0 / 35%);
+  --kr-action-ink: #071b20;
+  color-scheme: dark;
 }
 
 #app-shell .mainbar-container {
   background: var(--kr-premium-glass) !important;
-  -webkit-backdrop-filter: blur(14px) saturate(1.08) !important;
-  backdrop-filter: blur(14px) saturate(1.08) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.12) !important;
+  backdrop-filter: blur(18px) saturate(1.12) !important;
 }
 #app-shell .sidebar-container.kr-sidebar {
   background: var(--kr-premium-glass) !important;
-  -webkit-backdrop-filter: blur(18px) saturate(1.08) !important;
-  backdrop-filter: blur(18px) saturate(1.08) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.12) !important;
+  backdrop-filter: blur(22px) saturate(1.12) !important;
 }
 #app-shell .toolbarwidget,
 #app-shell .experience-workspace,
 #app-shell .map-workspace-shell-overlay {
   background: var(--kr-premium-glass) !important;
-  -webkit-backdrop-filter: blur(14px) saturate(1.08) !important;
-  backdrop-filter: blur(14px) saturate(1.08) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.12) !important;
+  backdrop-filter: blur(18px) saturate(1.12) !important;
 }
 #app-shell .common-query-window,
 #app-shell .kr-lazy-window {
-  background: color-mix(in srgb, var(--exp-surface, #fff) 94%, transparent) !important;
-  -webkit-backdrop-filter: blur(12px) saturate(1.04);
-  backdrop-filter: blur(12px) saturate(1.04);
+  background: color-mix(in srgb, var(--exp-surface, #fff) 82%, transparent) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.12);
+  backdrop-filter: blur(18px) saturate(1.12);
 }
 #app-shell .common-query-window-header {
-  background: color-mix(in srgb, var(--exp-surface-2, #f5f9fa) 93%, transparent);
+  background: color-mix(in srgb, var(--exp-surface-2, #f5f9fa) 82%, transparent);
 }
 #app-shell .common-query-window-body {
-  background: color-mix(in srgb, var(--exp-surface, #fff) 94%, transparent);
+  background: color-mix(in srgb, var(--exp-surface, #fff) 82%, transparent);
+}
+#app-shell .kr-sidebar .kr-sidebar__item.ns-card {
+  background: color-mix(in srgb, var(--exp-surface, #fff) 84%, transparent);
+  border-color: var(--exp-border);
+  color: var(--exp-text);
+}
+#app-shell .kr-sidebar .kr-sidebar__item.ns-card:is(:hover, :focus-visible) {
+  background: color-mix(in srgb, var(--exp-accent-soft) 90%, transparent);
+  border-color: color-mix(in srgb, var(--exp-accent) 50%, var(--exp-border));
+}
+#app-shell .kr-sidebar .kr-sidebar__panel-head h2 {
+  color: var(--exp-accent);
+}
+#app-shell .kr-sidebar .kr-sidebar__item-copy strong,
+#app-shell .kr-sidebar .kr-sidebar__panel-head span,
+#app-shell .kr-sidebar .kr-sidebar__item-arrow,
+#app-shell .kr-sidebar .kr-sidebar__empty {
+  color: var(--exp-text-soft);
+}
+#app-shell .map-workspace-status,
+#app-shell .common-query-window,
+#app-shell .kr-lazy-window {
+  color: var(--exp-text);
+  border-color: var(--exp-border);
 }
 
 

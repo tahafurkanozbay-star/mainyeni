@@ -4,7 +4,11 @@ import {
   createSceneIconRenderer,
   KENT_REHBERI_ICON_LAYER_ID,
   normalizeSceneIconHref,
+  type SceneIconGraphicConstructor,
+  type SceneIconGraphicsLayerConstructor,
+  type LoadSceneIconGraphicsModules,
   SCENE_ICON_GROUND_OFFSET_METERS,
+  SCENE_ICON_LAYER_OPACITY,
   SceneIconPresentationRuntime,
 } from './sceneIconPresentationRuntime';
 
@@ -37,7 +41,7 @@ const sourceRenderer = () => ({
 
 const createCollection = () => {
   const listeners = new Map<string, Set<(event: { item?: unknown }) => void>>();
-  const items: Array<{ id?: string; renderer?: unknown; elevationInfo?: unknown }> = [];
+  const items: Array<Record<string, unknown>> = [];
   return {
     items,
     on: vi.fn((eventName: string, callback: (event: { item?: unknown }) => void) => {
@@ -51,6 +55,19 @@ const createCollection = () => {
     },
   };
 };
+
+class FakeGraphic {
+  constructor(readonly properties: Record<string, unknown>) {}
+}
+
+class FakeGraphicsLayer {
+  readonly destroy = vi.fn();
+  constructor(readonly properties: Record<string, unknown>) {}
+}
+
+const loadGraphicsModules: LoadSceneIconGraphicsModules = async (): Promise<
+  readonly [SceneIconGraphicConstructor, SceneIconGraphicsLayerConstructor]
+> => [FakeGraphic, FakeGraphicsLayer];
 
 describe('3D SVG icon pins', () => {
   it('converts every registered SVG unique-value marker to a 50m elevated 3D icon with a callout', () => {
@@ -117,6 +134,7 @@ describe('3D SVG icon pins', () => {
     const serializedRenderer = { ...sourceRenderer(), type: 'uniqueValue' };
     const renderer = createSceneIconRenderer(serializedRenderer);
     const infos = renderer?.uniqueValueInfos as Array<{ symbol: { type?: string } }>;
+    expect(renderer?.type).toBe('unique-value');
     expect(infos).toHaveLength(2);
     expect(infos.every((entry) => entry.symbol.type === 'point-3d')).toBe(true);
   });
@@ -128,43 +146,94 @@ describe('3D SVG icon pins', () => {
     expect(normalizeSceneIconHref('https://example.test/icon.svg')).toBe('https://example.test/icon.svg');
   });
 
-  it('switches the current layer renderer and restores the original renderer and elevation info', () => {
+  it('adds elevated SVG graphics without mutating the 2D source layer and restores it on deactivation', async () => {
     const original = sourceRenderer();
-    const layer = { id: KENT_REHBERI_ICON_LAYER_ID, renderer: original, elevationInfo: { mode: 'on-the-ground' } };
-    const map = { layers: { items: [layer] } };
-    const runtime = new SceneIconPresentationRuntime();
+    const layer = {
+      id: KENT_REHBERI_ICON_LAYER_ID,
+      renderer: original,
+      visible: true,
+      createQuery: vi.fn(() => ({})),
+      queryFeatures: vi.fn(async () => ({
+        features: [
+          { geometry: { longitude: 32.85, latitude: 39.93 }, attributes: { iconKey: 'kutuphane' } },
+          { geometry: { longitude: 32.86, latitude: 39.94 }, attributes: { iconKey: 'otobus' } },
+        ],
+      })),
+    };
+    const items: unknown[] = [layer];
+    const map = {
+      layers: { items },
+      add: vi.fn((overlay: unknown) => { items.unshift(overlay); }),
+      remove: vi.fn((overlay: unknown) => {
+        const index = items.indexOf(overlay);
+        if (index >= 0) items.splice(index, 1);
+      }),
+    };
+    const runtime = new SceneIconPresentationRuntime({ loadGraphicsModules });
 
-    runtime.activate(map);
-    expect((layer.renderer as { uniqueValueInfos: Array<{ symbol: { type: string } }> }).uniqueValueInfos[0]?.symbol.type)
-      .toBe('point-3d');
-    expect(layer.elevationInfo).toEqual({ mode: 'relative-to-ground', offset: 0 });
+    await runtime.activate(map);
+    const overlay = items[0] as FakeGraphicsLayer;
+    const graphics = overlay.properties.graphics as FakeGraphic[];
+    expect(layer.renderer).toBe(original);
+    expect(layer.visible).toBe(false);
+    expect(overlay.properties).toMatchObject({
+      id: 'kent-rehberi-3d-icon-overlay',
+      listMode: 'hide',
+      opacity: SCENE_ICON_LAYER_OPACITY,
+    });
+    expect(graphics).toHaveLength(2);
+    expect(graphics.map((graphic) =>
+      (graphic.properties.symbol as { type?: string; verticalOffset?: { minWorldLength?: number } }).type))
+      .toEqual(['point-3d', 'point-3d']);
+    const firstGraphic = graphics[0];
+    if (!firstGraphic) throw new Error('Expected an elevated 3D icon graphic.');
+    expect((firstGraphic.properties.symbol as { verticalOffset?: { minWorldLength?: number } })
+      .verticalOffset?.minWorldLength).toBe(SCENE_ICON_GROUND_OFFSET_METERS);
 
     runtime.deactivate();
-    expect(layer.renderer).toBe(original);
-    expect(layer.elevationInfo).toEqual({ mode: 'on-the-ground' });
+    expect(layer.visible).toBe(true);
+    expect(map.remove).toHaveBeenCalledWith(overlay);
+    expect(overlay.destroy).toHaveBeenCalledTimes(1);
+    expect(items).toEqual([layer]);
 
-    runtime.activate(map);
-    expect((layer.renderer as { uniqueValueInfos: Array<{ symbol: { type: string } }> }).uniqueValueInfos[0]?.symbol.type)
-      .toBe('point-3d');
+    await runtime.activate(map);
+    expect(layer.visible).toBe(false);
     runtime.dispose();
-    expect(layer.renderer).toBe(original);
+    expect(layer.visible).toBe(true);
   });
 
-  it('applies the 3D renderer when the POI layer is attached after the 3D scene activates', () => {
+  it('creates the overlay when the POI layer is attached after the 3D scene activates', async () => {
     const collection = createCollection();
-    const map = { layers: collection };
-    const runtime = new SceneIconPresentationRuntime();
-    runtime.activate(map);
+    const map = {
+      layers: collection,
+      add: vi.fn((overlay: unknown) => { collection.items.unshift(overlay as Record<string, unknown>); }),
+      remove: vi.fn((overlay: unknown) => {
+        const index = collection.items.indexOf(overlay as Record<string, unknown>);
+        if (index >= 0) collection.items.splice(index, 1);
+      }),
+    };
+    const runtime = new SceneIconPresentationRuntime({ loadGraphicsModules });
+    await runtime.activate(map);
     const original = sourceRenderer();
-    const layer = { id: KENT_REHBERI_ICON_LAYER_ID, renderer: original, elevationInfo: undefined };
+    const layer = {
+      id: KENT_REHBERI_ICON_LAYER_ID,
+      renderer: original,
+      visible: true,
+      createQuery: vi.fn(() => ({})),
+      queryFeatures: vi.fn(async () => ({
+        features: [{ geometry: { longitude: 32.85, latitude: 39.93 }, attributes: { iconKey: 'kutuphane' } }],
+      })),
+    };
 
     collection.items.push(layer);
     collection.emit('after-add', layer);
 
-    expect((layer.renderer as { uniqueValueInfos: Array<{ symbol: { type: string } }> }).uniqueValueInfos[0]?.symbol.type)
-      .toBe('point-3d');
-    runtime.deactivate();
+    await vi.waitFor(() => expect(map.add).toHaveBeenCalledTimes(1));
     expect(layer.renderer).toBe(original);
+    expect(layer.visible).toBe(false);
+    runtime.deactivate();
+    expect(layer.visible).toBe(true);
+    expect(map.remove).toHaveBeenCalledTimes(1);
     runtime.dispose();
   });
 

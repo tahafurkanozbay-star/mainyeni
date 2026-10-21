@@ -5,9 +5,9 @@
   max-width: 100dvw;
   max-height: calc(100dvh - var(--mainbar-height, 60px));
   overflow: hidden;
-  background: color-mix(in srgb, var(--exp-surface, #fff) 84%, transparent);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
+  background: color-mix(in srgb, var(--exp-surface, #fff) 78%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.12);
+  backdrop-filter: blur(20px) saturate(1.12);
   border-right-color: color-mix(in srgb, var(--exp-border, #cbd5e1) 76%, transparent);
 }
 
@@ -63,6 +63,14 @@
   height: 40px;
   margin: 0 auto;
   object-fit: contain;
+  opacity: .78;
+  filter: saturate(.84);
+  transition: opacity 140ms ease, filter 140ms ease;
+}
+
+.kr-sidebar__group:is(:hover, [aria-pressed="true"]) img {
+  opacity: 1;
+  filter: none;
 }
 
 .kr-sidebar__panel {
