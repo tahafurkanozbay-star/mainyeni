@@ -1,5 +1,13 @@
 # 3D Altyapı / Üstyapı Koordinasyon Web Uygulaması — Güncel İlerleme
 
+## 2026-10-21 — 3B SVG harita ikonları: zeminden 50 m yüksekte callout pinleri
+
+- Dal: `agent/3d-svg-pin-icons-50m-20261021`; taban main SHA: `e1815574f3bad5ffb5fc53ae183a545f7b00d9ac`.
+- Yeni `SceneIconPresentationRuntime`, Kent Rehberi'nin mevcut `kent-rehberi-postgis` GeoJSON katmanının SVG `unique-value` renderer'ını yalnızca 3B sahne görünürken dönüştürür. Her SVG ikon, `IconSymbol3DLayer` içeren billboard `PointSymbol3D` olarak çizilir; `verticalOffset` min/max world length tam 50 m, ikon bağlantısı `LineCallout3D`, anchor `bottom` ve bina/zemin engellerine karşı görünürlük `visible` ayarlanır.
+- 2B'ye dönüldüğünde özgün renderer ve `elevationInfo` nesnesi geri yüklenir. Layer henüz veri yüklenirken 3B açılmışsa koleksiyon dinleyicisi katman eklendiğinde dönüşümü uygular; ayrı GeoJSON indirmesi veya kopya POI katmanı oluşturulmaz. SVG yolları `./images/...` biçimine normalize edilir, IIS alt dizin dağıtımı korunur.
+- Runtime ve 3B mod köprüsü regresyon testleri eklendi; kayıt defterindeki bütün SVG harita ikonlarının dönüştürüldüğünü test eden kapsama dahil edildi. CI ve üretim dağıtımı henüz doğrulanmadı.
+
+
 ## 2026-10-21 — Esri 3D Buildings SceneLayer entegrasyonu (PR #593)
 
 - Çalışma dalı: `agent/esri-3d-buildings-20261021-1048-11c7c61`; güncel main tabanı: `c81b285e87adf1d2031707cc00b6f43125c9a559`.
