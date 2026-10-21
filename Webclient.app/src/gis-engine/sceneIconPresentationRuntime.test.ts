@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import iconEntries from './iconRegistry.json';
 import {
   createSceneIconRenderer,
   KENT_REHBERI_ICON_LAYER_ID,
@@ -87,6 +88,29 @@ describe('3D SVG icon pins', () => {
     expect(infos[1]?.symbol.symbolLayers?.[0]?.resource?.href).toBe('./images/icons/map/EGO/otobusduraklari.svg');
     expect(renderer?.defaultSymbol).toEqual({ type: 'simple-marker', color: [0, 0, 0, 0], size: 1 });
     expect(sourceRenderer().uniqueValueInfos[0]?.symbol.type).toBe('picture-marker');
+  });
+
+  it('converts every SVG registered for Kent Rehberi map icons', () => {
+    const svgEntries = (iconEntries as readonly { id?: string; icon?: string; url?: string; src?: string }[])
+      .flatMap((entry) => {
+        const url = [entry.icon, entry.url, entry.src].find(
+          (candidate): candidate is string => typeof candidate === 'string' && /\.svg(?:[?#].*)?$/iu.test(candidate),
+        );
+        return entry.id && url ? [{ value: entry.id, symbol: { type: 'picture-marker', url, width: '28px', height: '32px' } }] : [];
+      });
+    const renderer = createSceneIconRenderer({
+      type: 'unique-value',
+      field: 'iconKey',
+      uniqueValueInfos: svgEntries,
+      defaultSymbol: { type: 'simple-marker', color: [0, 0, 0, 0], size: 1 },
+    });
+    const converted = renderer?.uniqueValueInfos as Array<{ value: string; symbol: { type: string; verticalOffset?: { minWorldLength?: number; maxWorldLength?: number } } }>;
+
+    expect(converted).toHaveLength(svgEntries.length);
+    expect(converted.every((entry) => entry.symbol.type === 'point-3d')).toBe(true);
+    expect(converted.every((entry) =>
+      entry.symbol.verticalOffset?.minWorldLength === 50
+      && entry.symbol.verticalOffset.maxWorldLength === 50)).toBe(true);
   });
 
   it('normalizes subpath-safe SVG URLs without altering absolute URLs', () => {
