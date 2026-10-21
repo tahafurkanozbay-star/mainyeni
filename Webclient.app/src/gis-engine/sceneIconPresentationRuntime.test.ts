@@ -113,6 +113,14 @@ describe('3D SVG icon pins', () => {
       && entry.symbol.verticalOffset.maxWorldLength === 50)).toBe(true);
   });
 
+  it('accepts the ArcGIS web-map JSON uniqueValue spelling as well as the SDK unique-value spelling', () => {
+    const serializedRenderer = { ...sourceRenderer(), type: 'uniqueValue' };
+    const renderer = createSceneIconRenderer(serializedRenderer);
+    const infos = renderer?.uniqueValueInfos as Array<{ symbol: { type?: string } }>;
+    expect(infos).toHaveLength(2);
+    expect(infos.every((entry) => entry.symbol.type === 'point-3d')).toBe(true);
+  });
+
   it('normalizes subpath-safe SVG URLs without altering absolute URLs', () => {
     expect(normalizeSceneIconHref('images/icons/map/ABB/parklar.svg')).toBe('./images/icons/map/ABB/parklar.svg');
     expect(normalizeSceneIconHref('/images/icons/map/ABB/parklar.svg')).toBe('./images/icons/map/ABB/parklar.svg');
