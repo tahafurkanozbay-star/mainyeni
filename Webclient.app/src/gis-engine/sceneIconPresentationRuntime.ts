@@ -147,9 +147,10 @@ const createSceneIconSymbol = (input: unknown): JsonRecord | null => {
  */
 export const createSceneIconRenderer = (input: unknown): JsonRecord | null => {
   const renderer = asRecord(toJSONValue(input));
-  if (!renderer || String(renderer.type ?? '').toLocaleLowerCase('en-US') !== 'unique-value') {
-    return null;
-  }
+  const rendererType = String(renderer?.type ?? '').toLocaleLowerCase('en-US').replace(/[^a-z]/gu, '');
+  // The SDK instance uses "unique-value"; its web-map JSON serialization can
+  // use "uniqueValue". Normalize both contracts before converting symbols.
+  if (!renderer || rendererType !== 'uniquevalue') return null;
 
   const infos = readCollection(renderer.uniqueValueInfos)
     .map((candidate): IconRendererInfo | null => {
