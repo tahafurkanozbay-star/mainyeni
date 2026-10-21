@@ -47,24 +47,17 @@ import { executeSceneCommand as executeSceneRuntimeCommand } from '../../experie
 
 const DEFAULT_SCENE_TILT = 48;
 const SCENE_TRANSITION_DURATION_MS = 320;
-const ATLAS_2D_BASEMAP_ID = 'dark-gray-vector';
-const ATLAS_2D_BASEMAP_TITLE = 'Atlas Night — Dark Gray Vector';
+const ATLAS_2D_BASEMAP_ID = 'gray-vector';
 
 const createAtlas2DBasemap = async (): Promise<unknown> => {
-  const [Basemap, VectorTileLayer] = await loadArcgisModules<readonly [
-    new (properties?: Record<string, unknown>) => { load?: () => Promise<unknown>; destroy?: () => void },
-    new (properties?: Record<string, unknown>) => { load?: () => Promise<unknown>; destroy?: () => void },
-  ]>(['esri/Basemap', 'esri/layers/VectorTileLayer']);
-  const layer = new VectorTileLayer({ portalItem: { id: 'c3ae924d5dea4b2b8f0a8e9f2f94b5f1' }, opacity: 0.82 });
-  try {
-    await layer.load?.();
-    return new Basemap({ id: ATLAS_2D_BASEMAP_ID, title: ATLAS_2D_BASEMAP_TITLE, baseLayers: [layer] });
-  } catch (error) {
-    try { layer.destroy?.(); } catch (cleanupError) {
-      DebugHelper.Log({ context: 'atlas-vector-basemap-failed-load-cleanup', error: cleanupError });
-    }
-    throw error;
-  }
+  const [Basemap] = await loadArcgisModules<readonly [
+    { fromId: (id: string) => { load?: () => Promise<unknown>; title?: string } | null },
+  ]>(['esri/Basemap']);
+  const basemap = Basemap.fromId(ATLAS_2D_BASEMAP_ID);
+  if (!basemap) throw new Error(`Basemap could not be loaded: ${ATLAS_2D_BASEMAP_ID}`);
+  basemap.title = 'Light Gray Canvas';
+  await basemap.load?.();
+  return basemap;
 };
 
 const basemapIdForMap = (map: unknown): string | null => {
@@ -489,7 +482,10 @@ export function ExperienceMapModeBridge({
       if (sharedMap) {
         sceneBasemapRuntimeRef.current?.restore(sharedMap as SceneBasemapMap);
       }
-      if (sharedMap && !sharedMap.basemap) sharedMap.basemap = 'osm';
+      if (sharedMap && !sharedMap.basemap) {
+        try { sharedMap.basemap = await createAtlas2DBasemap(); }
+        catch (basemapError) { DebugHelper.Log({ context: 'light-gray-basemap-recovery', error: basemapError }); }
+      }
       synchronizeBasemapId(bridge, sharedMap);
       sceneExperienceRef.current?.setActive(false);
       setSceneHostActive(false);
@@ -664,7 +660,13 @@ export function ExperienceMapModeBridge({
     // Make first-load 3D activation explicit and deterministic. The parent keeps
     // the 2D canvas visually suppressed until this initial attempt finishes, so
     // visitors never see the page flash through a temporary 2D state.
-    void queueTransition('3d').finally(settleInitialMode);
+    void queueTransition('3d').then(async () => {
+      if (activeModeRef.current === '2d' && mapView.map) {
+        const map = mapView.map as { basemap?: unknown };
+        if (!map.basemap || map.basemap === 'osm') map.basemap = await createAtlas2DBasemap();
+        synchronizeBasemapId(MapManager.GetViewStateBridge?.() as ViewStateBridgeLike | null, map);
+      }
+    }).finally(settleInitialMode);
 
     return () => {
       window.removeEventListener(EXPERIENCE_COMMAND_EVENT, onCommand as EventListener);

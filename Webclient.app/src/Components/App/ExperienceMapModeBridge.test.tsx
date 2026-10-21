@@ -88,17 +88,14 @@ vi.mock('../../gis-engine/arcgisModuleRuntime', () => ({
     class Basemap {
       id?: string;
       title?: string;
-      baseLayers?: unknown[];
       load = vi.fn(async () => {
         if (harness.basemapLoadFails) throw new Error('3D basemap unavailable');
       });
       destroy = vi.fn();
-      constructor(properties: Record<string, unknown>) {
-        Object.assign(this, properties);
-      }
+      static fromId(id: string) { return { id, load: vi.fn(async () => { if (harness.basemapLoadFails && id === 'gray-3d') throw new Error('Basemap unavailable'); }), destroy: vi.fn() }; }
+      constructor(properties: Record<string, unknown>) { Object.assign(this, properties); }
     }
-    class VectorTileLayer { load = vi.fn(async () => undefined); destroy = vi.fn(); constructor(properties: Record<string, unknown>) { Object.assign(this, properties); } }
-    return [Basemap, VectorTileLayer];
+    return [Basemap];
   }),
 }));
 
@@ -280,8 +277,8 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
       expect(harness.applyInitialMapViewState.mock.invocationCallOrder[0])
         .toBeLessThan(harness.applyToSceneView.mock.invocationCallOrder[0]);
       expect(mapView.map).toBe(sharedMap);
-      expect(sharedMap.basemap).toMatchObject({ id: 'atlas-night-vector-3d' });
-      expect(harness.bridge?.getState().basemapId).toBe('atlas-night-vector-3d');
+      expect(sharedMap.basemap).toMatchObject({ id: 'gray-3d' });
+      expect(harness.bridge?.getState().basemapId).toBe('gray-3d');
       expect(harness.sceneIconPresentationRuntime.activate).toHaveBeenCalledWith(sharedMap);
       expect(harness.views).toHaveLength(1);
       const host = container.querySelector('.experience-scene-host');
@@ -303,15 +300,15 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
       await act(async () => { dispatchMode('2d'); });
       await waitFor(() => expect(changedModes.filter((mode) => mode === '2d')).toHaveLength(1));
       expect(mapView.map).toBe(sharedMap);
-      expect(sharedMap.basemap).toMatchObject({ id: 'dark-gray-vector' });
-      expect(harness.bridge?.getState().basemapId).toBe('dark-gray-vector');
+      expect(sharedMap.basemap).toMatchObject({ id: 'gray-vector' });
+      expect(harness.bridge?.getState().basemapId).toBe('gray-vector');
       expect(harness.sceneIconPresentationRuntime.deactivate).toHaveBeenCalledTimes(1);
       expect(harness.esriBuildingsRuntime.deactivate).toHaveBeenCalledTimes(1);
 
       await act(async () => { dispatchMode('3d'); });
       await waitFor(() => expect(changedModes.filter((mode) => mode === '3d')).toHaveLength(2));
       expect(mapView.map).toBe(sharedMap);
-      expect(sharedMap.basemap).toMatchObject({ id: 'atlas-night-vector-3d' });
+      expect(sharedMap.basemap).toMatchObject({ id: 'gray-3d' });
       expect(harness.sceneIconPresentationRuntime.activate).toHaveBeenCalledTimes(2);
 
       // Keep the same WebGL host attached across 3B → 2B → 3B transitions.
@@ -329,7 +326,7 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
     }
   });
 
-  it('falls back to the visible 2D OSM map when the free 3D basemap cannot load', async () => {
+  it('falls back to the visible 2D map when the light 3D basemap cannot load', async () => {
     harness.basemapLoadFails = true;
     sharedMap.basemap = null;
     mapView.map = sharedMap;
@@ -349,7 +346,7 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
     try {
       await waitFor(() => expect(onInitialModeResolved).toHaveBeenCalledTimes(1));
       expect(mapView.map).toBe(sharedMap);
-      expect(sharedMap.basemap).toBe('osm');
+      expect(sharedMap.basemap).toMatchObject({ id: 'gray-vector' });
       expect(changedModes).toContain('2d');
       expect(harness.views[0]?.destroyed).toBe(true);
       expect(container.querySelector('.experience-scene-host')).not.toHaveClass('is-active');

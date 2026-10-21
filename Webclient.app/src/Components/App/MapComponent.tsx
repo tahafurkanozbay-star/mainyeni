@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import Store from '../../Store/Store';
 import { MapReducer_ActionTypes } from '../../Store/Reducers/MapReducer';
 import { NavigationBar } from './NavigationBar';
+import { AtlasSiteInterface } from './AtlasSiteInterface';
 import { SidebarModern } from './SidebarModern';
 import MapManager from '../../Store/Managers/MapManager';
 import { ToolbarWidgetModern } from '../Widget/Toolbar/ToolbarWidgetModern';
@@ -111,6 +112,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
   const [initialModeResolved, setInitialModeResolved] = useState(false);
   const [mapView, setMapView] = useState<MapViewLike | null>(null);
   const [navigationOpen, setNavigationOpen] = useState(false);
+  const [exploreOpen, setExploreOpen] = useState(false);
   const [atlasMode, setAtlasMode] = useState<ExperienceMapMode>('3d');
   const [sidebarToolHost, setSidebarToolHost] = useState<HTMLDivElement | null>(null);
   const sidebarRef = useRef<unknown>(null);
@@ -437,6 +439,25 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
           onAddressSelect={selectAddress}
           onOpenDirections={() => setNavigationOpen(true)}
           directionsOpen={navigationOpen}
+        />
+        <AtlasSiteInterface
+          mode={atlasMode}
+          onModeChange={(mode) => sendAtlasCommand('map-mode', mode)}
+          onAddressSearch={searchAddress}
+          onAddressSelect={selectAddress}
+          onOpenDirections={() => setNavigationOpen(true)}
+          directionsOpen={navigationOpen}
+          exploreOpen={exploreOpen}
+          onCommand={(command) => sendAtlasCommand(command)}
+          onOpenExplore={() => {
+            const sidebar = sidebarRef.current as { OnShow?: () => void; OnClose?: () => void; minimized?: boolean } | null;
+            if (sidebar?.minimized) { sidebar.OnShow?.(); setExploreOpen(true); }
+            else if (exploreOpen) { sidebar?.OnClose?.(); setExploreOpen(false); }
+            else { sidebar?.OnShow?.(); setExploreOpen(true); }
+          }}
+          onLocate={() => { document.querySelector<HTMLButtonElement>('[data-roving-focus-id="location"]')?.click(); }}
+          onBasemap={() => windowManager.ShowWindow('basemap-widget')}
+          onMeasure={() => windowManager.ShowWindow('measurement-widget')}
         />
         <aside className="atlas-map-deck" aria-label="Atlas harita araçları">
           <div className="atlas-map-deck__brand">
