@@ -401,9 +401,6 @@ export function ExperienceMapModeBridge({
 
       synchronizeBasemapId(bridge, scene.map);
       if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
-      // The shared Kent Rehberi layer keeps its existing SVG assets. Only while
-      // SceneView is active, use 3D billboards elevated exactly 50 world meters.
-      sceneIconPresentationRuntimeRef.current?.activate(scene.map as never);
       try {
         await esriBuildingsRuntimeRef.current?.activate(scene.view as never);
       } catch (error) {
@@ -411,6 +408,9 @@ export function ExperienceMapModeBridge({
         DebugHelper.Log({ context: 'scene-esri-3d-buildings', error });
       }
       if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
+      // The shared Kent Rehberi layer keeps its existing SVG assets. Switch it
+      // to raised 3D billboards immediately before the SceneView becomes visible.
+      sceneIconPresentationRuntimeRef.current?.activate(scene.map as never);
       setSceneHostActive(true);
       await nextBrowserFrame();
       synchronizeSceneViewSize(scene.view);
