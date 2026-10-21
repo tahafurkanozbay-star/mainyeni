@@ -435,6 +435,162 @@
 
 @media (prefers-reduced-motion: reduce) { .atlas-map-deck__tool { transition: none; } }
 
+/* Atlas Minimal: let the map occupy the page. Keep tools, remove ornamental UI. */
+.map-experience-atlas .atlas-map-deck,
+.map-experience-atlas .atlas-map-card,
+.map-experience-atlas .atlas-map-footer {
+  display: none !important;
+}
+
+.map-experience-atlas > .mainbar-container {
+  z-index: 1500 !important;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none;
+  pointer-events: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.map-experience-atlas .mainbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: min(620px, calc(100vw - 180px));
+  min-height: 54px;
+  margin: 16px auto 0;
+  padding: 6px;
+  border: 1px solid rgb(216 231 240 / 14%);
+  border-radius: 18px;
+  background: rgb(9 19 29 / 76%);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 20%);
+  pointer-events: auto;
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  backdrop-filter: blur(24px) saturate(1.2);
+}
+
+.map-experience-atlas .mainbar-brand,
+.map-experience-atlas .mainbar-right .kr-map-theme-badge,
+.map-experience-atlas .mainbar-right .kr-header-portal {
+  display: none !important;
+}
+
+.map-experience-atlas .ns-input {
+  position: relative;
+  inset: auto;
+  transform: none;
+  width: 100%;
+  margin: 0;
+}
+
+.map-experience-atlas .ns-input-group,
+.map-experience-atlas .ns-input-group input {
+  height: 42px;
+}
+
+.map-experience-atlas .ns-input-group input {
+  border: 0;
+  border-radius: 13px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.map-experience-atlas .ns-input-group input:focus {
+  background: rgb(255 255 255 / 4%);
+  box-shadow: inset 0 0 0 1px rgb(131 240 214 / 30%);
+}
+
+.map-experience-atlas .mainbar-right {
+  margin: 0;
+}
+
+.map-experience-atlas .mainbar-right .kr-header-directions {
+  min-width: 44px;
+  width: 44px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 13px;
+  background: rgb(131 240 214 / 12%);
+  color: #83f0d6;
+}
+
+.map-experience-atlas .mainbar-right .kr-header-directions span { display: none; }
+
+.map-experience-atlas .kr-sidebar--governed {
+  width: 58px !important;
+  border: 1px solid rgb(216 231 240 / 13%);
+  border-radius: 17px;
+  background: rgb(9 19 29 / 68%) !important;
+  box-shadow: 0 10px 34px rgb(0 0 0 / 18%);
+  -webkit-backdrop-filter: blur(22px) saturate(1.15);
+  backdrop-filter: blur(22px) saturate(1.15);
+}
+
+.map-experience-atlas .kr-sidebar--governed.is-collapsed {
+  inset-block-start: 88px !important;
+  inset-block-end: auto !important;
+  height: auto !important;
+  max-height: calc(100dvh - 110px) !important;
+  padding-block-start: 4px !important;
+}
+
+.map-experience-atlas .kr-sidebar--governed.is-collapsed .kr-sidebar__topline {
+  min-height: 42px;
+  padding: 2px;
+  border: 0;
+}
+
+.map-experience-atlas .kr-sidebar--governed.is-collapsed .kr-sidebar__title,
+.map-experience-atlas .toolbarwidget::before {
+  display: none !important;
+}
+
+.map-experience-atlas .toolbarwidget {
+  top: 88px;
+  right: 14px;
+  gap: 2px;
+  width: 52px;
+  padding: 4px;
+  border: 1px solid rgb(216 231 240 / 13%);
+  border-radius: 17px;
+  background: rgb(9 19 29 / 68%);
+  box-shadow: 0 10px 34px rgb(0 0 0 / 18%);
+  -webkit-backdrop-filter: blur(22px) saturate(1.15);
+  backdrop-filter: blur(22px) saturate(1.15);
+}
+
+.map-experience-atlas .toolbarwidget .experience-toolbar__button {
+  border-radius: 12px;
+  color: #dceaf1;
+}
+
+.map-experience-atlas .toolbarwidget .experience-toolbar__button:hover,
+.map-experience-atlas .toolbarwidget .experience-toolbar__button[aria-pressed="true"] {
+  background: rgb(131 240 214 / 13%) !important;
+  color: #83f0d6;
+}
+
+.map-experience-atlas .toolbarwidget .experience-toolbar__separator { opacity: .35; }
+
+.map-experience-atlas .esri3d-attribution {
+  max-width: min(70vw, 680px);
+  opacity: .48;
+  font-size: 9px;
+  line-height: 1.25;
+}
+
+@media (max-width: 760px) {
+  .map-experience-atlas .mainbar { width: calc(100vw - 116px); min-height: 50px; margin-top: 8px; border-radius: 16px; }
+  .map-experience-atlas .ns-input-group,
+  .map-experience-atlas .ns-input-group input { height: 38px; }
+  .map-experience-atlas .kr-sidebar--governed.is-collapsed { inset-block-start: 68px !important; max-height: calc(100dvh - 90px) !important; }
+  .map-experience-atlas .toolbarwidget { top: 68px; right: 8px; }
+}
+
 .map-navigation__header {
   display: flex;
   align-items: flex-start;
