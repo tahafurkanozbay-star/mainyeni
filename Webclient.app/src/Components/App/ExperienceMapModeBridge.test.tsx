@@ -35,6 +35,7 @@ const harness = vi.hoisted(() => ({
   setSceneHome: vi.fn(),
   bindSceneState: vi.fn(),
   esriBuildingsRuntime: { activate: vi.fn(async () => undefined), deactivate: vi.fn(), dispose: vi.fn() },
+  sceneIconPresentationRuntime: { activate: vi.fn(), deactivate: vi.fn(), dispose: vi.fn() },
   basemapLoadFails: false,
   applyInitialMapViewState: vi.fn(),
 }));
@@ -102,6 +103,10 @@ vi.mock('../../gis-engine/arcgisModuleRuntime', () => ({
 
 vi.mock('../../gis-engine/esri3DBuildingsRuntime', () => ({
   Esri3DBuildingsRuntime: vi.fn(() => harness.esriBuildingsRuntime),
+}));
+
+vi.mock('../../gis-engine/sceneIconPresentationRuntime', () => ({
+  SceneIconPresentationRuntime: vi.fn(() => harness.sceneIconPresentationRuntime),
 }));
 
 vi.mock('../../gis-engine/viewReadiness', () => ({
@@ -172,6 +177,9 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     harness.esriBuildingsRuntime.activate.mockResolvedValue(undefined);
+    harness.sceneIconPresentationRuntime.activate.mockClear();
+    harness.sceneIconPresentationRuntime.deactivate.mockClear();
+    harness.sceneIconPresentationRuntime.dispose.mockClear();
     harness.basemapLoadFails = false;
     harness.loadBasemapModule.mockImplementation(async () => ({
       fromId: (id: string) => ({ id, load: vi.fn(async () => undefined), destroy: vi.fn() }),
@@ -270,6 +278,7 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
         .toBeLessThan(harness.applyToSceneView.mock.invocationCallOrder[0]);
       expect((mapView.map.basemap as { id?: string }).id).toBe('openstreetmap-3d');
       expect(harness.bridge?.getState().basemapId).toBe('openstreetmap-3d');
+      expect(harness.sceneIconPresentationRuntime.activate).toHaveBeenCalledWith(mapView.map);
       expect(harness.views).toHaveLength(1);
       const host = container.querySelector('.experience-scene-host');
       expect(harness.createSceneView).toHaveBeenCalledWith(
@@ -291,10 +300,12 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
       await waitFor(() => expect(changedModes.filter((mode) => mode === '2d')).toHaveLength(1));
       expect((mapView.map.basemap as { id?: string }).id).toBe('osm');
       expect(harness.bridge?.getState().basemapId).toBe('osm');
+      expect(harness.sceneIconPresentationRuntime.deactivate).toHaveBeenCalledTimes(1);
 
       await act(async () => { dispatchMode('3d'); });
       await waitFor(() => expect(changedModes.filter((mode) => mode === '3d')).toHaveLength(2));
       expect((mapView.map.basemap as { id?: string }).id).toBe('openstreetmap-3d');
+      expect(harness.sceneIconPresentationRuntime.activate).toHaveBeenCalledTimes(2);
 
       // Keep the same WebGL host attached across 3B → 2B → 3B transitions.
       // Setting container=null can strand SceneView's renderer on a blank frame.
