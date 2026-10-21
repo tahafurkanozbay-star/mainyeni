@@ -7,7 +7,7 @@ const makeBasemap = (id: string): SceneBasemapLike => ({
   destroy: vi.fn(),
 });
 
-const createRuntime = (sceneBasemap = makeBasemap('atlas-night-vector-3d')) => {
+const createRuntime = (sceneBasemap = makeBasemap('gray-3d')) => {
   const fromId = vi.fn(() => sceneBasemap);
   const loadModule = vi.fn(async (): Promise<SceneBasemapModule> => ({ fromId }));
   return { runtime: new SceneBasemapRuntime(loadModule), sceneBasemap, fromId, loadModule };
@@ -56,7 +56,7 @@ describe('SceneBasemapRuntime', () => {
   it('does not replace the map basemap when loading is aborted', async () => {
     const current = { id: 'osm' };
     const map: SceneBasemapMap = { basemap: current };
-    const sceneBasemap = makeBasemap('atlas-night-vector-3d');
+    const sceneBasemap = makeBasemap('gray-3d');
     let finishLoad: () => void = () => undefined;
     sceneBasemap.load = vi.fn(() => new Promise<void>((resolve) => { finishLoad = resolve; }));
     const { runtime } = createRuntime(sceneBasemap);
@@ -76,7 +76,7 @@ describe('SceneBasemapRuntime', () => {
     const current = { id: 'osm' };
     const selected = { id: 'gray-vector' };
     const map: SceneBasemapMap = { basemap: current };
-    const sceneBasemap = makeBasemap('openstreetmap-3d');
+    const sceneBasemap = makeBasemap('gray-3d');
     let finishLoad: () => void = () => undefined;
     sceneBasemap.load = vi.fn(() => new Promise<void>((resolve) => { finishLoad = resolve; }));
     const { runtime } = createRuntime(sceneBasemap);

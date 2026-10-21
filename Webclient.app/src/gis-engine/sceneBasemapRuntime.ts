@@ -2,9 +2,8 @@ import { loadArcgisModules } from './arcgisModuleRuntime';
 import { withTimeout } from '../platform/runtime/resilience';
 import { runtimeDiagnostics } from '../platform/runtime/runtimeDiagnostics';
 
-export const FREE_SCENE_BASEMAP_ID = 'atlas-night-vector-3d';
-export const FREE_SCENE_BASEMAP_TITLE = 'Atlas Night — Dark Vector 3B';
-const ATLAS_DARK_VECTOR_PORTAL_ITEM_ID = 'c3ae924d5dea4b2b8f0a8e9f2f94b5f1';
+export const FREE_SCENE_BASEMAP_ID = 'gray-3d';
+export const FREE_SCENE_BASEMAP_TITLE = 'Light Gray 3D Canvas';
 
 export interface SceneBasemapLike {
   readonly id?: string;
@@ -18,21 +17,6 @@ export interface SceneBasemapModule {
   fromId: (id: string) => SceneBasemapLike | null | undefined;
 }
 
-interface SceneBasemapLayerLike {
-  tileInfo?: { readonly spatialReference?: { readonly wkid?: unknown; readonly latestWkid?: unknown } | null } | null;
-  on?: (
-    eventName: 'layerview-create-error',
-    callback: (event: {
-      readonly error?: unknown;
-      readonly view?: {
-        readonly type?: unknown;
-        readonly spatialReference?: { readonly wkid?: unknown; readonly latestWkid?: unknown } | null;
-        readonly map?: { readonly spatialReference?: { readonly wkid?: unknown; readonly latestWkid?: unknown } | null } | null;
-      };
-    }) => void,
-  ) => unknown;
-}
-
 export interface SceneBasemapMap {
   basemap?: SceneBasemapLike | string | null;
 }
@@ -43,36 +27,19 @@ interface SceneBasemapOwnership {
   readonly sceneBasemap: SceneBasemapLike;
 }
 
-type ArcgisConstructor<T = unknown> = new (properties?: Record<string, unknown>) => T;
+type ArcgisConstructor<T = unknown> = (new (properties?: Record<string, unknown>) => T) & {
+  fromId: (id: string) => SceneBasemapLike | null | undefined;
+};
 
 const loadFreeOpenStreetMapBasemap = async (): Promise<SceneBasemapModule> => {
-  const [Basemap, VectorTileLayer] = await loadArcgisModules<
-    readonly [ArcgisConstructor<SceneBasemapLike>, ArcgisConstructor<SceneBasemapLayerLike>]
-  >(['esri/Basemap', 'esri/layers/VectorTileLayer']);
+  const [Basemap] = await loadArcgisModules<readonly [ArcgisConstructor<SceneBasemapLike>]>(['esri/Basemap']);
 
   return {
     fromId: (id: string) => {
       if (id !== FREE_SCENE_BASEMAP_ID) return null;
-      const layer = new VectorTileLayer({
-        title: FREE_SCENE_BASEMAP_TITLE,
-        portalItem: { id: ATLAS_DARK_VECTOR_PORTAL_ITEM_ID },
-        opacity: 0.9,
-      });
-      layer.on?.('layerview-create-error', ({ error, view }) => {
-        runtimeDiagnostics.captureError(error, {
-          source: 'gis.scene-basemap.layer-view',
-          layerTitle: FREE_SCENE_BASEMAP_TITLE,
-          viewType: view?.type ?? null,
-          layerWkid: layer.tileInfo?.spatialReference?.wkid ?? layer.tileInfo?.spatialReference?.latestWkid ?? null,
-          viewWkid: view?.spatialReference?.wkid ?? view?.spatialReference?.latestWkid ?? null,
-          mapWkid: view?.map?.spatialReference?.wkid ?? view?.map?.spatialReference?.latestWkid ?? null,
-        });
-      });
-      return new Basemap({
-        id: FREE_SCENE_BASEMAP_ID,
-        title: FREE_SCENE_BASEMAP_TITLE,
-        baseLayers: [layer],
-      });
+      const basemap = Basemap.fromId(id);
+      if (basemap) Object.assign(basemap, { title: FREE_SCENE_BASEMAP_TITLE });
+      return basemap;
     },
   };
 };
@@ -84,9 +51,8 @@ const throwIfAborted = (signal?: AbortSignal): void => {
 };
 
 /**
- * Temporarily uses the API-key-free OpenStreetMap layer in SceneView.
- * It deliberately avoids the authenticated Esri streets-3d style and World
- * Elevation service; OSM3DBuildingsRuntime supplies the extruded building data.
+ * Temporarily uses the light gray Esri scene basemap in SceneView.
+ * OSM3DBuildingsRuntime supplies the 3D building data independently.
  */
 export class SceneBasemapRuntime {
   readonly #loadBasemap: () => Promise<SceneBasemapModule>;
