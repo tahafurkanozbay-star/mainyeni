@@ -469,7 +469,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
             onClose={() => setNavigationOpen(false)}
           />
         ) : null}
-        <LegacySidebar id="sidebar" windowManager={windowManager} ref={sidebarRef} onToolHostChange={setSidebarToolHost} />
+        <LegacySidebar id="sidebar" initialCollapsed windowManager={windowManager} ref={sidebarRef} onToolHostChange={setSidebarToolHost} />
         <ModernToolbarWidget
           id="toolbar-widget"
           windowManager={windowManager}

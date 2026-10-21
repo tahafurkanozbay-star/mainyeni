@@ -43,6 +43,7 @@ interface SidebarProps {
   readonly id: string;
   readonly windowManager: WindowManagerLike;
   readonly onToolHostChange?: (element: HTMLDivElement | null) => void;
+  readonly initialCollapsed?: boolean;
 }
 
 interface PointSearchMapViewLike {
@@ -123,7 +124,7 @@ const resolveLocalStorage = (): Storage | null => {
 };
 
 export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(function SidebarModern(
-  { id, windowManager, onToolHostChange },
+  { id, windowManager, onToolHostChange, initialCollapsed = false },
   ref,
 ) {
   const toolHostRef = useCallback((element: HTMLDivElement | null): void => {
@@ -143,10 +144,10 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
       items: ITEMS,
       initialFavoriteIds: preferences.favoriteIds,
       initialRecentIds: preferences.recentIds,
-      initialCollapsed: false,
+      initialCollapsed,
       limits: { maxRecentIds: MAX_RECENT_SERVICES },
     });
-  }, [preferenceStore]);
+  }, [initialCollapsed, preferenceStore]);
 
   const navigation = useSyncExternalStore(
     navigationModel.subscribe,
