@@ -26,7 +26,7 @@ import {
   createResponsivePadding,
   createViewPerformanceMonitor,
 } from '../../gis-engine/viewRuntime';
-import type { ExperienceMapMode } from '../../experience/experienceRuntime';
+import { EXPERIENCE_COMMAND_EVENT, EXPERIENCE_MAP_MODE_EVENT, type ExperienceMapMode } from '../../experience/experienceRuntime';
 import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
 import type { KentRehberiMapLike } from '../../data-services/kentRehberiGeoJsonLayer';
 import { searchAddressCandidates } from '../../data-services/addressGeocoding';
@@ -111,8 +111,22 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
   const [initialModeResolved, setInitialModeResolved] = useState(false);
   const [mapView, setMapView] = useState<MapViewLike | null>(null);
   const [navigationOpen, setNavigationOpen] = useState(false);
+  const [atlasMode, setAtlasMode] = useState<ExperienceMapMode>('3d');
   const [sidebarToolHost, setSidebarToolHost] = useState<HTMLDivElement | null>(null);
   const sidebarRef = useRef<unknown>(null);
+
+  useEffect(() => {
+    const syncMode = (event: Event) => {
+      const mode = (event as CustomEvent<{ mode?: ExperienceMapMode }>).detail?.mode;
+      if (mode === '2d' || mode === '3d') setAtlasMode(mode);
+    };
+    window.addEventListener(EXPERIENCE_MAP_MODE_EVENT, syncMode);
+    return () => window.removeEventListener(EXPERIENCE_MAP_MODE_EVENT, syncMode);
+  }, []);
+
+  const sendAtlasCommand = (name: string, mode?: ExperienceMapMode): void => {
+    window.dispatchEvent(new CustomEvent(EXPERIENCE_COMMAND_EVENT, { detail: { name, mode, source: 'atlas-map-deck' } }));
+  };
 
   useEffect(() => {
     let disposed = false;
@@ -424,6 +438,29 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
           onOpenDirections={() => setNavigationOpen(true)}
           directionsOpen={navigationOpen}
         />
+        <aside className="atlas-map-deck" aria-label="Atlas harita araçları">
+          <div className="atlas-map-deck__brand">
+            <span className="atlas-map-deck__mark" aria-hidden="true">A</span>
+            <span><strong>ATLAS</strong><small>ANKARA · KENTSEL VERİ</small></span>
+          </div>
+          <div className="atlas-map-deck__divider" />
+          <button type="button" className="atlas-map-deck__tool" aria-label="Yakınlaştır" title="Yakınlaştır" onClick={() => sendAtlasCommand('map-zoom-in')}><span aria-hidden="true">＋</span></button>
+          <button type="button" className="atlas-map-deck__tool" aria-label="Uzaklaştır" title="Uzaklaştır" onClick={() => sendAtlasCommand('map-zoom-out')}><span aria-hidden="true">−</span></button>
+          <button type="button" className="atlas-map-deck__tool" aria-label="Ana görünüme dön" title="Ana görünüme dön" onClick={() => sendAtlasCommand('map-home')}><span aria-hidden="true">⌂</span></button>
+          <div className="atlas-map-deck__divider" />
+          <div className="atlas-map-deck__mode" role="group" aria-label="Harita görünümü">
+            <button type="button" aria-pressed={atlasMode === '2d'} onClick={() => sendAtlasCommand('map-mode', '2d')}>2B</button>
+            <button type="button" aria-pressed={atlasMode === '3d'} onClick={() => sendAtlasCommand('map-mode', '3d')}>3B</button>
+          </div>
+        </aside>
+        <section className="atlas-map-card" aria-label="Harita bilgisi">
+          <span className="atlas-map-card__live"><i /> CANLI HARİTA</span>
+          <strong>Ankara</strong>
+          <span className="atlas-map-card__meta">{atlasMode === '3d' ? 'Üç boyutlu şehir modeli' : 'Koyu vektör harita'} · {atlasMode.toUpperCase()}</span>
+        </section>
+        <div className="atlas-map-footer" aria-hidden="true">
+          <span><i /> Harita hazır</span><span>WGS 84 · EPSG:3857</span><span>ATLAS / 01</span>
+        </div>
         {navigationOpen ? (
           <MapNavigationPanel
             onAddressSearch={searchAddress}

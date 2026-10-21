@@ -546,7 +546,7 @@ export function ExperienceMapModeBridge({
       esriBuildingsRuntimeRef.current?.deactivate();
       if (sharedMap) {
         sceneBasemapRuntimeRef.current?.restore(sharedMap as SceneBasemapMap);
-        if (!sharedMap.basemap) sharedMap.basemap = 'osm';
+        if (sharedMap.basemap !== ATLAS_2D_BASEMAP_ID) sharedMap.basemap = await createAtlas2DBasemap();
       }
       synchronizeBasemapId(bridge, sharedMap);
 

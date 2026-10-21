@@ -280,8 +280,8 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
       expect(harness.applyInitialMapViewState.mock.invocationCallOrder[0])
         .toBeLessThan(harness.applyToSceneView.mock.invocationCallOrder[0]);
       expect(mapView.map).toBe(sharedMap);
-      expect(sharedMap.basemap).toMatchObject({ id: 'openstreetmap-3d' });
-      expect(harness.bridge?.getState().basemapId).toBe('openstreetmap-3d');
+      expect(sharedMap.basemap).toMatchObject({ id: 'atlas-night-vector-3d' });
+      expect(harness.bridge?.getState().basemapId).toBe('atlas-night-vector-3d');
       expect(harness.sceneIconPresentationRuntime.activate).toHaveBeenCalledWith(sharedMap);
       expect(harness.views).toHaveLength(1);
       const host = container.querySelector('.experience-scene-host');
@@ -303,15 +303,15 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
       await act(async () => { dispatchMode('2d'); });
       await waitFor(() => expect(changedModes.filter((mode) => mode === '2d')).toHaveLength(1));
       expect(mapView.map).toBe(sharedMap);
-      expect(sharedMap.basemap).toMatchObject({ id: 'osm' });
-      expect(harness.bridge?.getState().basemapId).toBe('osm');
+      expect(sharedMap.basemap).toMatchObject({ id: 'dark-gray-vector' });
+      expect(harness.bridge?.getState().basemapId).toBe('dark-gray-vector');
       expect(harness.sceneIconPresentationRuntime.deactivate).toHaveBeenCalledTimes(1);
       expect(harness.esriBuildingsRuntime.deactivate).toHaveBeenCalledTimes(1);
 
       await act(async () => { dispatchMode('3d'); });
       await waitFor(() => expect(changedModes.filter((mode) => mode === '3d')).toHaveLength(2));
       expect(mapView.map).toBe(sharedMap);
-      expect(sharedMap.basemap).toMatchObject({ id: 'openstreetmap-3d' });
+      expect(sharedMap.basemap).toMatchObject({ id: 'atlas-night-vector-3d' });
       expect(harness.sceneIconPresentationRuntime.activate).toHaveBeenCalledTimes(2);
 
       // Keep the same WebGL host attached across 3B → 2B → 3B transitions.

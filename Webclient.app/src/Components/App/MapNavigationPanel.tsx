@@ -112,7 +112,7 @@ export function MapNavigationPanel({
       });
     } finally {
       if (searchControllersRef.current[field] === controller) {
-        searchControllersRef.current[field] = undefined;
+        delete searchControllersRef.current[field];
         updateField(field, { busy: false });
       }
     }
@@ -120,7 +120,7 @@ export function MapNavigationPanel({
 
   const changeField = (field: RouteField, query: string): void => {
     searchControllersRef.current[field]?.abort();
-    searchControllersRef.current[field] = undefined;
+    delete searchControllersRef.current[field];
     routeControllerRef.current?.abort();
     routeControllerRef.current = null;
     setRouteBusy(false);
