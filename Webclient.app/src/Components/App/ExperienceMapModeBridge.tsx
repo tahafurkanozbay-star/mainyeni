@@ -23,6 +23,7 @@ import { SceneBasemapRuntime, type SceneBasemapMap } from '../../gis-engine/scen
 import { Esri3DBuildingsRuntime } from '../../gis-engine/esri3DBuildingsRuntime';
 import { SceneIconPresentationRuntime } from '../../gis-engine/sceneIconPresentationRuntime';
 import { WEB_MERCATOR_SPATIAL_REFERENCE } from '../../gis-engine/contracts';
+import { loadArcgisModules } from '../../gis-engine/arcgisModuleRuntime';
 import './OpenStreetMap3DAttribution.css';
 import {
   createSceneExperienceRuntime,
