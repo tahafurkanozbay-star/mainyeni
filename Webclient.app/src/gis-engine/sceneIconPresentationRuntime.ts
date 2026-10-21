@@ -83,7 +83,8 @@ const readCollection = (value: unknown): readonly unknown[] => {
       return [];
     }
   }
-  if (record && Symbol.iterator in record && typeof record[Symbol.iterator] === 'function') {
+  const iterable = value as { readonly [Symbol.iterator]?: () => Iterator<unknown> } | null;
+  if (typeof iterable?.[Symbol.iterator] === 'function') {
     try {
       return Array.from(value as Iterable<unknown>);
     } catch {
