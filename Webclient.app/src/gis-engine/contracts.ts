@@ -454,3 +454,5 @@ export interface ViewStateBridge {
   isDestroyed: () => boolean;
   listenerCount: () => number;
 }
+
+export const WEB_MERCATOR_SPATIAL_REFERENCE = Object.freeze({ wkid: 3857 });

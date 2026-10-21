@@ -17,6 +17,21 @@ export interface SceneBasemapModule {
   fromId: (id: string) => SceneBasemapLike | null | undefined;
 }
 
+interface SceneBasemapLayerLike {
+  tileInfo?: { readonly spatialReference?: { readonly wkid?: unknown; readonly latestWkid?: unknown } | null } | null;
+  on?: (
+    eventName: 'layerview-create-error',
+    callback: (event: {
+      readonly error?: unknown;
+      readonly view?: {
+        readonly type?: unknown;
+        readonly spatialReference?: { readonly wkid?: unknown; readonly latestWkid?: unknown } | null;
+        readonly map?: { readonly spatialReference?: { readonly wkid?: unknown; readonly latestWkid?: unknown } | null } | null;
+      };
+    }) => void,
+  ) => unknown;
+}
+
 export interface SceneBasemapMap {
   basemap?: SceneBasemapLike | string | null;
 }
@@ -31,16 +46,27 @@ type ArcgisConstructor<T = unknown> = new (properties?: Record<string, unknown>)
 
 const loadFreeOpenStreetMapBasemap = async (): Promise<SceneBasemapModule> => {
   const [Basemap, OpenStreetMapLayer] = await loadArcgisModules<
-    readonly [ArcgisConstructor<SceneBasemapLike>, ArcgisConstructor<unknown>]
+    readonly [ArcgisConstructor<SceneBasemapLike>, ArcgisConstructor<SceneBasemapLayerLike>]
   >(['esri/Basemap', 'esri/layers/OpenStreetMapLayer']);
 
   return {
     fromId: (id: string) => {
       if (id !== FREE_SCENE_BASEMAP_ID) return null;
+      const layer = new OpenStreetMapLayer({ title: FREE_SCENE_BASEMAP_TITLE });
+      layer.on?.('layerview-create-error', ({ error, view }) => {
+        runtimeDiagnostics.captureError(error, {
+          source: 'gis.scene-basemap.layer-view',
+          layerTitle: FREE_SCENE_BASEMAP_TITLE,
+          viewType: view?.type ?? null,
+          layerWkid: layer.tileInfo?.spatialReference?.wkid ?? layer.tileInfo?.spatialReference?.latestWkid ?? null,
+          viewWkid: view?.spatialReference?.wkid ?? view?.spatialReference?.latestWkid ?? null,
+          mapWkid: view?.map?.spatialReference?.wkid ?? view?.map?.spatialReference?.latestWkid ?? null,
+        });
+      });
       return new Basemap({
         id: FREE_SCENE_BASEMAP_ID,
         title: FREE_SCENE_BASEMAP_TITLE,
-        baseLayers: [new OpenStreetMapLayer()],
+        baseLayers: [layer],
       });
     },
   };

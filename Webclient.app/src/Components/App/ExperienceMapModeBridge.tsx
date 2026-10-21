@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState, type MutableRefObject 
 import MapManager from '../../Store/Managers/MapManager';
 import { DebugHelper } from '../../Toolbox/DebugHelper';
 import {
+  applyInitialMapViewState,
   applyViewStateToMapView,
   snapshotMapViewState,
 } from '../../gis-engine/viewRuntime';
@@ -19,6 +20,7 @@ import type { ArcgisAccessorWatch } from '../../gis-engine/arcgisReactiveRuntime
 import { waitForArcgisView } from '../../gis-engine/viewReadiness';
 import { SceneBasemapRuntime, type SceneBasemapMap } from '../../gis-engine/sceneBasemapRuntime';
 import { OSM3DBuildingsRuntime } from '../../gis-engine/osm3DBuildingsRuntime';
+import { WEB_MERCATOR_SPATIAL_REFERENCE } from '../../gis-engine/contracts';
 import './OpenStreetMap3DAttribution.css';
 import {
   createSceneExperienceRuntime,
@@ -294,6 +296,7 @@ export function ExperienceMapModeBridge({
     } : undefined;
     const scene = await createSceneView(sceneHostRef.current, {
       map: mapView.map,
+      spatialReference: WEB_MERCATOR_SPATIAL_REFERENCE,
       ...(initialCamera ? { camera: initialCamera } : {}),
       qualityProfile: 'medium',
       padding: mapView.padding,
@@ -379,18 +382,50 @@ export function ExperienceMapModeBridge({
       synchronizeSceneViewSize(scene.view);
 
       scene.view.padding = mapView.padding;
-      const sceneState = normalizeSceneStateFromMap(mapView, bridge);
+      try {
+        await sceneBasemapRuntimeRef.current?.activate(scene.map as SceneBasemapMap, sceneLifetimeRef.current.signal);
+      } catch (error) {
+        // An empty SceneView is visually indistinguishable from a missing map.
+        // Let the existing recovery path dispose it and expose a usable 2D OSM map.
+        DebugHelper.Log({ context: 'scene-free-osm-basemap', error });
+        throw error;
+      }
+      if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
+
       if (modeRef) modeRef.current = '3d';
       activeModeRef.current = '3d';
-      bridge.setState(sceneState);
+      const initialSceneActivation = !sceneNavigationHomeSetRef.current;
 
+      synchronizeBasemapId(bridge, scene.map);
+      if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
+      try {
+        await osmBuildingsRuntimeRef.current?.activate(scene.view as never);
+      } catch (error) {
+        // Overpass availability must not block 2D/3D navigation.
+        DebugHelper.Log({ context: 'scene-osm-3d-buildings', error });
+      }
+      if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
+      setSceneHostActive(true);
+      await nextBrowserFrame();
+      synchronizeSceneViewSize(scene.view);
+      await nextBrowserFrame();
+      synchronizeSceneViewSize(scene.view);
+
+      if (initialSceneActivation) {
+        const configuration = MapManager.GetMapConfiguration?.() ?? {};
+        const initialStateApplied = await applyInitialMapViewState(mapView as never, configuration);
+        if (!initialStateApplied) throw new Error('The initial map center and zoom could not be applied.');
+        if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
+      }
+
+      const sceneState = normalizeSceneStateFromMap(mapView, bridge);
+      bridge.setState(sceneState);
       await applyViewStateToSceneView(scene.view, sceneState, {
         allowCrossMode: true,
-        duration: prefersReducedMotion() ? 0 : SCENE_TRANSITION_DURATION_MS,
-        animate: !prefersReducedMotion(),
+        duration: initialSceneActivation || prefersReducedMotion() ? 0 : SCENE_TRANSITION_DURATION_MS,
+        animate: !initialSceneActivation && !prefersReducedMotion(),
       });
-
-      if (!sceneNavigationHomeSetRef.current) {
+      if (initialSceneActivation) {
         sceneNavigationRef.current?.setHome();
         sceneNavigationHomeSetRef.current = true;
       }
@@ -406,28 +441,6 @@ export function ExperienceMapModeBridge({
         accessorWatch,
       });
 
-      try {
-        await sceneBasemapRuntimeRef.current?.activate(scene.map as SceneBasemapMap, sceneLifetimeRef.current.signal);
-        synchronizeBasemapId(bridge, scene.map);
-      } catch (error) {
-        // An empty SceneView is visually indistinguishable from a missing map.
-        // Let the existing recovery path dispose it and expose a usable 2D OSM map.
-        DebugHelper.Log({ context: 'scene-free-osm-basemap', error });
-        throw error;
-      }
-      if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
-      try {
-        await osmBuildingsRuntimeRef.current?.activate(scene.view as never);
-      } catch (error) {
-        // Overpass availability must not block 2D/3D navigation.
-        DebugHelper.Log({ context: 'scene-osm-3d-buildings', error });
-      }
-      if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
-      setSceneHostActive(true);
-      await nextBrowserFrame();
-      synchronizeSceneViewSize(scene.view);
-      await nextBrowserFrame();
-      synchronizeSceneViewSize(scene.view);
       sceneExperienceRef.current?.setActive(true);
       if (disposedRef.current) return;
       setMode('3d');

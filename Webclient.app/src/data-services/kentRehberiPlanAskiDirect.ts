@@ -14,9 +14,11 @@ import {
   type PlanAskiPersistentCategoryCache,
 } from './kentRehberiPersistentCache';
 
-// Do not accept arbitrary origins or URL overrides: this mode deliberately
-// speaks only to the official, browser-CORS-enabled municipal endpoint.
-const SOURCE = 'https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi';
+// Keep production fixed to the official endpoint; Vite proxies this one route
+// during local development because PlanASKI only allows the deployed origin.
+const SOURCE = import.meta.env.MODE === 'development'
+  ? '/__dev/planaski/kentrehberiapi/api/kentrehberi'
+  : 'https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi';
 const MIN_TYPE = 0;
 const MAX_TYPE = 42;
 const MAX_ROWS_PER_TYPE = 20_000;
@@ -729,4 +731,3 @@ export const fetchPlanAskiTypeCatalogDirect = async (
   cacheTypeCatalog(options, groups);
   return catalog;
 };
-

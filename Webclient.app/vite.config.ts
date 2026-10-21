@@ -81,7 +81,17 @@ export default defineConfig(() => ({
     host: '0.0.0.0',
     port: 3000,
     strictPort: false,
+    proxy: {
+      '/__dev/planaski': {
+        target: 'https://planaski.ankara.bel.tr',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => {
+          const queryIndex = path.indexOf('?');
+          return `/kentrehberiapi/api/kentrehberi${queryIndex < 0 ? '' : path.slice(queryIndex)}`;
+        },
+      },
+    },
   },
   preview: { host: '0.0.0.0', port: 4173 },
 }));
-

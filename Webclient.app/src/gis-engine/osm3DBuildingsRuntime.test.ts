@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   buildingHeightMeters,
   createBuildingQuery,
+  OSM3DBuildingsRuntime,
   parseOverpassBuildings,
   resolveOSMSceneTarget,
   type OSMBounds,
+  type OSM3DSceneViewLike,
 } from './osm3DBuildingsRuntime';
 
 const closedBuilding = {
@@ -77,5 +79,41 @@ describe('OSM 3D building footprint parsing', () => {
     expect(parseOverpassBuildings(null)).toEqual([]);
     expect(parseOverpassBuildings({ elements: 'not-an-array' })).toEqual([]);
     expect(parseOverpassBuildings({ elements: [] })).toEqual([]);
+  });
+});
+
+describe('OSM3DBuildingsRuntime', () => {
+  it('watches SceneView camera changes through reactiveUtils', async () => {
+    class GraphicsLayer {
+      visible = false;
+      removeAll = vi.fn();
+      destroy = vi.fn();
+    }
+    class Graphic {}
+
+    const reactiveUtils = {
+      watch: vi.fn(() => ({ remove: vi.fn() })),
+    };
+    const request = vi.fn(async () => ({ data: { elements: [] } }));
+    const runtime = new OSM3DBuildingsRuntime({
+      loadModules: async () => [GraphicsLayer, Graphic, reactiveUtils] as const,
+      loadRequest: async () => request,
+    });
+    const map = { add: vi.fn(), remove: vi.fn() };
+    const legacyWatch = vi.fn();
+    const view = {
+      map,
+      center: { longitude: 32.85, latitude: 39.93 },
+      camera: { position: { altitude: 100 } },
+      scale: 1_000,
+      watch: legacyWatch,
+    } as OSM3DSceneViewLike;
+
+    await runtime.activate(view);
+
+    expect(reactiveUtils.watch).toHaveBeenNthCalledWith(1, view, 'camera', expect.any(Function));
+    expect(reactiveUtils.watch).toHaveBeenNthCalledWith(2, view, 'scale', expect.any(Function));
+    expect(legacyWatch).not.toHaveBeenCalled();
+    runtime.dispose();
   });
 });

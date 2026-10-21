@@ -98,6 +98,7 @@ describe('sceneRuntime', () => {
     const result = await createSceneView({ id: 'container' }, {
       map: sharedMap,
       camera: { heading: 10 },
+      spatialReference: { wkid: 3857 },
     });
 
     expect(result.map).toBe(sharedMap);
@@ -107,6 +108,7 @@ describe('sceneRuntime', () => {
     expect(SceneView).toHaveBeenCalledWith(expect.objectContaining({
       map: sharedMap,
       camera: { heading: 10 },
+      spatialReference: { wkid: 3857 },
       qualityProfile: 'medium',
       ui: { components: [] },
     }));

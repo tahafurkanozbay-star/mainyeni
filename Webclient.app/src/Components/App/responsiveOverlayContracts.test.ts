@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const css = (relativePath: string): string =>
-  readFileSync(new URL(relativePath, import.meta.url), 'utf8');
+  readFileSync(new URL(relativePath, import.meta.url), 'utf8').replace(/\r\n/gu, '\n');
 
 const ruleBlock = (sheet: string, marker: string, nextMarker: string): string => {
   const start = sheet.indexOf(marker);

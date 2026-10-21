@@ -54,16 +54,26 @@ interface OSMCameraPositionLike extends OSMCoordinateLike {
   z?: unknown;
   altitude?: unknown;
 }
+interface OSMReactiveUtilsLike {
+  watch: (
+    target: unknown,
+    propertyName: string,
+    callback: (...args: unknown[]) => void,
+  ) => { remove?: () => void };
+}
 export interface OSM3DSceneViewLike {
   readonly map?: OSMSceneMapLike | null;
   readonly center?: OSMCoordinateLike | null;
   readonly camera?: { readonly position?: OSMCameraPositionLike | null } | null;
   readonly scale?: number;
-  watch?: (property: string, callback: (...args: unknown[]) => void) => { remove?: () => void };
 }
 
 type ArcgisConstructor<T = unknown> = new (properties?: Record<string, unknown>) => T;
-type LoadArcgisModules = () => Promise<readonly [ArcgisConstructor<OSMSceneLayerLike>, ArcgisConstructor<unknown>]>;
+type LoadArcgisModules = () => Promise<readonly [
+  ArcgisConstructor<OSMSceneLayerLike>,
+  ArcgisConstructor<unknown>,
+  OSMReactiveUtilsLike,
+]>;
 interface ArcgisRequestOptions {
   readonly method: 'post';
   readonly body: string;
@@ -224,8 +234,8 @@ const cameraIsCloseEnough = (view: OSM3DSceneViewLike, position: ScenePosition):
   return scale !== null || position.altitudeMeters !== null;
 };
 const defaultLoadModules: LoadArcgisModules = () => loadArcgisModules<
-  readonly [ArcgisConstructor<OSMSceneLayerLike>, ArcgisConstructor<unknown>]
->(['esri/layers/GraphicsLayer', 'esri/Graphic']);
+  readonly [ArcgisConstructor<OSMSceneLayerLike>, ArcgisConstructor<unknown>, OSMReactiveUtilsLike]
+>(['esri/layers/GraphicsLayer', 'esri/Graphic', 'esri/core/watchUtils']);
 
 const defaultLoadArcgisRequest: LoadArcgisRequest = () => loadArcgisModule<ArcgisRequest>('esri/request');
 
@@ -273,7 +283,7 @@ export class OSM3DBuildingsRuntime {
     this.deactivate();
     const generation = this.#generation;
     this.#view = view;
-    const [[GraphicsLayer, Graphic], requester] = await Promise.all([this.#loadGisModules(), this.#loadRequest()]);
+    const [[GraphicsLayer, Graphic, reactiveUtils], requester] = await Promise.all([this.#loadGisModules(), this.#loadRequest()]);
     if (generation !== this.#generation || this.#view !== view) return;
     this.#requester = requester;
 
@@ -300,12 +310,10 @@ export class OSM3DBuildingsRuntime {
     }
     this.#Graphic = Graphic;
     this.#layer.visible = true;
-    if (typeof view.watch === 'function') {
-      this.#watchHandles.push(
-        view.watch('camera', () => this.#scheduleRefresh()),
-        view.watch('scale', () => this.#scheduleRefresh()),
-      );
-    }
+    this.#watchHandles.push(
+      reactiveUtils.watch(view, 'camera', () => this.#scheduleRefresh()),
+      reactiveUtils.watch(view, 'scale', () => this.#scheduleRefresh()),
+    );
     this.#scheduleRefresh(100);
   }
 
