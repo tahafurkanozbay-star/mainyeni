@@ -19,7 +19,7 @@ import {
 import type { ArcgisAccessorWatch } from '../../gis-engine/arcgisReactiveRuntime';
 import { waitForArcgisView } from '../../gis-engine/viewReadiness';
 import { SceneBasemapRuntime, type SceneBasemapMap } from '../../gis-engine/sceneBasemapRuntime';
-import { OSM3DBuildingsRuntime } from '../../gis-engine/osm3DBuildingsRuntime';
+import { Esri3DBuildingsRuntime } from '../../gis-engine/esri3DBuildingsRuntime';
 import { WEB_MERCATOR_SPATIAL_REFERENCE } from '../../gis-engine/contracts';
 import './OpenStreetMap3DAttribution.css';
 import {
@@ -191,8 +191,8 @@ export function ExperienceMapModeBridge({
   const sceneRef = useRef<SceneHandle | null>(null);
   const sceneBasemapRuntimeRef = useRef<SceneBasemapRuntime | null>(null);
   if (!sceneBasemapRuntimeRef.current) sceneBasemapRuntimeRef.current = new SceneBasemapRuntime();
-  const osmBuildingsRuntimeRef = useRef<OSM3DBuildingsRuntime | null>(null);
-  if (!osmBuildingsRuntimeRef.current) osmBuildingsRuntimeRef.current = new OSM3DBuildingsRuntime();
+  const esriBuildingsRuntimeRef = useRef<Esri3DBuildingsRuntime | null>(null);
+  if (!esriBuildingsRuntimeRef.current) esriBuildingsRuntimeRef.current = new Esri3DBuildingsRuntime();
   const pendingSceneRef = useRef<SceneHandle | null>(null);
   const sceneLifetimeRef = useRef(new AbortController());
   const sceneExperienceRef = useRef<SceneExperienceRuntime | null>(null);
@@ -399,10 +399,10 @@ export function ExperienceMapModeBridge({
       synchronizeBasemapId(bridge, scene.map);
       if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
       try {
-        await osmBuildingsRuntimeRef.current?.activate(scene.view as never);
+        await esriBuildingsRuntimeRef.current?.activate(scene.view as never);
       } catch (error) {
-        // Overpass availability must not block 2D/3D navigation.
-        DebugHelper.Log({ context: 'scene-osm-3d-buildings', error });
+        // The optional buildings layer must not block 2D/3D navigation.
+        DebugHelper.Log({ context: 'scene-esri-3d-buildings', error });
       }
       if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
       setSceneHostActive(true);
@@ -448,7 +448,7 @@ export function ExperienceMapModeBridge({
       announce('3B görünüm etkinleştirildi.');
     } catch (error) {
       DebugHelper.Log(error);
-      osmBuildingsRuntimeRef.current?.deactivate();
+      esriBuildingsRuntimeRef.current?.deactivate();
       sceneBasemapRuntimeRef.current?.restore(mapView.map as SceneBasemapMap);
       const sharedMap = mapView.map as { basemap?: unknown } | null;
       if (sharedMap && !sharedMap.basemap) sharedMap.basemap = 'osm';
@@ -513,7 +513,7 @@ export function ExperienceMapModeBridge({
 
       if (disposedRef.current) return;
       setSceneHostActive(false);
-      osmBuildingsRuntimeRef.current?.deactivate();
+      esriBuildingsRuntimeRef.current?.deactivate();
       sceneBasemapRuntimeRef.current?.restore(mapView.map as SceneBasemapMap);
       const sharedMap = mapView.map as { basemap?: unknown } | null;
       if (sharedMap && !sharedMap.basemap) sharedMap.basemap = 'osm';
@@ -623,7 +623,7 @@ export function ExperienceMapModeBridge({
   useEffect(() => () => {
     disposedRef.current = true;
     sceneLifetimeRef.current.abort();
-    osmBuildingsRuntimeRef.current?.dispose();
+    esriBuildingsRuntimeRef.current?.dispose();
     sceneBasemapRuntimeRef.current?.dispose();
     if (pendingSceneRef.current) destroySceneView(pendingSceneRef.current, (error) => DebugHelper.Log({ context: 'pending-scene-destroy', error }));
     pendingSceneRef.current = null;
@@ -653,8 +653,10 @@ export function ExperienceMapModeBridge({
         data-scene-status={sceneUi.statusLabel}
       />
       {sceneHostActive && (
-        <div className="osm3d-attribution" role="note" aria-label="OpenStreetMap bina verisi atfı">
-          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer noopener">© OpenStreetMap contributors</a>
+        <div className="esri3d-attribution" role="note" aria-label="3B yapı verisi kaynakları">
+          <span>3B yapı verisi: </span>
+          <a href="https://basemaps3d.arcgis.com/arcgis/rest/services/Esri3D_Buildings_v1/SceneServer" target="_blank" rel="noreferrer noopener">Esri 3D Buildings</a>
+          <span> · © TomTom; Vantor; Esri Community Maps contributors; © OpenStreetMap contributors (Open Database License); Microsoft; Esri; Google Open Buildings (CC BY 4.0); U.S. Geological Survey / USGS 3D Elevation Program.</span>
         </div>
       )}
       {activeMode === '3d' && (

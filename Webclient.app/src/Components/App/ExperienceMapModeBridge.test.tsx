@@ -34,7 +34,7 @@ const harness = vi.hoisted(() => ({
   disposeSceneNavigation: vi.fn(),
   setSceneHome: vi.fn(),
   bindSceneState: vi.fn(),
-  osmBuildingsRuntime: { activate: vi.fn(async () => undefined), deactivate: vi.fn(), dispose: vi.fn() },
+  esriBuildingsRuntime: { activate: vi.fn(async () => undefined), deactivate: vi.fn(), dispose: vi.fn() },
   basemapLoadFails: false,
   applyInitialMapViewState: vi.fn(),
 }));
@@ -100,8 +100,8 @@ vi.mock('../../gis-engine/arcgisModuleRuntime', () => ({
   }),
 }));
 
-vi.mock('../../gis-engine/osm3DBuildingsRuntime', () => ({
-  OSM3DBuildingsRuntime: vi.fn(() => harness.osmBuildingsRuntime),
+vi.mock('../../gis-engine/esri3DBuildingsRuntime', () => ({
+  Esri3DBuildingsRuntime: vi.fn(() => harness.esriBuildingsRuntime),
 }));
 
 vi.mock('../../gis-engine/viewReadiness', () => ({
@@ -171,7 +171,7 @@ const dispatchMode = (mode: '2d' | '3d'): void => {
 describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    harness.osmBuildingsRuntime.activate.mockResolvedValue(undefined);
+    harness.esriBuildingsRuntime.activate.mockResolvedValue(undefined);
     harness.basemapLoadFails = false;
     harness.loadBasemapModule.mockImplementation(async () => ({
       fromId: (id: string) => ({ id, load: vi.fn(async () => undefined), destroy: vi.fn() }),
