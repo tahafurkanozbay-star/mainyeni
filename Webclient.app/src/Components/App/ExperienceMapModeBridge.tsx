@@ -19,6 +19,7 @@ import type { ArcgisAccessorWatch } from '../../gis-engine/arcgisReactiveRuntime
 import { waitForArcgisView } from '../../gis-engine/viewReadiness';
 import { SceneBasemapRuntime, type SceneBasemapMap } from '../../gis-engine/sceneBasemapRuntime';
 import { OSM3DBuildingsRuntime } from '../../gis-engine/osm3DBuildingsRuntime';
+import { WEB_MERCATOR_SPATIAL_REFERENCE } from '../../gis-engine/contracts';
 import './OpenStreetMap3DAttribution.css';
 import {
   createSceneExperienceRuntime,
@@ -294,6 +295,7 @@ export function ExperienceMapModeBridge({
     } : undefined;
     const scene = await createSceneView(sceneHostRef.current, {
       map: mapView.map,
+      spatialReference: WEB_MERCATOR_SPATIAL_REFERENCE,
       ...(initialCamera ? { camera: initialCamera } : {}),
       qualityProfile: 'medium',
       padding: mapView.padding,

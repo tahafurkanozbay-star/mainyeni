@@ -264,6 +264,7 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
       expect(harness.createSceneView).toHaveBeenCalledWith(
         host,
         expect.objectContaining({
+          spatialReference: { wkid: 3857 },
           camera: expect.objectContaining({
             position: { longitude: 32.85, latitude: 39.93, z: 8_000 },
             tilt: 48,

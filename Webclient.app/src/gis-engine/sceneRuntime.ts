@@ -2,6 +2,7 @@ import { watchArcgisProperty, type ArcgisAccessorWatch } from './arcgisReactiveR
 import { loadArcgisModule, resetArcgisModuleRuntimeCache } from './arcgisModuleRuntime';
 import { createViewState, updateSelection } from './viewState';
 import { create3DLayer } from './layerFactory';
+import { WEB_MERCATOR_SPATIAL_REFERENCE } from './contracts';
 import type { ArcGisGraphicLike, ArcGisLayerLike, GisServiceInput, ViewState, ViewStateBridge, ViewStateInput } from './contracts';
 
 const finite = (value: unknown, fallback: number | null = null): number | null => { const numeric = Number(value); return Number.isFinite(numeric) ? numeric : fallback; };
@@ -33,7 +34,7 @@ export interface SceneViewLike {
 const sceneCenter = (view: SceneViewLike): [number, number] | null => { const position = view?.camera?.position; const longitude = finite(position?.longitude); const latitude = finite(position?.latitude); if (longitude !== null && latitude !== null) return [longitude, latitude]; const x = finite(position?.x); const y = finite(position?.y); return x !== null && y !== null ? [x, y] : null; };
 const sceneExtent = (view: SceneViewLike) => { const extent = view?.extent; if (!extent) return null; const xmin = finite(extent.xmin); const ymin = finite(extent.ymin); const xmax = finite(extent.xmax); const ymax = finite(extent.ymax); if ([xmin, ymin, xmax, ymax].some((value) => value === null) || xmin === null || ymin === null || xmax === null || ymax === null) return null; return { xmin, ymin, xmax, ymax, wkid: finite(extent.spatialReference?.wkid) }; };
 
-export interface SceneCreateOptions { map?: any; basemap?: any; ground?: any; camera?: any; qualityProfile?: string; environment?: any; constraints?: any; padding?: any; }
+export interface SceneCreateOptions { map?: any; basemap?: any; ground?: any; camera?: any; qualityProfile?: string; environment?: any; constraints?: any; padding?: any; spatialReference?: typeof WEB_MERCATOR_SPATIAL_REFERENCE; }
 
 export interface SceneContainerLike {
   clientWidth?: number;
@@ -93,7 +94,7 @@ const createOwnedSceneMap = async (options: SceneCreateOptions = {}): Promise<an
 export const resetSceneRuntimeModuleCache = (): void => { resetArcgisModuleRuntimeCache(); };
 export const createSceneView = async (container: unknown, options: SceneCreateOptions = {}): Promise<{ map: any; view: SceneViewLike; ownsMap: boolean }> => {
   const SceneViewCtor = await loadArcgisModule<any>('esri/views/SceneView'); const ownsMap = !options.map; const map = options.map || await createOwnedSceneMap(options); const viewOptions: Record<string, any> = { container, map, ui: { components: [] } };
-  if (options.camera !== undefined) viewOptions.camera = options.camera; viewOptions.qualityProfile = options.qualityProfile !== undefined ? options.qualityProfile : 'medium'; if (options.environment !== undefined) viewOptions.environment = options.environment; if (options.constraints !== undefined) viewOptions.constraints = options.constraints; if (options.padding !== undefined) viewOptions.padding = options.padding;
+  if (options.camera !== undefined) viewOptions.camera = options.camera; viewOptions.qualityProfile = options.qualityProfile !== undefined ? options.qualityProfile : 'medium'; if (options.environment !== undefined) viewOptions.environment = options.environment; if (options.constraints !== undefined) viewOptions.constraints = options.constraints; if (options.padding !== undefined) viewOptions.padding = options.padding; if (options.spatialReference !== undefined) viewOptions.spatialReference = options.spatialReference;
   const view = new SceneViewCtor(viewOptions) as SceneViewLike; return { map, view, ownsMap };
 };
 export const destroySceneView = (

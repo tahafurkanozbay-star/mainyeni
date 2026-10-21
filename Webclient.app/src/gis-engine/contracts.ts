@@ -12,6 +12,8 @@ export type Dictionary<T = unknown> = Record<string, T>;
 export type Id = string;
 export type Timestamp = string;
 
+export const WEB_MERCATOR_SPATIAL_REFERENCE = Object.freeze({ wkid: 3857 });
+
 export interface RuntimeErrorDetails {
   code?: string;
   cause?: unknown;

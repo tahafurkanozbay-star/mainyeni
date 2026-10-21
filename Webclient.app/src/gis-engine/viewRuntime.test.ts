@@ -140,6 +140,7 @@ describe('viewRuntime', () => {
     expect(options).toMatchObject({
       map,
       container,
+      spatialReference: { wkid: 3857 },
       zoom: 12,
       center: [32.85, 39.93],
       padding: { top: 0, bottom: 0, left: 400, right: 0 },

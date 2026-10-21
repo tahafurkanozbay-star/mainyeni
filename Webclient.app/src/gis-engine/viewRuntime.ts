@@ -1,6 +1,6 @@
 import { watchArcgisProperty, type ArcgisAccessorWatch } from './arcgisReactiveRuntime';
 import { createViewState, switchViewMode, updateCamera } from './viewState';
-import type { ViewCameraInput, ViewMode, ViewState, ViewStateBridge, ViewStateInput } from './contracts';
+import { WEB_MERCATOR_SPATIAL_REFERENCE, type ViewCameraInput, type ViewMode, type ViewState, type ViewStateBridge, type ViewStateInput } from './contracts';
 
 const DEFAULT_CENTER: [number, number] = [32.8597, 39.9334];
 const DEFAULT_MIN_ZOOM = 1;
@@ -84,7 +84,7 @@ export interface MapViewOptionsInput { map?: unknown; container?: unknown; confi
 export const createMapViewOptions = ({ map, container, configuration = {}, viewportWidth, padding }: MapViewOptionsInput = {}) => {
   const constraints = normalizeViewConstraints(configuration);
   const configuredZoom = Math.floor(finite(configuration.Zoom ?? configuration.zoom, 11) as number);
-  return { container, ui: { components: [] as unknown[] }, map, zoom: clamp(configuredZoom, constraints.minZoom, constraints.maxZoom), center: normalizeInitialCenter(configuration), padding: padding || createResponsivePadding(viewportWidth, configuration), constraints };
+  return { container, ui: { components: [] as unknown[] }, map, spatialReference: WEB_MERCATOR_SPATIAL_REFERENCE, zoom: clamp(configuredZoom, constraints.minZoom, constraints.maxZoom), center: normalizeInitialCenter(configuration), padding: padding || createResponsivePadding(viewportWidth, configuration), constraints };
 };
 
 export const snapshotMapViewState = (view: MapViewLike, previous: ViewStateInput | ViewState = {}): ViewState => createViewState({
