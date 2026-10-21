@@ -1,5 +1,13 @@
 # 3D Altyapı / Üstyapı Koordinasyon Web Uygulaması — Güncel İlerleme
 
+## 2026-10-21 — Esri 3D Buildings SceneLayer entegrasyonu (PR #593)
+
+- Çalışma dalı: `agent/esri-3d-buildings-20261021-1048-11c7c61`; güncel main tabanı: `c81b285e87adf1d2031707cc00b6f43125c9a559`.
+- Esri'nin resmi `Esri3D_Buildings_v1/SceneServer/layers/0` servisi için tembel yüklenen `Esri3DBuildingsRuntime` eklendi. Katman yalnızca 3B görünüme geçerken oluşturulur; 2B'ye dönüşte gizlenip aynı Map üzerinde korunur. Yapı adı/türü, yükseklik ve kat sayısı için popup bilgileri ile servis kaynak atfı tanımlandı.
+- Aktif geçiş artık bina geometrilerini ayrıca Overpass'tan indirmek yerine Esri'nin akışlı 3B katmanını kullanır; çift bina çizimini ve ilgili gereksiz Overpass isteklerini önler. PR #592 ile ana dala alınan Ankara başlangıç/kamera iyileştirmeleri korunarak yeniden tabanlandı.
+- Yeni runtime yaşam döngü testleri ve 2B/3B köprü test mock'u eklendi. İlk Release QA turunda bulunan tanı gözlemleyicisi istisnasını yutan `catch` düzeltildi. Yeniden tabanlanan en güncel başlık için zorunlu CI kontrolleri yeniden çalıştırılıyor; canlı IIS/üretim tarayıcı doğrulaması yapılmadı.
+
+
 > Bu dosya kısa ve güncel başlangıç kaydıdır. Eski, ayrıntılı durum kayıtlarının tam kopyaları [`progress/archive/`](./progress/archive/) altındadır. Yapısal düzenleme öncesindeki eksiksiz kayıt [`KENT_REHBERI_PROGRESS_ARCHIVE_MAIN_THROUGH_20261019_PRE_STRUCTURE_HYGIENE.md`](./progress/archive/KENT_REHBERI_PROGRESS_ARCHIVE_MAIN_THROUGH_20261019_PRE_STRUCTURE_HYGIENE.md) dosyasında korunur.
 
 ## 2026-10-20 — Keşfet paneli, kayıt merkezli yakınlaşma ve alt uyarı
