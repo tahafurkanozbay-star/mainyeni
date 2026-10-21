@@ -20,6 +20,7 @@ import type { ArcgisAccessorWatch } from '../../gis-engine/arcgisReactiveRuntime
 import { waitForArcgisView } from '../../gis-engine/viewReadiness';
 import { SceneBasemapRuntime, type SceneBasemapMap } from '../../gis-engine/sceneBasemapRuntime';
 import { Esri3DBuildingsRuntime } from '../../gis-engine/esri3DBuildingsRuntime';
+import { SceneIconPresentationRuntime } from '../../gis-engine/sceneIconPresentationRuntime';
 import { WEB_MERCATOR_SPATIAL_REFERENCE } from '../../gis-engine/contracts';
 import './OpenStreetMap3DAttribution.css';
 import {
@@ -193,6 +194,8 @@ export function ExperienceMapModeBridge({
   if (!sceneBasemapRuntimeRef.current) sceneBasemapRuntimeRef.current = new SceneBasemapRuntime();
   const esriBuildingsRuntimeRef = useRef<Esri3DBuildingsRuntime | null>(null);
   if (!esriBuildingsRuntimeRef.current) esriBuildingsRuntimeRef.current = new Esri3DBuildingsRuntime();
+  const sceneIconPresentationRuntimeRef = useRef<SceneIconPresentationRuntime | null>(null);
+  if (!sceneIconPresentationRuntimeRef.current) sceneIconPresentationRuntimeRef.current = new SceneIconPresentationRuntime();
   const pendingSceneRef = useRef<SceneHandle | null>(null);
   const sceneLifetimeRef = useRef(new AbortController());
   const sceneExperienceRef = useRef<SceneExperienceRuntime | null>(null);
@@ -405,6 +408,9 @@ export function ExperienceMapModeBridge({
         DebugHelper.Log({ context: 'scene-esri-3d-buildings', error });
       }
       if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
+      // The shared Kent Rehberi layer keeps its existing SVG assets. Switch it
+      // to raised 3D billboards immediately before the SceneView becomes visible.
+      sceneIconPresentationRuntimeRef.current?.activate(scene.map as never);
       setSceneHostActive(true);
       await nextBrowserFrame();
       synchronizeSceneViewSize(scene.view);
@@ -448,6 +454,7 @@ export function ExperienceMapModeBridge({
       announce('3B görünüm etkinleştirildi.');
     } catch (error) {
       DebugHelper.Log(error);
+      sceneIconPresentationRuntimeRef.current?.deactivate();
       esriBuildingsRuntimeRef.current?.deactivate();
       sceneBasemapRuntimeRef.current?.restore(mapView.map as SceneBasemapMap);
       const sharedMap = mapView.map as { basemap?: unknown } | null;
@@ -512,6 +519,7 @@ export function ExperienceMapModeBridge({
       });
 
       if (disposedRef.current) return;
+      sceneIconPresentationRuntimeRef.current?.deactivate();
       setSceneHostActive(false);
       esriBuildingsRuntimeRef.current?.deactivate();
       sceneBasemapRuntimeRef.current?.restore(mapView.map as SceneBasemapMap);
@@ -623,6 +631,7 @@ export function ExperienceMapModeBridge({
   useEffect(() => () => {
     disposedRef.current = true;
     sceneLifetimeRef.current.abort();
+    sceneIconPresentationRuntimeRef.current?.dispose();
     esriBuildingsRuntimeRef.current?.dispose();
     sceneBasemapRuntimeRef.current?.dispose();
     if (pendingSceneRef.current) destroySceneView(pendingSceneRef.current, (error) => DebugHelper.Log({ context: 'pending-scene-destroy', error }));
