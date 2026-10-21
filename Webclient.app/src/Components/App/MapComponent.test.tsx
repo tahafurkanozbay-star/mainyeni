@@ -216,6 +216,19 @@ describe('SVG overview markers', () => {
 });
 
 describe('real map workspace admission and recovery', () => {
+  it('opens and closes the in-app route planner from the top-level map navigation', async () => {
+    setup();
+    await screen.findByText('Araçlar hazır');
+    const navigation = runtime.navigationProps as { onOpenDirections: () => void };
+
+    act(() => { navigation.onOpenDirections(); });
+    expect(await screen.findByRole('complementary', { name: 'Uygulama içi yol tarifi' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Yol tarifi panelini kapat' }));
+    await waitFor(() => expect(
+      screen.queryByRole('complementary', { name: 'Uygulama içi yol tarifi' }),
+    ).not.toBeInTheDocument());
+  });
+
   it('publishes interactive tools only after the SDK view is ready', async () => {
     const ready = deferred(); runtime.create.mockReturnValue({ ready: false, when: () => ready.promise });
     setup();

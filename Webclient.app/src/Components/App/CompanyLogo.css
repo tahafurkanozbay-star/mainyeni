@@ -3,7 +3,6 @@
     width: 100px;
     right: 20px;
     bottom: 10px; 
-  
 }
 
 .cbs-logo{
@@ -16,6 +15,13 @@
     color: #23397d;
     right: 20px;
     bottom: 10px; 
+    opacity: .78;
+    transition: opacity 140ms ease;
+}
+
+.cbs-logo:hover,
+.cbs-logo:focus-visible{
+    opacity: 1;
 }
 
 .cbs-logo-colour{

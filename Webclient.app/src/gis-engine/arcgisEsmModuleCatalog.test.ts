@@ -36,6 +36,28 @@ describe('arcgisEsmModuleCatalog', () => {
     expect(queryTask.specifier).toBe('@arcgis/core/rest/query.js');
   });
 
+  it('registers the lazily loaded routing modules without prewarming them', () => {
+    const routeModules = resolveArcgisCatalogModules([
+      'esri/rest/networkService',
+      'esri/rest/route',
+      'esri/rest/support/FeatureSet',
+      'esri/rest/support/RouteParameters',
+    ]);
+
+    expect(routeModules.map(({ descriptor: item }) => item.prewarmClass)).toEqual([
+      'on-demand',
+      'on-demand',
+      'on-demand',
+      'on-demand',
+    ]);
+    expect(routeModules.map(({ descriptor: item }) => item.specifier)).toEqual([
+      '@arcgis/core/rest/networkService.js',
+      '@arcgis/core/rest/route.js',
+      '@arcgis/core/rest/support/FeatureSet.js',
+      '@arcgis/core/rest/support/RouteParameters.js',
+    ]);
+  });
+
   it('deduplicates requested ids by their ESM specifier while preserving first-request semantics', () => {
     const resolved = resolveArcgisCatalogModules([
       'esri/tasks/QueryTask',

@@ -13,6 +13,7 @@ import { WIDGET_WINDOW_DEFINITIONS } from '../Common/WidgetWindowRegistry';
 import { waitForArcgisView } from '../../gis-engine/viewReadiness';
 import { withTimeout } from '../../platform/runtime/resilience';
 import { ExperienceMapModeBridge } from './ExperienceMapModeBridge';
+import { MapNavigationPanel } from './MapNavigationPanel';
 import { MapWorkspaceRecoverySurface } from './MapWorkspaceRecoverySurface';
 import { MapWorkspaceRecoveryModel } from './mapWorkspaceRecoveryModel';
 import { MapWorkspaceAccessibilityModel } from './mapWorkspaceAccessibility';
@@ -30,6 +31,12 @@ import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
 import type { KentRehberiMapLike } from '../../data-services/kentRehberiGeoJsonLayer';
 import { searchAddressCandidates } from '../../data-services/addressGeocoding';
 import type { AddressGeocodingResult } from '../../data-services/addressGeocoding';
+import {
+  InAppNavigationRuntime,
+  type InAppNavigationResult,
+  type InAppNavigationMapLike,
+  type InAppTravelMode,
+} from '../../gis-engine/inAppNavigationRuntime';
 import { KentRehberiDataLayer } from './KentRehberiDataLayer';
 import './MapComponent.css';
 import '../Widget/_shared/ExperienceWidgetModernization.css';
@@ -86,6 +93,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
   const mapDiv = useRef<HTMLDivElement | null>(null);
   const searchMarkerLayerRef = useRef<SearchGraphicsLayerLike | null>(null);
   const searchMarkerMapRef = useRef<SearchMapLike | null>(null);
+  const navigationRuntimeRef = useRef<InAppNavigationRuntime | null>(null);
   const accessorWatchRef = useRef<ArcgisAccessorWatch | null>(null);
   const activeViewModeRef = useRef<ExperienceMapMode>('2d');
   const accessibilityModelRef = useRef<MapWorkspaceAccessibilityModel | null>(null);
@@ -102,6 +110,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
   const [mapGeneration, setMapGeneration] = useState(0);
   const [initialModeResolved, setInitialModeResolved] = useState(false);
   const [mapView, setMapView] = useState<MapViewLike | null>(null);
+  const [navigationOpen, setNavigationOpen] = useState(false);
   const [sidebarToolHost, setSidebarToolHost] = useState<HTMLDivElement | null>(null);
   const sidebarRef = useRef<unknown>(null);
 
@@ -224,6 +233,9 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       } catch (error) { DebugHelper.Log(error); }
       searchMarkerLayerRef.current = null;
       searchMarkerMapRef.current = null;
+      navigationRuntimeRef.current?.dispose();
+      navigationRuntimeRef.current = null;
+      setNavigationOpen(false);
       unbindViewState(); performanceMonitor?.dispose?.(); MapManager.ClearViewPerformanceMonitor?.(performanceMonitor);
       MapManager.ClearViewStateBridge?.(bridge as never); bridge?.destroy?.(); handles.forEach(safeRemove); windowManager.SetMapUpdating(false);
       Store.dispatch({ type: MapReducer_ActionTypes.SetMapView, payload: null });
@@ -344,6 +356,46 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
     }
   }, []);
 
+  const planNavigationRoute = useCallback(async (
+    origin: AddressGeocodingResult,
+    destination: AddressGeocodingResult,
+    mode: InAppTravelMode,
+    signal: AbortSignal,
+  ): Promise<InAppNavigationResult> => {
+    if (signal.aborted) throw signal.reason ?? new DOMException('Rota işlemi iptal edildi.', 'AbortError');
+    const view = (
+      MapManager.GetActiveMapView?.() ?? MapManager.GetMapView()
+    ) as MapViewLike | null;
+    const map = view?.map as InAppNavigationMapLike | null | undefined;
+    if (!view || view.destroyed || typeof view.goTo !== 'function' || !map) {
+      throw new Error('Harita henüz hazır değil. Birkaç saniye sonra yeniden deneyin.');
+    }
+
+    const runtime = navigationRuntimeRef.current ?? new InAppNavigationRuntime();
+    navigationRuntimeRef.current = runtime;
+    const result = await runtime.planRoute(
+      map,
+      origin,
+      destination,
+      mode,
+      signal,
+    );
+    if (signal.aborted) throw signal.reason ?? new DOMException('Rota işlemi iptal edildi.', 'AbortError');
+    const activeView = (
+      MapManager.GetActiveMapView?.() ?? MapManager.GetMapView()
+    ) as MapViewLike | null;
+    if (view !== activeView || view.destroyed) {
+      throw new DOMException('Harita görünümü rota hesaplanırken değişti.', 'AbortError');
+    }
+    await view.goTo(result.geometry, { duration: 700 });
+    if (signal.aborted) throw signal.reason ?? new DOMException('Rota işlemi iptal edildi.', 'AbortError');
+    return result;
+  }, []);
+
+  const clearNavigationRoute = useCallback((): void => {
+    navigationRuntimeRef.current?.clear();
+  }, []);
+
   const modelsMountedRef = useRef(false);
   useEffect(() => {
     modelsMountedRef.current = true;
@@ -365,7 +417,21 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       {mapView && <>
         <KentRehberiDataLayer map={mapView.map as KentRehberiMapLike} />
         <ExperienceMapModeBridge mapView={mapView as never} modeRef={activeViewModeRef} accessorWatch={accessorWatchRef.current ?? undefined} onInitialModeResolved={markInitialModeResolved} />
-        <NavigationBar id="mainbar" onAddressSearch={searchAddress} onAddressSelect={selectAddress} />
+        <NavigationBar
+          id="mainbar"
+          onAddressSearch={searchAddress}
+          onAddressSelect={selectAddress}
+          onOpenDirections={() => setNavigationOpen(true)}
+          directionsOpen={navigationOpen}
+        />
+        {navigationOpen ? (
+          <MapNavigationPanel
+            onAddressSearch={searchAddress}
+            onPlanRoute={planNavigationRoute}
+            onClearRoute={clearNavigationRoute}
+            onClose={() => setNavigationOpen(false)}
+          />
+        ) : null}
         <LegacySidebar id="sidebar" windowManager={windowManager} ref={sidebarRef} onToolHostChange={setSidebarToolHost} />
         <ModernToolbarWidget
           id="toolbar-widget"

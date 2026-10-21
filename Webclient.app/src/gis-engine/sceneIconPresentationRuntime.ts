@@ -1,7 +1,10 @@
+import { loadArcgisModules } from './arcgisModuleRuntime';
 import { runtimeDiagnostics } from '../platform/runtime/runtimeDiagnostics';
 
 export const KENT_REHBERI_ICON_LAYER_ID = 'kent-rehberi-postgis';
+export const SCENE_ICON_OVERLAY_LAYER_ID = 'kent-rehberi-3d-icon-overlay';
 export const SCENE_ICON_GROUND_OFFSET_METERS = 50;
+export const SCENE_ICON_LAYER_OPACITY = 0.78;
 
 const SCENE_ICON_SIZE_PX = 36;
 const SCENE_ICON_VERTICAL_OFFSET = Object.freeze({
@@ -18,6 +21,13 @@ const SCENE_ICON_CALLOUT = Object.freeze({
 
 type JsonRecord = Record<string, unknown>;
 interface RemovableHandle { remove?: () => void; }
+interface SceneIconFeatureLike {
+  readonly geometry?: unknown;
+  readonly attributes?: Readonly<Record<string, unknown>>;
+}
+interface SceneIconFeatureSetLike {
+  readonly features?: readonly SceneIconFeatureLike[];
+}
 interface IconRendererSymbol {
   readonly type?: unknown;
   readonly url?: unknown;
@@ -34,27 +44,46 @@ interface IconRendererInfo {
 interface SceneIconLayerLike {
   readonly id?: string;
   renderer?: unknown;
-  elevationInfo?: unknown;
+  visible?: boolean;
+  popupTemplate?: unknown;
+  createQuery?: () => unknown;
+  queryFeatures?: (query: unknown) => PromiseLike<SceneIconFeatureSetLike>;
 }
 interface SceneIconLayerCollectionLike {
-  readonly items?: readonly SceneIconLayerLike[];
-  toArray?: () => readonly SceneIconLayerLike[];
+  readonly items?: readonly unknown[];
+  toArray?: () => readonly unknown[];
   on?: (eventName: 'after-add' | 'after-remove', callback: (event: { item?: unknown }) => void) => RemovableHandle;
 }
+interface SceneIconGraphicsLayerLike {
+  destroy?: () => void;
+}
 interface SceneIconMapLike {
+  add?: (layer: SceneIconGraphicsLayerLike, index?: number) => unknown;
+  remove?: (layer: SceneIconGraphicsLayerLike) => unknown;
   readonly layers?: SceneIconLayerCollectionLike;
   readonly allLayers?: SceneIconLayerCollectionLike;
   findLayerById?: (id: string) => SceneIconLayerLike | null | undefined;
 }
 interface LayerPresentationSnapshot {
   readonly layer: SceneIconLayerLike;
-  readonly renderer: unknown;
-  readonly elevationInfo: unknown;
-  readonly sceneRenderer: JsonRecord;
+  readonly visible: boolean | undefined;
+  readonly overlay: SceneIconGraphicsLayerLike;
 }
+export type SceneIconGraphicConstructor = new (properties: Record<string, unknown>) => unknown;
+export type SceneIconGraphicsLayerConstructor = new (properties: Record<string, unknown>) => SceneIconGraphicsLayerLike;
+export type LoadSceneIconGraphicsModules = () => Promise<
+  readonly [SceneIconGraphicConstructor, SceneIconGraphicsLayerConstructor]
+>;
 export interface SceneIconPresentationRuntimeOptions {
+  readonly loadGraphicsModules?: LoadSceneIconGraphicsModules;
   readonly onError?: (error: unknown, source: string) => void;
 }
+
+const defaultLoadGraphicsModules: LoadSceneIconGraphicsModules = () =>
+  loadArcgisModules<readonly [SceneIconGraphicConstructor, SceneIconGraphicsLayerConstructor]>([
+    'esri/Graphic',
+    'esri/layers/GraphicsLayer',
+  ]);
 
 const asRecord = (value: unknown): JsonRecord | null =>
   value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -165,12 +194,17 @@ export const createSceneIconRenderer = (input: unknown): JsonRecord | null => {
 
   return {
     ...renderer,
+    type: 'unique-value',
     uniqueValueInfos: infos,
   };
 };
 
 const collectionItems = (collection: SceneIconLayerCollectionLike | undefined): readonly SceneIconLayerLike[] =>
-  collection ? readCollection(collection.items ?? collection.toArray?.()) as readonly SceneIconLayerLike[] : [];
+  collection
+    ? readCollection(collection.items ?? collection.toArray?.())
+      .map((item) => asRecord(item) as SceneIconLayerLike | null)
+      .filter((item): item is SceneIconLayerLike => item !== null)
+    : [];
 
 const findLayer = (map: SceneIconMapLike): SceneIconLayerLike | null => {
   const found = map.findLayerById?.(KENT_REHBERI_ICON_LAYER_ID);
@@ -183,34 +217,39 @@ const findLayer = (map: SceneIconMapLike): SceneIconLayerLike | null => {
 };
 
 /**
- * Switches the existing Kent Rehberi SVG renderer in-place while SceneView is
- * active. It does not fetch or duplicate the GeoJSON layer. A collection
- * watcher handles cases where the data layer arrives after 3D activation.
+ * Keeps the existing GeoJSON layer's 2D renderer intact and adds a lightweight
+ * GraphicsLayer of elevated 3D icons only while SceneView is active.
  */
 export class SceneIconPresentationRuntime {
   readonly #onError: (error: unknown, source: string) => void;
+  readonly #loadGraphicsModules: LoadSceneIconGraphicsModules;
   #map: SceneIconMapLike | null = null;
   #active = false;
   #snapshot: LayerPresentationSnapshot | null = null;
   #handles: RemovableHandle[] = [];
+  #generation = 0;
 
   constructor(options: SceneIconPresentationRuntimeOptions = {}) {
+    this.#loadGraphicsModules = options.loadGraphicsModules ?? defaultLoadGraphicsModules;
     this.#onError = options.onError ?? ((error, source) => {
       runtimeDiagnostics.captureError(error, { source }, 'warn');
     });
   }
 
-  activate(map: SceneIconMapLike): void {
-    if (!map) return;
+  async activate(map: SceneIconMapLike): Promise<void> {
+    if (!map || typeof map.add !== 'function' || typeof map.remove !== 'function') {
+      throw new TypeError('3B Kent Rehberi ikonları için harita add/remove desteği gereklidir.');
+    }
     if (this.#map && this.#map !== map) this.dispose();
     this.#map = map;
     this.#active = true;
     this.#attachCollectionWatchers();
-    this.#apply(findLayer(map));
+    await this.#apply(findLayer(map));
   }
 
   deactivate(): void {
     this.#active = false;
+    this.#generation += 1;
     this.#removeWatchers();
     this.#restoreSnapshot();
   }
@@ -226,7 +265,7 @@ export class SceneIconPresentationRuntime {
     const handleLayerEvent = (event: { item?: unknown }): void => {
       const item = asRecord(event?.item);
       if (!this.#active || item?.id !== KENT_REHBERI_ICON_LAYER_ID) return;
-      this.#apply(item as SceneIconLayerLike);
+      void this.#apply(item as SceneIconLayerLike);
     };
 
     for (const collection of [this.#map?.layers, this.#map?.allLayers]) {
@@ -236,6 +275,7 @@ export class SceneIconPresentationRuntime {
           const handle = collection.on(eventName, (event) => {
             const item = asRecord(event?.item);
             if (eventName === 'after-remove' && this.#snapshot?.layer === item) {
+              this.#generation += 1;
               this.#restoreSnapshot();
               return;
             }
@@ -257,39 +297,94 @@ export class SceneIconPresentationRuntime {
     }
   }
 
-  #apply(layer: SceneIconLayerLike | null): void {
+  async #apply(layer: SceneIconLayerLike | null): Promise<void> {
     if (!this.#active || !layer || layer.id !== KENT_REHBERI_ICON_LAYER_ID) return;
-    if (this.#snapshot?.layer !== layer) {
-      this.#restoreSnapshot();
-      const sceneRenderer = createSceneIconRenderer(layer.renderer);
-      if (!sceneRenderer) return;
-      this.#snapshot = {
-        layer,
-        renderer: layer.renderer,
-        elevationInfo: layer.elevationInfo,
-        sceneRenderer,
-      };
-    }
-
-    const snapshot = this.#snapshot;
-    if (!snapshot) return;
+    if (this.#snapshot?.layer === layer) return;
+    this.#restoreSnapshot();
+    const generation = ++this.#generation;
     try {
-      layer.renderer = snapshot.sceneRenderer;
-      layer.elevationInfo = { mode: 'relative-to-ground', offset: 0 };
+      const sceneRenderer = createSceneIconRenderer(layer.renderer);
+      const rendererInfos = readCollection(sceneRenderer?.uniqueValueInfos)
+        .map((entry) => asRecord(entry))
+        .filter((entry): entry is JsonRecord => entry !== null);
+      if (!sceneRenderer || rendererInfos.length === 0) return;
+      if (typeof layer.queryFeatures !== 'function') {
+        throw new TypeError('Kent Rehberi ikon katmanı özelliklerini sorgulayamıyor.');
+      }
+
+      const [Graphic, GraphicsLayer] = await this.#loadGraphicsModules();
+      const query = asRecord(layer.createQuery?.()) ?? {};
+      query.where = '1=1';
+      query.outFields = ['*'];
+      query.returnGeometry = true;
+      const result = await layer.queryFeatures(query);
+      if (generation !== this.#generation || !this.#active || this.#map === null) return;
+
+      const symbols = new Map<unknown, unknown>(
+        rendererInfos.map((info) => [info.value, info.symbol]),
+      );
+      const graphics = (result.features ?? []).flatMap((feature) => {
+        const symbol = symbols.get(feature.attributes?.iconKey);
+        if (!feature.geometry || !symbol) return [];
+        const properties: Record<string, unknown> = {
+          geometry: feature.geometry,
+          attributes: feature.attributes,
+          symbol,
+        };
+        if (layer.popupTemplate) properties.popupTemplate = layer.popupTemplate;
+        return [new Graphic(properties)];
+      });
+      if (graphics.length === 0) return;
+
+      const overlay = new GraphicsLayer({
+        id: SCENE_ICON_OVERLAY_LAYER_ID,
+        title: 'Kent Rehberi 3B ikonları',
+        listMode: 'hide',
+        opacity: SCENE_ICON_LAYER_OPACITY,
+        graphics,
+      });
+      if (generation !== this.#generation || !this.#active || this.#map === null) {
+        overlay.destroy?.();
+        return;
+      }
+
+      try {
+        const map = this.#map;
+        if (!map || typeof map.add !== 'function') {
+          throw new TypeError('3B Kent Rehberi ikon katmanı haritaya eklenemiyor.');
+        }
+        map.add(overlay, 0);
+      } catch (error) {
+        try { overlay.destroy?.(); } catch (destroyError) {
+          this.#report(destroyError, 'gis.scene-icons.destroy-after-add-failure');
+        }
+        throw error;
+      }
+      this.#snapshot = { layer, visible: layer.visible, overlay };
+      layer.visible = false;
     } catch (error) {
-      this.#report(error, 'gis.scene-icons.apply-renderer');
-      this.#restoreSnapshot();
+      if (generation === this.#generation) this.#report(error, 'gis.scene-icons.create-overlay');
     }
   }
 
   #restoreSnapshot(): void {
     const snapshot = this.#snapshot;
     if (!snapshot) return;
+    this.#snapshot = null;
     try {
-      snapshot.layer.renderer = snapshot.renderer;
-      snapshot.layer.elevationInfo = snapshot.elevationInfo;
+      this.#map?.remove?.(snapshot.overlay);
     } catch (error) {
-      this.#report(error, 'gis.scene-icons.restore-renderer');
+      this.#report(error, 'gis.scene-icons.remove-overlay');
+    }
+    try {
+      snapshot.layer.visible = snapshot.visible ?? true;
+    } catch (error) {
+      this.#report(error, 'gis.scene-icons.restore-visibility');
+    }
+    try {
+      snapshot.overlay.destroy?.();
+    } catch (error) {
+      this.#report(error, 'gis.scene-icons.destroy-overlay');
     }
   }
 

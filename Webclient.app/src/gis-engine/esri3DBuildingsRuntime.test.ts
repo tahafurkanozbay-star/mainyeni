@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   ESRI_3D_BUILDINGS_SCENE_LAYER_URL,
+  ESRI_3D_BUILDINGS_OPACITY,
   Esri3DBuildingsRuntime,
   type Esri3DBuildingsLayerConstructor,
   type Esri3DBuildingsLayerLike,
@@ -57,6 +58,7 @@ describe('Esri 3D buildings runtime', () => {
       title: 'Esri 3D Buildings',
       url: ESRI_3D_BUILDINGS_SCENE_LAYER_URL,
       visible: true,
+      opacity: ESRI_3D_BUILDINGS_OPACITY,
       listMode: 'hide',
       legendEnabled: false,
       popupEnabled: true,
@@ -65,7 +67,7 @@ describe('Esri 3D buildings runtime', () => {
     runtime.dispose();
   });
 
-  it('hides and reuses the same layer when switching between 3D and 2D', async () => {
+  it('detaches and reuses the same layer when switching between 3D and 2D', async () => {
     const loadSceneLayer = vi.fn(async () => layerConstructor);
     const map = createMap();
     const runtime = new Esri3DBuildingsRuntime({ loadSceneLayer });
@@ -76,12 +78,14 @@ describe('Esri 3D buildings runtime', () => {
 
     runtime.deactivate();
     expect(layer.visible).toBe(false);
-    expect(map.remove).not.toHaveBeenCalled();
+    expect(map.remove).toHaveBeenCalledWith(layer);
+    expect(map.layers).toHaveLength(0);
 
     await runtime.activate({ map });
     expect(layer.visible).toBe(true);
     expect(loadSceneLayer).toHaveBeenCalledTimes(1);
-    expect(map.add).toHaveBeenCalledTimes(1);
+    expect(map.add).toHaveBeenCalledTimes(2);
+    expect(map.layers).toEqual([layer]);
 
     runtime.dispose();
     expect(map.remove).toHaveBeenCalledWith(layer);

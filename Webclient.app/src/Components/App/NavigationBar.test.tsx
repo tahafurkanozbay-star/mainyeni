@@ -1,22 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { NavigationBar } from './NavigationBar';
 import type { AddressGeocodingResult } from '../../data-services/addressGeocoding';
-
-const themeMocks = vi.hoisted(() => ({
-  theme: 'light' as 'light' | 'dark',
-  toggleTheme: vi.fn(),
-}));
-
-vi.mock('../Common/ExperienceDesignSystem', () => ({
-  useExperienceTheme: () => ({
-    theme: themeMocks.theme,
-    preference: themeMocks.theme,
-    setTheme: vi.fn(),
-    toggleTheme: themeMocks.toggleTheme,
-  }),
-}));
 
 const createAddressResult = (
   displayName = 'Kızılay, Çankaya, Ankara, Türkiye',
@@ -51,11 +37,6 @@ const getSearchInput = (): HTMLInputElement => screen.getByRole('searchbox', {
 });
 
 describe('NavigationBar', () => {
-  beforeEach(() => {
-    themeMocks.theme = 'light';
-    themeMocks.toggleTheme.mockReset();
-  });
-
   it('uses Kent Rehberi branding in the header', () => {
     renderNavigationBar();
     const homeLink = screen.getByRole('link', { name: 'KENT REHBERİ ana sayfası' });
@@ -172,12 +153,28 @@ describe('NavigationBar', () => {
     expect(new Set(cbsLink?.getAttribute('rel')?.trim().split(/\s+/))).toEqual(new Set(['noopener', 'noreferrer']));
   });
 
-  it('places the accessible theme toggle in the top navigation with a clear action icon', () => {
+  it('identifies the map-owned Atlas theme without exposing the global theme toggle', () => {
     renderNavigationBar();
 
-    const themeButton = screen.getByRole('button', { name: 'Karanlık temaya geç' });
-    expect(themeButton.querySelector('svg')).not.toBeNull();
-    fireEvent.click(themeButton);
-    expect(themeMocks.toggleTheme).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('Bağımsız Atlas harita teması')).toHaveTextContent('Atlas');
+    expect(screen.queryByRole('button', { name: /temaya geç/i })).not.toBeInTheDocument();
+  });
+
+  it('exposes the in-app directions action without redirecting away from the map', async () => {
+    const user = userEvent.setup();
+    const onOpenDirections = vi.fn();
+    render(
+      <NavigationBar
+        onAddressSearch={createAddressSearch()}
+        onAddressSelect={createAddressSelect()}
+        onOpenDirections={onOpenDirections}
+      />,
+    );
+
+    const button = screen.getByRole('button', { name: 'Uygulama içi yol tarifi' });
+    expect(button).toHaveAttribute('aria-controls', 'map-navigation-panel');
+    await user.click(button);
+    expect(onOpenDirections).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('link', { name: /Google Haritalar/i })).not.toBeInTheDocument();
   });
 });
