@@ -46,6 +46,23 @@ import { executeSceneCommand as executeSceneRuntimeCommand } from '../../experie
 
 const DEFAULT_SCENE_TILT = 48;
 const SCENE_TRANSITION_DURATION_MS = 320;
+const ATLAS_2D_BASEMAP_ID = 'dark-gray-vector';
+const ATLAS_2D_BASEMAP_TITLE = 'Atlas Night — Dark Gray Vector';
+
+const createAtlas2DBasemap = async (): Promise<unknown> => {
+  const [Basemap, VectorTileLayer] = await loadArcgisModules<readonly [
+    new (properties?: Record<string, unknown>) => { load?: () => Promise<unknown>; destroy?: () => void },
+    new (properties?: Record<string, unknown>) => { load?: () => Promise<unknown>; destroy?: () => void },
+  ]>(['esri/Basemap', 'esri/layers/VectorTileLayer']);
+  const layer = new VectorTileLayer({ portalItem: { id: 'c3ae924d5dea4b2b8f0a8e9f2f94b5f1' }, opacity: 0.82 });
+  try {
+    await layer.load?.();
+    return new Basemap({ id: ATLAS_2D_BASEMAP_ID, title: ATLAS_2D_BASEMAP_TITLE, baseLayers: [layer] });
+  } catch (error) {
+    try { layer.destroy?.(); } catch { /* failed candidate has no owner */ }
+    throw error;
+  }
+};
 
 const basemapIdForMap = (map: unknown): string | null => {
   const basemap = (map as { basemap?: { id?: unknown; portalItem?: { id?: unknown } | null; title?: unknown } | string | null } | null)?.basemap;
@@ -410,6 +427,14 @@ export function ExperienceMapModeBridge({
           zoom: null,
         })
         : normalizeSceneStateFromMap(mapView, bridge);
+
+      // The 2D canvas shares the same map object. Give the Atlas workspace its
+      // own night cartography when entering 2D; the 3D OSM runtime restores its
+      // owned scene style when returning to SceneView.
+      const atlasMap = mapView.map as { basemap?: unknown } | null;
+      if (atlasMap && !sceneState && atlasMap.basemap !== ATLAS_2D_BASEMAP_ID) {
+        atlasMap.basemap = await createAtlas2DBasemap();
+      }
 
       try {
         await esriBuildingsRuntimeRef.current?.activate(scene.view as never);

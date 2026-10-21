@@ -4,7 +4,7 @@ import { runtimeDiagnostics } from '../platform/runtime/runtimeDiagnostics';
 export const KENT_REHBERI_ICON_LAYER_ID = 'kent-rehberi-postgis';
 export const SCENE_ICON_OVERLAY_LAYER_ID = 'kent-rehberi-3d-icon-overlay';
 export const SCENE_ICON_GROUND_OFFSET_METERS = 50;
-export const SCENE_ICON_LAYER_OPACITY = 0.78;
+export const SCENE_ICON_LAYER_OPACITY = 0.58;
 
 const SCENE_ICON_SIZE_PX = 36;
 const SCENE_ICON_VERTICAL_OFFSET = Object.freeze({

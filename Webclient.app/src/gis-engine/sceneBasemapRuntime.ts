@@ -3,7 +3,7 @@ import { withTimeout } from '../platform/runtime/resilience';
 import { runtimeDiagnostics } from '../platform/runtime/runtimeDiagnostics';
 
 export const FREE_SCENE_BASEMAP_ID = 'openstreetmap-3d';
-export const FREE_SCENE_BASEMAP_TITLE = 'OpenStreetMap — ücretsiz 3B binalar';
+export const FREE_SCENE_BASEMAP_TITLE = 'Atlas Night — OpenStreetMap 3B';
 
 export interface SceneBasemapLike {
   readonly id?: string;
@@ -52,7 +52,7 @@ const loadFreeOpenStreetMapBasemap = async (): Promise<SceneBasemapModule> => {
   return {
     fromId: (id: string) => {
       if (id !== FREE_SCENE_BASEMAP_ID) return null;
-      const layer = new OpenStreetMapLayer({ title: FREE_SCENE_BASEMAP_TITLE });
+      const layer = new OpenStreetMapLayer({ title: FREE_SCENE_BASEMAP_TITLE, opacity: 0.76 });
       layer.on?.('layerview-create-error', ({ error, view }) => {
         runtimeDiagnostics.captureError(error, {
           source: 'gis.scene-basemap.layer-view',

@@ -305,6 +305,7 @@ export class OSM3DBuildingsRuntime {
         title: 'OpenStreetMap 3B binalar',
         listMode: 'hide',
         visible: true,
+        opacity: 0.52,
       });
       map.add(this.#layer, 0);
     }

@@ -251,12 +251,89 @@
   padding: 18px;
   border: 1px solid color-mix(in srgb, var(--exp-border, #cbd5e1) 88%, transparent);
   border-radius: 18px;
-  background: color-mix(in srgb, var(--exp-surface, #fff) 78%, transparent);
+  background: color-mix(in srgb, var(--exp-surface, #fff) 54%, transparent);
   box-shadow: 0 18px 50px rgb(15 23 42 / 24%);
   color: var(--exp-text, #0f172a);
   -webkit-backdrop-filter: blur(22px) saturate(1.12);
   backdrop-filter: blur(22px) saturate(1.12);
   font-family: var(--exp-font-sans, system-ui, sans-serif);
+}
+
+/* Atlas is a self-contained cartographic skin; it does not inherit the app's
+ * light/dark experience palette. Translucent glass keeps map detail visible. */
+.map-experience-atlas {
+  --atlas-ink: #eaf3ff;
+  --atlas-muted: #b7c9dc;
+  --atlas-line: rgb(155 195 224 / 28%);
+  --atlas-glass: rgb(8 20 34 / 58%);
+  --atlas-glass-strong: rgb(8 20 34 / 76%);
+  --atlas-accent: #69e0d0;
+  --exp-bg: #0b1723;
+  --exp-surface: var(--atlas-glass);
+  --exp-surface-2: var(--atlas-glass-strong);
+  --exp-text: var(--atlas-ink);
+  --exp-text-soft: var(--atlas-muted);
+  --exp-text-muted: #90a6bb;
+  --exp-border: var(--atlas-line);
+  --exp-border-strong: rgb(105 224 208 / 60%);
+  --exp-accent: var(--atlas-accent);
+  background: #0b1723;
+  color: var(--atlas-ink);
+}
+
+.map-experience-atlas .experience-scene-host[data-scene-ready="false"] {
+  background:
+    radial-gradient(ellipse at 50% 45%, rgb(105 224 208 / 12%), transparent 38%),
+    linear-gradient(145deg, #0b1723, #142b3a 55%, #0b1723);
+}
+
+.map-experience-atlas .experience-scene-controls,
+.map-experience-atlas .experience-scene-health,
+.map-experience-atlas .map-navigation,
+.map-experience-atlas > .sidebar-container,
+.map-experience-atlas > .sidebar-container1,
+.map-experience-atlas .esri-widget,
+.map-experience-atlas .esri-popup__main-container {
+  border-color: var(--atlas-line) !important;
+  background-color: var(--atlas-glass) !important;
+  color: var(--atlas-ink) !important;
+  box-shadow: 0 16px 48px rgb(0 0 0 / 24%);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  backdrop-filter: blur(24px) saturate(1.2);
+}
+
+.map-experience-atlas .experience-scene-controls button,
+.map-experience-atlas .map-navigation input,
+.map-experience-atlas .map-navigation select,
+.map-experience-atlas .map-navigation button {
+  border-color: var(--atlas-line);
+  background-color: rgb(15 34 49 / 58%);
+  color: var(--atlas-ink);
+}
+
+.map-experience-atlas > .mainbar-container {
+  border-bottom: 1px solid var(--atlas-line);
+  background: rgb(8 20 34 / 66%) !important;
+  color: var(--atlas-ink);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  backdrop-filter: blur(24px) saturate(1.2);
+}
+
+.map-experience-atlas .esri-attribution,
+.map-experience-atlas .esri-widget__heading,
+.map-experience-atlas .esri-widget button {
+  color: var(--atlas-ink);
+}
+
+.map-experience-atlas .esri-widget button:hover,
+.map-experience-atlas .map-navigation button:hover {
+  border-color: var(--atlas-accent);
+  background-color: rgb(105 224 208 / 16%);
+}
+
+.map-experience-atlas .esri-widget:focus-within,
+.map-experience-atlas :focus-visible {
+  outline-color: var(--atlas-accent);
 }
 
 .map-navigation__header {

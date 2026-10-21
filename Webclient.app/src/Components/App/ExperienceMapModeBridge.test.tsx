@@ -97,8 +97,8 @@ vi.mock('../../gis-engine/arcgisModuleRuntime', () => ({
         Object.assign(this, properties);
       }
     }
-    class OpenStreetMapLayer {}
-    return [Basemap, OpenStreetMapLayer];
+    class VectorTileLayer { load = vi.fn(async () => undefined); destroy = vi.fn(); constructor(properties: Record<string, unknown>) { Object.assign(this, properties); } }
+    return [Basemap, VectorTileLayer];
   }),
 }));
 

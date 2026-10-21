@@ -27,3 +27,14 @@
 .cbs-logo-colour{
     color: #C62E2E;
 }
+
+/* Atlas map mark: keep the existing identity while letting the cartography show through. */
+.map-experience-atlas .cbs-logo,
+.map-experience-atlas .cbs-logo-colour {
+    color: rgb(235 245 255 / 72%);
+}
+
+.map-experience-atlas .cbs-logo {
+    opacity: .62;
+    text-shadow: 0 1px 12px rgb(5 15 30 / 55%);
+}
