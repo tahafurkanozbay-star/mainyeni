@@ -60,7 +60,9 @@ const createAtlas2DBasemap = async (): Promise<unknown> => {
     await layer.load?.();
     return new Basemap({ id: ATLAS_2D_BASEMAP_ID, title: ATLAS_2D_BASEMAP_TITLE, baseLayers: [layer] });
   } catch (error) {
-    try { layer.destroy?.(); } catch { /* failed candidate has no owner */ }
+    try { layer.destroy?.(); } catch (cleanupError) {
+      DebugHelper.Log({ context: 'atlas-vector-basemap-failed-load-cleanup', error: cleanupError });
+    }
     throw error;
   }
 };
